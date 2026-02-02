@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<!-- popup.html — Extension popup UI for SchoolPilot with tabs. -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="header">
+    <h1>SchoolPilot</h1>
+    <button id="settings-btn" title="Settings">&#9881;</button>
+  </div>
+  <p class="subtitle">AI Study Assistant</p>
+
+  <!-- Settings -->
+  <div id="settings-panel">
+    <label for="email-input">Your email</label>
+    <input type="email" id="email-input" class="form-input" placeholder="you@school.org" autocomplete="email">
+    <button id="save-email-btn" class="small-btn full-width mt-10">Save</button>
+    <div id="email-status"></div>
+    <label for="backend-url-input" class="mt-10">Backend URL</label>
+    <input type="url" id="backend-url-input" class="form-input" placeholder="http://localhost:5000">
+    <button id="save-backend-btn" class="small-btn full-width mt-6">Save URL</button>
+    <div id="backend-status"></div>
+  </div>
+  <div id="current-email"></div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="plan">Plan</button>
+    <button class="tab-btn" data-tab="focus">Focus</button>
+    <button class="tab-btn" data-tab="grades">Grades</button>
+    <button class="tab-btn" data-tab="study">Study</button>
+    <button class="tab-btn" data-tab="sprint">Sprint</button>
+  </div>
+
+  <!-- Tab: Daily Plan -->
+  <div id="tab-plan" class="tab-content active">
+    <button id="scan-btn" class="primary-btn">&#128225; Scan &amp; Send</button>
+    <div id="plan-status" class="status"></div>
+    <div id="plan-timestamp" class="timestamp"></div>
+  </div>
+
+  <!-- Tab: Focus (Work Chunking) -->
+  <div id="tab-focus" class="tab-content">
+    <div class="grade-section">
+      <h3>Break Down an Assignment</h3>
+      <div class="chunk-input">
+        <label>What's the assignment?</label>
+        <input type="text" id="chunk-title" placeholder="e.g. Read Ch. 5 and answer questions">
+      </div>
+      <div class="flex-row">
+        <div class="chunk-input flex-1">
+          <label>Type</label>
+          <input type="text" id="chunk-type" placeholder="e.g. Homework">
+        </div>
+        <div class="chunk-input flex-1">
+          <label>Course</label>
+          <input type="text" id="chunk-course" placeholder="e.g. AP History">
+        </div>
+      </div>
+      <div class="chunk-input">
+        <label>Due (optional)</label>
+        <input type="text" id="chunk-due" placeholder="e.g. Tomorrow 8:30 AM">
+      </div>
+      <div class="chunk-input">
+        <label>Extra context (optional)</label>
+        <textarea id="chunk-context" rows="2" placeholder="e.g. It's a 10-page chapter with 15 questions"></textarea>
+      </div>
+      <button id="chunk-btn" class="primary-btn mt-4">Break It Down</button>
+    </div>
+
+    <div id="chunk-results" class="hidden">
+      <div class="chunk-progress"><div id="chunk-progress-bar" class="chunk-progress-bar"></div></div>
+      <div id="chunk-list"></div>
+      <div id="chunk-total" class="chunk-total"></div>
+    </div>
+
+    <div id="chunk-status" class="status"></div>
+  </div>
+
+  <!-- Tab: Grades -->
+  <div id="tab-grades" class="tab-content">
+    <!-- Sync from Teamie -->
+    <div class="grade-section mb-12">
+      <h3>Sync from Teamie</h3>
+      <p class="sync-description">Navigate to a course gradebook page on Teamie, then click Sync.</p>
+      <div class="flex-row">
+        <button id="sync-grades-btn" class="small-btn flex-1">Sync Grades</button>
+        <button id="sync-assessments-btn" class="small-btn flex-1">Sync Tests</button>
+      </div>
+      <div id="sync-status" class="status mt-8"></div>
+      <div id="sync-timestamp" class="timestamp"></div>
+    </div>
+
+    <!-- Upcoming assessments -->
+    <div id="assessments-section" class="grade-section mb-12 hidden">
+      <h3>Upcoming Assessments</h3>
+      <div id="assessments-list"></div>
+    </div>
+
+    <!-- Course chips -->
+    <div id="course-list" class="course-list"></div>
+    <button id="add-course-btn" class="add-link">+ Add course</button>
+
+    <!-- Add course form -->
+    <div id="add-course-panel">
+      <div class="form-row">
+        <label>Course name</label>
+        <input type="text" id="new-course-name" class="form-input" placeholder="e.g. AP Statistics">
+      </div>
+      <label class="section-label">Categories &amp; Weights</label>
+      <div id="cat-inputs"></div>
+      <button id="add-cat-btn" class="add-link">+ Add category</button>
+      <div class="flex-row mt-12">
+        <button id="save-course-btn" class="small-btn flex-1">Save Course</button>
+        <button id="cancel-course-btn" class="small-btn secondary flex-1">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Grade display (shown when a course is selected) -->
+    <div id="grade-display" class="hidden">
+      <!-- Current grade overview -->
+      <div class="grade-section">
+        <h3>Current Grade</h3>
+        <div class="grade-overview">
+          <div><span id="grade-pct" class="grade-big">--</span><span id="grade-letter" class="grade-letter">--</span></div>
+        </div>
+        <div id="grade-categories"></div>
+      </div>
+
+      <!-- Add grade -->
+      <div class="grade-section">
+        <h3>Log a Grade</h3>
+        <div class="form-row">
+          <label>Category</label>
+          <select id="grade-cat-select"></select>
+        </div>
+        <div class="form-row">
+          <label>Assignment name</label>
+          <input type="text" id="grade-name" class="form-input" placeholder="e.g. Unit 2 Test">
+        </div>
+        <div class="flex-row">
+          <div class="form-row flex-1">
+            <label>Score</label>
+            <input type="number" id="grade-score" placeholder="87">
+          </div>
+          <div class="form-row flex-1">
+            <label>Out of</label>
+            <input type="number" id="grade-max" value="100">
+          </div>
+        </div>
+        <button id="add-grade-btn" class="small-btn full-width mt-6">Add Grade</button>
+      </div>
+
+      <!-- What do I need? -->
+      <div class="grade-section">
+        <h3>What Do I Need?</h3>
+        <div class="flex-row">
+          <div class="form-row flex-1">
+            <label>Target %</label>
+            <input type="number" id="target-grade" placeholder="90" value="90">
+          </div>
+          <div class="form-row flex-1">
+            <label>In category</label>
+            <select id="target-cat-select"></select>
+          </div>
+        </div>
+        <button id="calc-required-btn" class="small-btn full-width mt-6">Calculate</button>
+        <div id="required-result" class="result-box"></div>
+      </div>
+
+      <!-- What if -->
+      <div class="grade-section">
+        <h3>What If I Get...</h3>
+        <div class="flex-row">
+          <div class="form-row flex-1">
+            <label>Score</label>
+            <input type="number" id="whatif-score" placeholder="85">
+          </div>
+          <div class="form-row flex-1">
+            <label>Out of</label>
+            <input type="number" id="whatif-max" value="100">
+          </div>
+          <div class="form-row flex-1">
+            <label>Category</label>
+            <select id="whatif-cat-select"></select>
+          </div>
+        </div>
+        <button id="calc-whatif-btn" class="small-btn full-width mt-6">Project</button>
+        <div id="whatif-result" class="result-box"></div>
+      </div>
+    </div>
+
+    <div id="grades-status" class="status"></div>
+  </div>
+
+  <!-- Tab: Study Guide -->
+  <div id="tab-study" class="tab-content">
+    <div id="study-onboarding" class="onboarding-hint hidden">
+      Add a course in the <strong>Grades</strong> tab first, then come back to generate study guides.
+    </div>
+    <div id="study-form" class="grade-section">
+      <h3>Generate Study Guide</h3>
+      <div class="chunk-input">
+        <label>Course</label>
+        <select id="study-course-select" class="form-input"></select>
+      </div>
+      <div class="chunk-input">
+        <label>Unit / Topic (optional)</label>
+        <input type="text" id="study-unit" placeholder="e.g. Confidence Intervals, Chapter 5">
+      </div>
+      <div class="chunk-input">
+        <label>Extra notes (optional)</label>
+        <textarea id="study-notes" rows="2" placeholder="e.g. Teacher said focus on proofs, skip section 5.4"></textarea>
+      </div>
+      <button id="study-btn" class="primary-btn mt-4">Generate Guide</button>
+    </div>
+
+    <div id="study-results" class="hidden">
+      <div id="study-unit-title" class="sprint-test-name mb-8"></div>
+      <div id="study-summary" class="guide-summary"></div>
+
+      <div class="guide-section-title">Key Concepts</div>
+      <div id="study-concepts"></div>
+
+      <div class="guide-section-title">High-Likelihood Topics</div>
+      <div id="study-topics"></div>
+
+      <div class="guide-section-title">Practice Questions</div>
+      <div id="study-questions"></div>
+    </div>
+
+    <div id="study-status" class="status"></div>
+  </div>
+
+  <!-- Tab: Sprint Mode -->
+  <div id="tab-sprint" class="tab-content">
+    <div id="sprint-onboarding" class="onboarding-hint hidden">
+      Add a course in the <strong>Grades</strong> tab first to use Sprint mode.
+    </div>
+    <!-- Sprint Setup Form -->
+    <div id="sprint-setup">
+      <div class="grade-section">
+        <h3>Start a 7-Day Sprint</h3>
+        <div class="chunk-input">
+          <label>Test / Assessment Name</label>
+          <input type="text" id="sprint-test-name-input" placeholder="e.g. AP Stats Unit 4 Test">
+        </div>
+        <div class="flex-row">
+          <div class="chunk-input flex-1">
+            <label>Test Date</label>
+            <input type="date" id="sprint-test-date" class="form-input">
+          </div>
+          <div class="chunk-input flex-1">
+            <label>Course</label>
+            <select id="sprint-course-select" class="form-input"></select>
+          </div>
+        </div>
+        <div class="chunk-input">
+          <label>Hours available per day</label>
+          <input type="number" id="sprint-hours" class="form-input" value="2" min="0.5" max="8" step="0.5">
+        </div>
+        <label class="section-label">Topics to Cover</label>
+        <div id="sprint-topics-list"></div>
+        <button id="sprint-add-topic" class="add-link">+ Add topic</button>
+        <button id="sprint-create-btn" class="primary-btn mt-12">Create Sprint Plan</button>
+      </div>
+    </div>
+
+    <!-- Active Sprint View -->
+    <div id="sprint-active" class="hidden">
+      <div class="sprint-header-info">
+        <div id="sprint-active-name" class="sprint-test-name"></div>
+        <div id="sprint-active-date" class="sprint-test-date"></div>
+      </div>
+      <div class="sprint-progress-row">
+        <div class="sprint-progress-bar"><div id="sprint-progress-fill" class="sprint-progress-fill"></div></div>
+        <span id="sprint-progress-text" class="sprint-progress-text">0%</span>
+      </div>
+      <div id="sprint-days-list"></div>
+      <div id="sprint-tips-box" class="sprint-tips hidden">
+        <h4>Tips</h4>
+        <div id="sprint-tips-list"></div>
+      </div>
+      <button id="sprint-end-btn" class="small-btn danger full-width mt-12">End Sprint</button>
+    </div>
+
+    <div id="sprint-status" class="status"></div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
