@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-bg-dark: #0a0a0f;
+  --color-bg-card: #1a1a2e;
+  --color-bg-hover: #2a2a3e;
+  --color-border: #2a2a3e;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #a0a0b0;
+  --color-text-muted: #707080;
+  --color-accent: #7c3aed;
+  --color-accent-hover: #6d28d9;
+  --color-success: #10b981;
+  --color-error: #ef4444;
+  --color-warning: #f59e0b;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+body {
+  background: var(--color-bg-dark);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
+
+/* Custom checkbox for sprint/focus tasks */
+.task-checkbox {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--color-border);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.task-checkbox:checked {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+.task-checkbox:checked::after {
+  content: "\2713";
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 12px;
+  line-height: 1;
+}

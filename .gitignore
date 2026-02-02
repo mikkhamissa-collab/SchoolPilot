@@ -1,4 +1,5 @@
 .env
+.env.local
 __pycache__/
 *.pyc
 .DS_Store
@@ -7,3 +8,5 @@ data/
 .claude/
 *.pdf
 .pytest_cache/
+.next/
+out/

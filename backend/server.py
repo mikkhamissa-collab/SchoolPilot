@@ -33,6 +33,9 @@ CORS(app, origins=[
     r'http://localhost:*',
     r'http://127.0.0.1:*',
     r'https://*.onrender.com',
+    r'https://schoolpilot.co',
+    r'https://*.schoolpilot.co',
+    r'https://*.vercel.app',
 ])
 
 logger = logging.getLogger(__name__)
