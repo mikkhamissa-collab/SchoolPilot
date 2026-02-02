@@ -1,5 +1,15 @@
 // popup.js — Orchestrates scanning, email config, tabs, grades, focus, study, and sprint.
 
+// Polyfill: if chrome.storage is unavailable (e.g. opened outside extension context), provide a no-op shim.
+if (typeof chrome === 'undefined' || !chrome.storage) {
+  if (typeof chrome === 'undefined') window.chrome = {};
+  chrome.storage = { local: {
+    get: (_keys, cb) => cb({}),
+    set: (_data, cb) => { if (cb) cb(); },
+    remove: (_keys, cb) => { if (cb) cb(); }
+  }};
+}
+
 // ============================================================
 // UTILITIES
 // ============================================================

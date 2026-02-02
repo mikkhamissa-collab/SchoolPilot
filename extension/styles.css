@@ -48,8 +48,9 @@ body {
 .header { display: flex; justify-content: space-between; align-items: center; }
 h1 { font-size: 22px; font-weight: 700; color: var(--text-white); letter-spacing: -0.5px; }
 #settings-btn {
-  background: none; border: none; color: var(--text-muted); font-size: 18px;
-  cursor: pointer; padding: 4px; border-radius: var(--radius-xs); transition: color 0.2s;
+  background: none; border: none; color: var(--text-muted); font-size: 22px;
+  cursor: pointer; padding: 8px; border-radius: var(--radius-xs); transition: color 0.2s;
+  min-width: 36px; min-height: 36px; display: flex; align-items: center; justify-content: center;
 }
 #settings-btn:hover { color: var(--purple-light); }
 .subtitle {
