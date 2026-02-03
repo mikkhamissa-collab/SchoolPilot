@@ -22,6 +22,73 @@ interface DashStats {
   overdueCount: number;
 }
 
+interface CourseImportance {
+  [courseName: string]: number; // 1-5, higher = more important
+}
+
+// Parse date string like "03" (day number) or full date
+function parseDateNum(dateStr?: string, dayStr?: string): Date | null {
+  if (!dateStr) return null;
+  const now = new Date();
+  const dayNum = parseInt(dateStr, 10);
+  if (isNaN(dayNum)) return null;
+
+  // Assume current month/year, but if day is less than today, assume next month
+  let targetDate = new Date(now.getFullYear(), now.getMonth(), dayNum);
+  if (targetDate < now) {
+    targetDate = new Date(now.getFullYear(), now.getMonth() + 1, dayNum);
+  }
+  return targetDate;
+}
+
+// Calculate urgency score: higher = more urgent (due sooner + higher type weight + importance)
+function getUrgencyScore(
+  a: Assignment,
+  importance: CourseImportance
+): number {
+  const now = new Date();
+  const dueDate = parseDateNum(a.date, a.day);
+
+  // Days until due (0 = today, negative = overdue)
+  let daysUntil = dueDate ? Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 14;
+  if (a.isOverdue) daysUntil = -1;
+
+  // Time urgency: exponential decay (items due sooner get much higher scores)
+  const timeScore = Math.max(0, 100 - daysUntil * 10);
+
+  // Type weight: assessments/tests > quizzes > assignments > tasks
+  const typeStr = (a.type || "").toLowerCase();
+  let typeScore = 10;
+  if (typeStr.includes("assess") || typeStr.includes("test") || typeStr.includes("exam") || typeStr.includes("offline")) {
+    typeScore = 50; // High-stakes
+  } else if (typeStr.includes("quiz")) {
+    typeScore = 30;
+  } else if (typeStr.includes("assignment")) {
+    typeScore = 20;
+  }
+
+  // Course importance (1-5 scale, default 3)
+  const courseName = a.course?.split("\n")[0]?.trim() || "";
+  const courseScore = (importance[courseName] || 3) * 5;
+
+  // Overdue penalty (push these to top)
+  const overdueBonus = a.isOverdue ? 100 : 0;
+
+  return timeScore + typeScore + courseScore + overdueBonus;
+}
+
+// Filter to only high-stakes items (assessments, tests, quizzes)
+function isHighStakes(a: Assignment): boolean {
+  const typeStr = (a.type || "").toLowerCase();
+  return (
+    typeStr.includes("assess") ||
+    typeStr.includes("test") ||
+    typeStr.includes("exam") ||
+    typeStr.includes("quiz") ||
+    typeStr.includes("offline")
+  );
+}
+
 export default function DashboardPage() {
   const [user, setUser] = useState<{ name: string } | null>(null);
   const [stats, setStats] = useState<DashStats>({
@@ -30,7 +97,9 @@ export default function DashboardPage() {
   });
   const [upcoming, setUpcoming] = useState<Assignment[]>([]);
   const [overdue, setOverdue] = useState<Assignment[]>([]);
+  const [mostPressing, setMostPressing] = useState<Assignment[]>([]);
   const [courseNames, setCourseNames] = useState<string[]>([]);
+  const [courseImportance, setCourseImportance] = useState<CourseImportance>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -42,7 +111,7 @@ export default function DashboardPage() {
       setUser({ name: user.user_metadata?.full_name || user.email?.split("@")[0] || "Student" });
 
       const [coursesRes, sprints, plans, assignmentsRes] = await Promise.all([
-        supabase.from("courses").select("id, name").eq("user_id", user.id),
+        supabase.from("courses").select("id, name, policies").eq("user_id", user.id),
         supabase.from("sprints").select("test_name").eq("user_id", user.id).eq("completed", false).limit(1),
         supabase.from("plans").select("created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(1),
         supabase.from("scraped_assignments").select("assignments").eq("user_id", user.id).order("scraped_at", { ascending: false }).limit(1),
@@ -80,6 +149,24 @@ export default function DashboardPage() {
       setCourseNames(courseList.map((c: { name: string }) => c.name));
       setUpcoming(upcomingList);
       setOverdue(overdueList);
+
+      // Load course importance from policies
+      const importanceMap: CourseImportance = {};
+      for (const c of courseList) {
+        const policies = c.policies as { importance?: number } | null;
+        if (policies?.importance) {
+          importanceMap[c.name] = policies.importance;
+        }
+      }
+      setCourseImportance(importanceMap);
+
+      // Calculate Most Pressing: top 2 high-stakes items sorted by urgency
+      const allItems = [...overdueList, ...upcomingList];
+      const highStakes = allItems.filter(isHighStakes);
+      const sorted = highStakes.sort((a, b) =>
+        getUrgencyScore(b, importanceMap) - getUrgencyScore(a, importanceMap)
+      );
+      setMostPressing(sorted.slice(0, 2));
 
       setStats({
         courseCount: courseList.length,
@@ -217,6 +304,89 @@ export default function DashboardPage() {
                 {name}
               </Link>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Most Pressing - Top 2 urgent tests/assessments */}
+      {mostPressing.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+              <span className="text-xl">🔥</span> Most Pressing
+            </h3>
+            <span className="text-xs text-text-muted">Top {mostPressing.length} urgent</span>
+          </div>
+          <div className="space-y-3">
+            {mostPressing.map((a, i) => {
+              const dueDate = parseDateNum(a.date, a.day);
+              const now = new Date();
+              const daysUntil = dueDate
+                ? Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                : null;
+              const isUrgent = a.isOverdue || (daysUntil !== null && daysUntil <= 2);
+
+              return (
+                <div
+                  key={`pressing-${a.title}-${i}`}
+                  className={`p-4 rounded-xl border-2 ${
+                    a.isOverdue
+                      ? "bg-error/10 border-error/40"
+                      : isUrgent
+                      ? "bg-warning/10 border-warning/40"
+                      : "bg-accent/10 border-accent/40"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-white font-semibold">{a.title}</p>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        {a.type && (
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${typeBadgeColor(a.type)}`}>
+                            {a.type.split("\n")[0]}
+                          </span>
+                        )}
+                        {cleanCourse(a.course) && (
+                          <span className="text-text-muted text-xs truncate">{cleanCourse(a.course)}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      {a.isOverdue ? (
+                        <span className="px-3 py-1 rounded-lg text-sm font-bold bg-error/20 text-error">
+                          OVERDUE
+                        </span>
+                      ) : daysUntil !== null ? (
+                        <div>
+                          <span className={`text-2xl font-bold ${isUrgent ? "text-warning" : "text-accent"}`}>
+                            {daysUntil}
+                          </span>
+                          <span className="text-text-muted text-xs block">
+                            {daysUntil === 1 ? "day" : "days"}
+                          </span>
+                        </div>
+                      ) : a.due ? (
+                        <span className="text-text-secondary text-sm">{a.due}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-border/30 flex items-center justify-between">
+                    <Link
+                      href="/sprint"
+                      className="text-xs text-accent hover:underline flex items-center gap-1"
+                    >
+                      🏃 Start Sprint
+                    </Link>
+                    <Link
+                      href="/study"
+                      className="text-xs text-accent hover:underline flex items-center gap-1"
+                    >
+                      📖 Study Guide
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

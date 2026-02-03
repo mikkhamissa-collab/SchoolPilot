@@ -5,7 +5,7 @@ import os
 import re
 import time
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
@@ -144,11 +144,13 @@ SYSTEM_PROMPT: str = (
     "You are a sharp, no-BS academic planner for a high school student. "
     "You receive their upcoming assignments and create a focused daily action plan.\n\n"
     "Rules:\n"
-    "- Today's date context will be provided. Prioritize by urgency (due soonest) "
-    "and weight (assessments > assignments > tasks).\n"
+    "- RANK BY URGENCY AND IMPACT, not by class. The most urgent high-stakes items come first regardless of subject.\n"
+    "- Urgency ranking: Overdue > Due tomorrow > Due this week > Due next week\n"
+    "- Type weight: Assessments/Tests/Exams > Quizzes > Assignments > Tasks\n"
+    "- Start with a '🔥 MOST PRESSING' section listing the top 2-3 most critical items\n"
+    "- Then group remaining items by day. Bold the most urgent items.\n"
     "- Be concise. Use short punchy sentences. No fluff.\n"
-    "- Group by day. Bold the most urgent items.\n"
-    "- If something is due tomorrow morning, flag it as URGENT.\n"
+    "- If something is due tomorrow or is overdue, flag it clearly.\n"
     "- End with one motivational line that isn't cheesy.\n"
     "- Format for email readability (short paragraphs, clear headers)."
 )
@@ -193,16 +195,94 @@ SPRINT_PROMPT: str = (
     '"tips": ["...", "..."]}'
 )
 
+COMPREHENSIVE_STUDY_GUIDE_PROMPT: str = (
+    "Create a comprehensive study guide that builds knowledge from the ground up. "
+    "The student has provided course materials, assignments, and topics. Your job is to:\n\n"
+    "1. LEARNING PATH: Create a step-by-step learning progression starting from fundamentals\n"
+    "2. RESOURCES: Recommend specific YouTube videos and Khan Academy topics for each concept\n"
+    "3. PRACTICE PROBLEMS: Create worked example problems with step-by-step solutions\n"
+    "4. PRACTICE TEST: Generate a realistic practice test matching the course style\n\n"
+    "Rules:\n"
+    "- Start with foundational concepts before advanced ones\n"
+    "- Each concept should have a 'Learn' section with video recommendations\n"
+    "- Include 2-3 worked examples per major topic showing full solutions\n"
+    "- Practice test should mirror what they'd see on an actual exam\n"
+    "- Be specific with YouTube search terms that will find quality educational content\n\n"
+    "Respond ONLY with valid JSON, no markdown. Format:\n"
+    '{"course": "...", "unit": "...", "overview": "...", '
+    '"learning_path": [{"order": 1, "topic": "...", "description": "...", "prerequisites": [], '
+    '"youtube_search": "...", "khan_academy_topic": "...", "estimated_minutes": 30}], '
+    '"worked_examples": [{"topic": "...", "problem": "...", "difficulty": "easy|medium|hard", '
+    '"solution_steps": [{"step": 1, "action": "...", "explanation": "..."}], "final_answer": "..."}], '
+    '"practice_test": {"title": "...", "time_limit_minutes": 45, "instructions": "...", '
+    '"questions": [{"number": 1, "type": "multiple_choice|free_response|calculation", '
+    '"question": "...", "options": ["A...", "B...", "C...", "D..."], "correct_answer": "...", '
+    '"explanation": "...", "points": 5}]}, '
+    '"study_tips": ["..."]}'
+)
+
+TOPIC_EXTRACTOR_PROMPT: str = (
+    "Analyze these course materials and assignments to identify the key topics and concepts covered. "
+    "Extract every testable topic, formula, definition, and skill mentioned.\n\n"
+    "Respond ONLY with valid JSON. Format:\n"
+    '{"topics": [{"name": "...", "type": "concept|formula|definition|skill|procedure", '
+    '"importance": "high|medium|low", "source": "...", "details": "..."}], '
+    '"formulas": [{"name": "...", "formula": "...", "when_to_use": "..."}], '
+    '"vocabulary": [{"term": "...", "definition": "..."}]}'
+)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def format_assignments(assignments: list[dict]) -> str:
-    """Format assignment dicts into a readable text block for Claude."""
+def get_urgency_score(a: dict) -> int:
+    """Calculate urgency score for sorting. Higher = more urgent."""
+    score = 0
+
+    # Overdue items are most urgent
+    if a.get('isOverdue'):
+        score += 1000
+
+    # Type weight
+    type_str = (a.get('type') or '').lower()
+    if 'assess' in type_str or 'test' in type_str or 'exam' in type_str:
+        score += 100
+    elif 'quiz' in type_str:
+        score += 50
+    elif 'assignment' in type_str:
+        score += 25
+
+    # Due date proximity (lower date number = sooner = more urgent)
+    if a.get('date'):
+        try:
+            day_num = int(a['date'])
+            # Invert: lower day numbers get higher scores
+            score += max(0, 31 - day_num) * 10
+        except (ValueError, TypeError):
+            pass
+
+    return score
+
+
+def format_assignments(assignments: List[Dict], include_overdue: Optional[List[Dict]] = None) -> str:
+    """Format assignment dicts into a readable text block for Claude, sorted by urgency."""
+    all_items = list(assignments)
+
+    # Add overdue items if provided
+    if include_overdue:
+        for item in include_overdue:
+            item_copy = dict(item)
+            item_copy['isOverdue'] = True
+            all_items.append(item_copy)
+
+    # Sort by urgency score (highest first)
+    all_items.sort(key=lambda x: get_urgency_score(x), reverse=True)
+
     lines: list[str] = []
-    for i, a in enumerate(assignments, 1):
-        parts = [f"{i}. {a.get('title', 'Untitled')}"]
+    for i, a in enumerate(all_items, 1):
+        status = '[OVERDUE]' if a.get('isOverdue') else ''
+        parts = [f"{i}. {status} {a.get('title', 'Untitled')}".strip()]
         if a.get('type'):
             parts.append(f"   Type: {a['type']}")
         if a.get('course'):
@@ -261,13 +341,20 @@ def process():
         return jsonify({'error': 'Rate limit exceeded. Max 10 scans per day.'}), 429
 
     assignments: list[dict] = data['assignments']
+    overdue: list[dict] = data.get('overdue', [])
     now = datetime.now()
     today_str = now.strftime('%A, %B %d, %Y')
 
+    # Format assignments with overdue items included and sorted by urgency
+    formatted = format_assignments(assignments, include_overdue=overdue)
+
+    overdue_count = len(overdue)
+    overdue_note = f"\n\n⚠️ You have {overdue_count} OVERDUE item(s) that need immediate attention!" if overdue_count > 0 else ""
+
     user_message = (
-        f"Today is {today_str}.\n\n"
-        f"Here are my upcoming assignments:\n\n"
-        f"{format_assignments(assignments)}"
+        f"Today is {today_str}.{overdue_note}\n\n"
+        f"Here are my assignments sorted by urgency (most urgent first):\n\n"
+        f"{formatted}"
     )
 
     try:
@@ -444,6 +531,150 @@ def grades_whatif():
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 400
+
+
+# ---------------------------------------------------------------------------
+# Comprehensive Study Guide endpoints
+# ---------------------------------------------------------------------------
+
+@app.route('/study-guide/extract-topics', methods=['POST'])
+def extract_topics():
+    """Extract topics and concepts from course materials."""
+    data = request.get_json(silent=True)
+    if not data or 'materials' not in data:
+        return jsonify({'error': 'No materials provided'}), 400
+
+    try:
+        course = validate_str(data.get('course', ''), 100, 'course')
+        unit = validate_str(data.get('unit', ''), 200, 'unit')
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+    materials = data['materials']
+
+    # Format materials for Claude
+    parts = []
+    if course:
+        parts.append(f"Course: {course}")
+    if unit:
+        parts.append(f"Unit: {unit}")
+
+    parts.append("\nCourse Materials:")
+    for i, m in enumerate(materials, 1):
+        if isinstance(m, str):
+            parts.append(f"{i}. {m}")
+        else:
+            name = m.get('name', m.get('title', 'Unknown'))
+            content = m.get('content', m.get('instructions', ''))
+            parts.append(f"{i}. {name}")
+            if content:
+                parts.append(f"   Content: {content[:500]}")
+
+    try:
+        return jsonify(call_claude_json(TOPIC_EXTRACTOR_PROMPT, '\n'.join(parts), max_tokens=2048))
+    except (ValueError, KeyError):
+        return jsonify({'error': 'Failed to parse AI response'}), 502
+    except Exception as e:
+        return jsonify({'error': f'Claude API error: {e}'}), 502
+
+
+@app.route('/study-guide/comprehensive', methods=['POST'])
+def comprehensive_study_guide():
+    """Generate a comprehensive study guide with learning path, videos, examples, and practice test."""
+    data = request.get_json(silent=True)
+    if not data or 'course' not in data:
+        return jsonify({'error': 'No course provided'}), 400
+
+    try:
+        course = validate_str(data['course'], 100, 'course')
+        unit = validate_str(data.get('unit', ''), 200, 'unit')
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+    topics = data.get('topics', [])
+    materials = data.get('materials', [])
+    student_notes = data.get('notes', '')
+
+    # Build a comprehensive prompt
+    parts = [f"Course: {course}"]
+    if unit:
+        parts.append(f"Unit: {unit}")
+
+    if topics:
+        parts.append(f"\nTopics to cover ({len(topics)}):")
+        for i, t in enumerate(topics, 1):
+            if isinstance(t, str):
+                parts.append(f"  {i}. {t}")
+            else:
+                name = t.get('name', t.get('topic', 'Unknown'))
+                details = t.get('details', '')
+                parts.append(f"  {i}. {name}: {details}" if details else f"  {i}. {name}")
+
+    if materials:
+        parts.append(f"\nCourse materials and assignments ({len(materials)}):")
+        for i, m in enumerate(materials, 1):
+            if isinstance(m, str):
+                parts.append(f"  {i}. {m}")
+            else:
+                name = m.get('name', m.get('title', 'Unknown'))
+                mtype = m.get('type', '')
+                parts.append(f"  {i}. [{mtype}] {name}" if mtype else f"  {i}. {name}")
+
+    if student_notes:
+        parts.append(f"\nStudent's notes/areas of difficulty: {student_notes[:500]}")
+
+    try:
+        result = call_claude_json(COMPREHENSIVE_STUDY_GUIDE_PROMPT, '\n'.join(parts), max_tokens=4096)
+        return jsonify(result)
+    except (ValueError, KeyError):
+        return jsonify({'error': 'Failed to parse AI response'}), 502
+    except Exception as e:
+        return jsonify({'error': f'Claude API error: {e}'}), 502
+
+
+@app.route('/study-guide/practice-test', methods=['POST'])
+def generate_practice_test():
+    """Generate a standalone practice test for a topic/unit."""
+    data = request.get_json(silent=True)
+    if not data or 'course' not in data:
+        return jsonify({'error': 'No course provided'}), 400
+
+    try:
+        course = validate_str(data['course'], 100, 'course')
+        unit = validate_str(data.get('unit', ''), 200, 'unit')
+        num_questions = min(max(int(data.get('num_questions', 10)), 5), 25)
+    except (ValueError, TypeError) as e:
+        return jsonify({'error': str(e)}), 400
+
+    topics = data.get('topics', [])
+    difficulty = data.get('difficulty', 'medium')  # easy, medium, hard, mixed
+
+    prompt = (
+        f"Generate a {num_questions}-question practice test for {course}"
+        + (f" - {unit}" if unit else "")
+        + f". Difficulty: {difficulty}.\n\n"
+        "Rules:\n"
+        "- Mix question types: multiple choice, free response, and calculations\n"
+        "- Include point values that sum to 100\n"
+        "- Provide detailed explanations for each answer\n"
+        "- Questions should progressively increase in difficulty\n\n"
+        "Respond ONLY with valid JSON. Format:\n"
+        '{"title": "...", "course": "...", "unit": "...", "time_limit_minutes": 45, '
+        '"total_points": 100, "instructions": "...", '
+        '"questions": [{"number": 1, "type": "multiple_choice|free_response|calculation", '
+        '"question": "...", "options": ["A...", "B...", "C...", "D..."], "points": 5, '
+        '"correct_answer": "...", "explanation": "...", "topic": "..."}]}'
+    )
+
+    if topics:
+        prompt += f"\n\nTopics to cover:\n" + "\n".join(f"- {t}" for t in topics[:10])
+
+    try:
+        return jsonify(call_claude_json(prompt, "", max_tokens=4096))
+    except (ValueError, KeyError):
+        return jsonify({'error': 'Failed to parse AI response'}), 502
+    except Exception as e:
+        return jsonify({'error': f'Claude API error: {e}'}), 502
 
 
 # ---------------------------------------------------------------------------

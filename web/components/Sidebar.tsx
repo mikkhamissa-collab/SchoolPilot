@@ -12,6 +12,7 @@ const navItems = [
   { href: "/grades", label: "Grades", icon: "📊" },
   { href: "/study", label: "Study", icon: "📖" },
   { href: "/sprint", label: "Sprint", icon: "🏃" },
+  { href: "/settings", label: "Settings", icon: "⚙️" },
 ];
 
 export default function Sidebar() {

@@ -307,14 +307,19 @@ scanBtn.addEventListener('click', async () => {
     // Support both old format (array) and new format ({ courses, assignments, overdue })
     const upcoming = Array.isArray(scraped) ? scraped : (scraped?.assignments || []);
     const overdue = Array.isArray(scraped) ? [] : (scraped?.overdue || []);
-    const assignments = [...upcoming, ...overdue];
-    if (!assignments || assignments.length === 0) {
+
+    if (upcoming.length === 0 && overdue.length === 0) {
       setStatus(planStatus, 'No assignments found. Are you on lms.asl.org/dash?', 'error');
       scanBtn.disabled = false;
       return;
     }
-    setStatus(planStatus, `Found ${assignments.length} assignments. Sending to AI...`, 'loading');
-    await apiFetch('/process', { assignments, email: userEmail });
+
+    const totalCount = upcoming.length + overdue.length;
+    const overdueNote = overdue.length > 0 ? ` (${overdue.length} overdue!)` : '';
+    setStatus(planStatus, `Found ${totalCount} assignments${overdueNote}. Sending to AI...`, 'loading');
+
+    // Send both upcoming and overdue separately so backend can prioritize properly
+    await apiFetch('/process', { assignments: upcoming, overdue, email: userEmail });
     setStatus(planStatus, 'Email sent! Check your inbox.', 'success');
     planTimestamp.textContent = `Last scanned: ${new Date().toLocaleTimeString()}`;
   } catch (err) {

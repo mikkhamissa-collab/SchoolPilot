@@ -6,22 +6,63 @@ import { useEffect, useState } from "react";
 
 interface SprintTask { task: string; minutes: number; type: "learn" | "review" | "practice"; topic: string; }
 interface SprintDay { day: number; date: string; theme: string; tasks: SprintTask[]; total_minutes: number; }
+interface SprintPlan {
+  test_name: string;
+  course?: string;
+  days: SprintDay[];
+  tips: string[];
+  predicted_grade?: number;
+  confidence?: string;
+}
 interface Sprint {
   id: string;
   test_name: string;
   test_date: string;
-  plan: { test_name: string; course?: string; days: SprintDay[]; tips: string[] };
+  plan: SprintPlan;
   checked: Record<string, boolean[]>;
   completed: boolean;
   created_at: string;
+  target_grade?: number;
 }
-interface Course { id: string; name: string; }
+interface Course {
+  id: string;
+  name: string;
+  policies: { importance?: number } | null;
+}
+interface GradeResult {
+  overall: number;
+  letter: string;
+}
 
 const TYPE_COLORS: Record<string, string> = {
   learn: "bg-blue-500/15 text-blue-400",
   review: "bg-yellow-500/15 text-yellow-400",
   practice: "bg-green-500/15 text-green-400",
 };
+
+// Calculate predicted grade based on progress and target
+function calculatePredictedGrade(
+  progress: number,
+  targetGrade: number,
+  currentGrade: number | null
+): { predicted: number; confidence: string } {
+  // Base prediction starts at current grade or target
+  const base = currentGrade !== null ? currentGrade : targetGrade * 0.8;
+
+  // Progress multiplier: 100% progress = full target potential
+  const progressMultiplier = progress / 100;
+
+  // Calculate predicted: move from base toward target based on progress
+  const predicted = base + (targetGrade - base) * progressMultiplier * 0.8;
+
+  // Confidence based on progress
+  let confidence = "Low";
+  if (progress >= 80) confidence = "High";
+  else if (progress >= 50) confidence = "Medium";
+  else if (progress >= 25) confidence = "Low-Medium";
+
+  return { predicted: Math.min(100, Math.max(0, predicted)), confidence };
+}
 
 export default function SprintPage() {
   const [courses, setCourses] = useState<Course[]>([]);
@@ -32,12 +73,16 @@ export default function SprintPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
+  // Current grade for the sprint course
+  const [currentGrade, setCurrentGrade] = useState<number | null>(null);
+
   // Form
   const [testName, setTestName] = useState("");
   const [testDate, setTestDate] = useState("");
   const [sprintCourse, setSprintCourse] = useState("");
   const [hoursPerDay, setHoursPerDay] = useState("2");
   const [topics, setTopics] = useState(["", "", ""]);
+  const [targetGrade, setTargetGrade] = useState("85");
 
   useEffect(() => {
     const load = async () => {
@@ -46,7 +91,7 @@ export default function SprintPage() {
       if (!user) return;
       setUserId(user.id);
       const [coursesRes, activeRes, pastRes] = await Promise.all([
-        supabase.from("courses").select("id, name").eq("user_id", user.id),
+        supabase.from("courses").select("id, name, policies").eq("user_id", user.id),
         supabase.from("sprints").select("*").eq("user_id", user.id).eq("completed", false).order("created_at", { ascending: false }).limit(1),
         supabase.from("sprints").select("*").eq("user_id", user.id).eq("completed", true).order("created_at", { ascending: false }).limit(5),
       ]);
@@ -54,12 +99,49 @@ export default function SprintPage() {
         setCourses(coursesRes.data);
         if (coursesRes.data.length > 0) setSprintCourse(coursesRes.data[0].name);
       }
-      if (activeRes.data?.[0]) setActiveSprint(activeRes.data[0]);
+      if (activeRes.data?.[0]) {
+        setActiveSprint(activeRes.data[0]);
+        // Load current grade for the active sprint's course
+        if (activeRes.data[0].plan.course) {
+          loadCurrentGrade(activeRes.data[0].plan.course, coursesRes.data || []);
+        }
+      }
       if (pastRes.data) setPastSprints(pastRes.data);
       setPageLoading(false);
     };
     load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const loadCurrentGrade = async (courseName: string, courseList: Course[]) => {
+    const course = courseList.find(c => c.name === courseName);
+    if (!course) return;
+
+    try {
+      const supabase = createClient();
+      const { data: grades } = await supabase
+        .from("grades")
+        .select("*")
+        .eq("course_id", course.id);
+
+      const { data: courseData } = await supabase
+        .from("courses")
+        .select("categories")
+        .eq("id", course.id)
+        .single();
+
+      if (grades && grades.length > 0 && courseData) {
+        const result = await apiFetch<GradeResult>("grades/calculate", {
+          categories: courseData.categories,
+          grades: grades.map(g => ({ category: g.category, name: g.name, score: g.score, max: g.max_score })),
+          policies: {},
+        });
+        setCurrentGrade(result.overall);
+      }
+    } catch {
+      // Ignore grade loading errors
+    }
+  };
 
   const handleCreate = async () => {
     const filteredTopics = topics.filter(t => t.trim());
@@ -70,12 +152,13 @@ export default function SprintPage() {
     setLoading(true);
     setError("");
     try {
-      const result = await apiFetch<Sprint["plan"]>("sprint/create", {
+      const result = await apiFetch<SprintPlan>("sprint/create", {
         test_name: testName.trim(),
         test_date: testDate,
         course: sprintCourse || undefined,
         topics: filteredTopics,
         available_hours_per_day: parseFloat(hoursPerDay) || 2,
+        target_grade: parseFloat(targetGrade) || 85,
       });
 
       const supabase = createClient();
@@ -93,7 +176,10 @@ export default function SprintPage() {
         })
         .select()
         .single();
-      if (data) setActiveSprint(data);
+      if (data) {
+        setActiveSprint({ ...data, target_grade: parseFloat(targetGrade) });
+        if (course) loadCurrentGrade(course.name, courses);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
@@ -119,6 +205,7 @@ export default function SprintPage() {
     await supabase.from("sprints").update({ completed: true }).eq("id", activeSprint.id);
     setPastSprints([{ ...activeSprint, completed: true }, ...pastSprints]);
     setActiveSprint(null);
+    setCurrentGrade(null);
   };
 
   if (pageLoading) {
@@ -135,6 +222,17 @@ export default function SprintPage() {
   const doneTasks = activeSprint ? Object.values(activeSprint.checked).flat().filter(Boolean).length : 0;
   const progress = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
+  // Calculate predicted grade
+  const activeTargetGrade = activeSprint?.target_grade || parseFloat(targetGrade) || 85;
+  const prediction = activeSprint
+    ? calculatePredictedGrade(progress, activeTargetGrade, currentGrade)
+    : null;
+
+  // Days until test
+  const daysUntilTest = activeSprint
+    ? Math.ceil((new Date(activeSprint.test_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+    : 0;
+
   const inputClass = "px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent text-sm";
 
   return (
@@ -150,17 +248,52 @@ export default function SprintPage() {
             <p className="text-text-muted text-sm mt-1">
               {activeSprint.plan.course && `${activeSprint.plan.course} · `}
               Test: {new Date(activeSprint.test_date).toLocaleDateString()}
+              {daysUntilTest > 0 && (
+                <span className={`ml-2 font-medium ${daysUntilTest <= 2 ? "text-error" : daysUntilTest <= 5 ? "text-warning" : "text-text-secondary"}`}>
+                  ({daysUntilTest} {daysUntilTest === 1 ? "day" : "days"} left)
+                </span>
+              )}
             </p>
           </div>
 
-          {/* Progress */}
-          <div className="p-4 rounded-xl bg-bg-card border border-border">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-text-secondary">{doneTasks}/{totalTasks} tasks</span>
-              <span className="text-sm font-semibold text-accent">{progress}%</span>
+          {/* Progress & Prediction */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 rounded-xl bg-bg-card border border-border">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-text-secondary">Progress</span>
+                <span className="text-sm font-semibold text-accent">{progress}%</span>
+              </div>
+              <div className="w-full h-2 bg-bg-dark rounded-full overflow-hidden">
+                <div className="h-full bg-accent rounded-full transition-all" style={{ width: `${progress}%` }} />
+              </div>
+              <p className="text-text-muted text-xs mt-2">{doneTasks}/{totalTasks} tasks</p>
             </div>
-            <div className="w-full h-2 bg-bg-dark rounded-full overflow-hidden">
-              <div className="h-full bg-accent rounded-full transition-all" style={{ width: `${progress}%` }} />
+
+            <div className="p-4 rounded-xl bg-bg-card border border-border">
+              <span className="text-sm text-text-secondary block mb-1">Predicted Grade</span>
+              {prediction ? (
+                <>
+                  <div className="flex items-baseline gap-2">
+                    <span className={`text-2xl font-bold ${
+                      prediction.predicted >= activeTargetGrade ? "text-success" :
+                      prediction.predicted >= activeTargetGrade - 5 ? "text-warning" : "text-error"
+                    }`}>
+                      {prediction.predicted.toFixed(0)}%
+                    </span>
+                    <span className="text-text-muted text-xs">
+                      (target: {activeTargetGrade}%)
+                    </span>
+                  </div>
+                  <p className="text-text-muted text-xs mt-1">
+                    Confidence: {prediction.confidence}
+                    {currentGrade !== null && (
+                      <span className="ml-2">· Current: {currentGrade.toFixed(0)}%</span>
+                    )}
+                  </p>
+                </>
+              ) : (
+                <span className="text-text-muted">--</span>
+              )}
             </div>
           </div>
 
@@ -248,17 +381,34 @@ export default function SprintPage() {
               ))}
             </select>
           </div>
-          <div className="flex items-center gap-3">
-            <label className="text-text-secondary text-sm whitespace-nowrap">Hours/day</label>
-            <input
-              type="number"
-              value={hoursPerDay}
-              onChange={(e) => setHoursPerDay(e.target.value)}
-              min="0.5"
-              max="8"
-              step="0.5"
-              className={`w-20 ${inputClass}`}
-            />
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex items-center gap-2">
+              <label className="text-text-secondary text-sm whitespace-nowrap">Hours/day</label>
+              <input
+                type="number"
+                value={hoursPerDay}
+                onChange={(e) => setHoursPerDay(e.target.value)}
+                min="0.5"
+                max="8"
+                step="0.5"
+                className={`w-20 ${inputClass}`}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-text-secondary text-sm whitespace-nowrap">Target Grade</label>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={targetGrade}
+                  onChange={(e) => setTargetGrade(e.target.value)}
+                  min="0"
+                  max="100"
+                  className={`w-20 ${inputClass}`}
+                />
+                <span className="text-text-muted text-sm">%</span>
+              </div>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -310,14 +460,27 @@ export default function SprintPage() {
         <div>
           <h3 className="text-sm font-semibold text-text-secondary mb-3">Past Sprints</h3>
           <div className="space-y-2">
-            {pastSprints.map((s) => (
-              <div key={s.id} className="p-3 rounded-lg bg-bg-card border border-border">
-                <p className="text-white text-sm font-medium">{s.plan.test_name}</p>
-                <p className="text-text-muted text-xs mt-0.5">
-                  {new Date(s.test_date).toLocaleDateString()} · {s.plan.days?.length || 0} days
-                </p>
-              </div>
-            ))}
+            {pastSprints.map((s) => {
+              const pastTotal = s.plan.days.reduce((sum, d) => sum + d.tasks.length, 0);
+              const pastDone = Object.values(s.checked).flat().filter(Boolean).length;
+              const pastProgress = pastTotal > 0 ? Math.round((pastDone / pastTotal) * 100) : 0;
+
+              return (
+                <div key={s.id} className="p-3 rounded-lg bg-bg-card border border-border">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-white text-sm font-medium">{s.plan.test_name}</p>
+                      <p className="text-text-muted text-xs mt-0.5">
+                        {new Date(s.test_date).toLocaleDateString()} · {s.plan.days?.length || 0} days
+                      </p>
+                    </div>
+                    <span className={`text-sm font-medium ${pastProgress >= 80 ? "text-success" : pastProgress >= 50 ? "text-warning" : "text-text-muted"}`}>
+                      {pastProgress}%
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

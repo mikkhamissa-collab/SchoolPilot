@@ -6,8 +6,26 @@ import { useEffect, useState, useCallback } from "react";
 
 interface Category { name: string; weight: number; }
 interface Grade { id: string; category: string; name: string; score: number; max_score: number; }
-interface Course { id: string; name: string; categories: Category[]; policies: Record<string, unknown>; }
+interface Course { id: string; name: string; categories: Category[]; policies: { marzano?: boolean; importance?: number } | null; }
 interface GradeResult { overall: number; letter: string; categories: Record<string, { average: number; weight: number; assignments: number }>; }
+
+// Marzano grading scale labels
+const MARZANO_LABELS: Record<number, { label: string; color: string }> = {
+  4: { label: "Exceeding", color: "text-success" },
+  3.5: { label: "Mastering", color: "text-accent" },
+  3: { label: "Meeting", color: "text-accent" },
+  2.5: { label: "Approaching", color: "text-warning" },
+  2: { label: "Developing", color: "text-warning" },
+  1.5: { label: "Beginning", color: "text-error" },
+  1: { label: "Beginning", color: "text-error" },
+  0: { label: "Not Yet", color: "text-error" },
+};
+
+function getMarzanoLabel(score: number): { label: string; color: string } {
+  // Round to nearest 0.5
+  const rounded = Math.round(score * 2) / 2;
+  return MARZANO_LABELS[rounded] || MARZANO_LABELS[Math.floor(score)] || { label: "", color: "text-text-muted" };
+}
 
 export default function GradesPage() {
   const [courses, setCourses] = useState<Course[]>([]);
@@ -311,23 +329,58 @@ export default function GradesPage() {
         <>
           {gradeResult ? (
             <div className="p-5 rounded-xl bg-bg-card border border-border">
-              <div className="flex items-baseline gap-3 mb-4">
-                <span className="text-4xl font-bold text-white">{gradeResult.overall.toFixed(1)}%</span>
-                <span className="text-2xl font-semibold text-accent">{gradeResult.letter}</span>
-              </div>
-              <div className="space-y-2">
-                {Object.entries(gradeResult.categories).map(([name, data]) => (
-                  <div key={name} className="flex items-center justify-between text-sm">
-                    <span className="text-text-secondary">
-                      {name} <span className="text-text-muted">({(data.weight * 100).toFixed(0)}%)</span>
+              {activeCourse.policies?.marzano ? (
+                // Marzano display (0-4 scale)
+                <>
+                  <div className="flex items-baseline gap-3 mb-2">
+                    <span className="text-4xl font-bold text-white">
+                      {(gradeResult.overall / 25).toFixed(1)}
                     </span>
-                    <span className="text-white font-medium">
-                      {data.average.toFixed(1)}%
-                      <span className="text-text-muted ml-1">({data.assignments})</span>
-                    </span>
+                    <span className="text-lg text-text-muted">/ 4.0</span>
                   </div>
-                ))}
-              </div>
+                  <div className={`text-lg font-semibold mb-4 ${getMarzanoLabel(gradeResult.overall / 25).color}`}>
+                    {getMarzanoLabel(gradeResult.overall / 25).label}
+                  </div>
+                  <div className="space-y-2">
+                    {Object.entries(gradeResult.categories).map(([name, data]) => {
+                      const marzanoScore = data.average / 25;
+                      const marzanoInfo = getMarzanoLabel(marzanoScore);
+                      return (
+                        <div key={name} className="flex items-center justify-between text-sm">
+                          <span className="text-text-secondary">
+                            {name} <span className="text-text-muted">({(data.weight * 100).toFixed(0)}%)</span>
+                          </span>
+                          <div className="text-right">
+                            <span className="text-white font-medium">{marzanoScore.toFixed(1)}</span>
+                            <span className={`ml-2 text-xs ${marzanoInfo.color}`}>{marzanoInfo.label}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                // Standard percentage display
+                <>
+                  <div className="flex items-baseline gap-3 mb-4">
+                    <span className="text-4xl font-bold text-white">{gradeResult.overall.toFixed(1)}%</span>
+                    <span className="text-2xl font-semibold text-accent">{gradeResult.letter}</span>
+                  </div>
+                  <div className="space-y-2">
+                    {Object.entries(gradeResult.categories).map(([name, data]) => (
+                      <div key={name} className="flex items-center justify-between text-sm">
+                        <span className="text-text-secondary">
+                          {name} <span className="text-text-muted">({(data.weight * 100).toFixed(0)}%)</span>
+                        </span>
+                        <span className="text-white font-medium">
+                          {data.average.toFixed(1)}%
+                          <span className="text-text-muted ml-1">({data.assignments})</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             <div className="p-5 rounded-xl bg-bg-card border border-border text-center text-text-muted">
@@ -445,20 +498,37 @@ export default function GradesPage() {
             <div>
               <h3 className="text-sm font-semibold text-text-secondary mb-3">Logged Grades</h3>
               <div className="space-y-1">
-                {grades.map((g) => (
-                  <div key={g.id} className="flex items-center justify-between p-3 rounded-lg bg-bg-card border border-border text-sm">
-                    <div>
-                      <span className="text-white">{g.name}</span>
-                      <span className="text-text-muted ml-2">{g.category}</span>
+                {grades.map((g) => {
+                  const pct = (g.score / g.max_score) * 100;
+                  const isMarzano = activeCourse?.policies?.marzano;
+                  const marzanoScore = isMarzano ? g.score : null;
+                  const marzanoInfo = marzanoScore !== null ? getMarzanoLabel(marzanoScore) : null;
+
+                  return (
+                    <div key={g.id} className="flex items-center justify-between p-3 rounded-lg bg-bg-card border border-border text-sm">
+                      <div>
+                        <span className="text-white">{g.name}</span>
+                        <span className="text-text-muted ml-2">{g.category}</span>
+                      </div>
+                      {isMarzano ? (
+                        <div className="text-right">
+                          <span className="text-white font-medium">{g.score.toFixed(1)}</span>
+                          <span className="text-text-muted">/4</span>
+                          {marzanoInfo && (
+                            <span className={`ml-2 text-xs ${marzanoInfo.color}`}>{marzanoInfo.label}</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-white font-medium">
+                          {g.score}/{g.max_score}
+                          <span className="text-text-muted ml-1">
+                            ({pct.toFixed(0)}%)
+                          </span>
+                        </span>
+                      )}
                     </div>
-                    <span className="text-white font-medium">
-                      {g.score}/{g.max_score}
-                      <span className="text-text-muted ml-1">
-                        ({((g.score / g.max_score) * 100).toFixed(0)}%)
-                      </span>
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
