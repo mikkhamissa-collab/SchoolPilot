@@ -321,6 +321,72 @@ scanBtn.addEventListener('click', async () => {
 });
 
 // ============================================================
+// SYNC TO WEB APP (schoolpilot.co)
+// ============================================================
+const syncWebBtn = document.getElementById('sync-web-btn');
+const WEB_APP_URL = 'https://schoolpilot.co';
+
+if (syncWebBtn) {
+  syncWebBtn.addEventListener('click', async () => {
+    syncWebBtn.disabled = true;
+    setStatus(planStatus, 'Scanning Teamie...', 'loading');
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab || !tab.url || !tab.url.includes('lms.asl.org')) {
+        setStatus(planStatus, 'Not on Teamie. Navigate to lms.asl.org/dash first.', 'error');
+        syncWebBtn.disabled = false;
+        return;
+      }
+      const [result] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
+      const assignments = result?.result;
+      if (!assignments || assignments.length === 0) {
+        setStatus(planStatus, 'No assignments found. Are you on lms.asl.org/dash?', 'error');
+        syncWebBtn.disabled = false;
+        return;
+      }
+      setStatus(planStatus, `Found ${assignments.length} assignments. Syncing to web...`, 'loading');
+
+      const { webAuthToken } = await chrome.storage.local.get(['webAuthToken']);
+      if (!webAuthToken) {
+        setStatus(planStatus, 'Not signed in to schoolpilot.co. Opening sign-in page...', 'error');
+        chrome.tabs.create({ url: `${WEB_APP_URL}/auth/login` });
+        syncWebBtn.disabled = false;
+        return;
+      }
+
+      const res = await fetch(`${WEB_APP_URL}/api/sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${webAuthToken}`
+        },
+        body: JSON.stringify({ assignments, type: 'assignments' })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        if (res.status === 401) {
+          setStatus(planStatus, 'Session expired. Sign in to schoolpilot.co again.', 'error');
+          chrome.storage.local.remove(['webAuthToken']);
+        } else {
+          throw new Error(err.error || 'Sync failed');
+        }
+        syncWebBtn.disabled = false;
+        return;
+      }
+
+      const data = await res.json();
+      setStatus(planStatus, `Synced ${data.count} assignments to schoolpilot.co!`, 'success');
+      planTimestamp.textContent = `Last synced: ${new Date().toLocaleTimeString()}`;
+    } catch (err) {
+      setStatus(planStatus, handleFetchError(err), 'error');
+    } finally {
+      syncWebBtn.disabled = false;
+    }
+  });
+}
+
+// ============================================================
 // GRADES — COURSE MANAGEMENT
 // ============================================================
 function saveCourses() {

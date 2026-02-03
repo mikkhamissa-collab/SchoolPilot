@@ -133,6 +133,11 @@ select.form-input { appearance: auto; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 .timestamp { margin-top: 10px; font-size: 11px; color: var(--text-dim); }
+.open-web-link {
+  display: block; text-align: center; margin-top: 12px; color: var(--purple-light);
+  font-size: 12px; text-decoration: none; opacity: 0.8; transition: opacity 0.2s;
+}
+.open-web-link:hover { opacity: 1; text-decoration: underline; }
 
 /* === Sections / Cards === */
 .grade-section {
