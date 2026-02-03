@@ -1,4 +1,4 @@
-// Sync endpoint — receives scraped data from extension and auto-creates courses
+// Sync endpoint — receives deep-scraped data from extension and populates database
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -9,10 +9,35 @@ const DEFAULT_CATEGORIES = [
   { name: "Participation", weight: 0.25 },
 ];
 
-// Clean course name (Teamie often includes teacher name on next line)
 function cleanCourseName(raw: string): string {
-  const firstLine = raw.split("\n")[0].trim();
-  return firstLine;
+  return raw.split("\n")[0].trim().replace(/\s+/g, " ");
+}
+
+interface ScrapedAssignment {
+  title?: string;
+  type?: string;
+  due?: string;
+  course?: string;
+  date?: string;
+  day?: string;
+  isOverdue?: boolean;
+  icon?: string;
+}
+
+interface ScrapedCourse {
+  name: string;
+  id?: string;
+  href?: string;
+}
+
+function dedup(items: ScrapedAssignment[]): ScrapedAssignment[] {
+  const seen = new Set<string>();
+  return items.filter((a) => {
+    const key = `${a.title || ""}|${a.course || ""}|${a.date || ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -23,7 +48,6 @@ export async function POST(request: NextRequest) {
 
   const token = authHeader.slice(7);
 
-  // Verify user with Supabase
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -35,46 +59,47 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { assignments = [], courses: scrapedCourses = [], type } = body;
+  const {
+    assignments = [],
+    overdue = [],
+    courses: scrapedCourses = [],
+    newsfeed = [],
+    stats = {},
+    type,
+  } = body;
 
-  if (!Array.isArray(assignments)) {
-    return NextResponse.json({ error: "Missing assignments array" }, { status: 400 });
-  }
-
-  // Use service role for inserts (bypasses RLS)
   const admin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_KEY!
   );
 
-  // Deduplicate assignments by title + course + date
-  const seen = new Set<string>();
-  const dedupedAssignments = assignments.filter((a: { title?: string; course?: string; date?: string }) => {
-    const key = `${a.title || ""}|${a.course || ""}|${a.date || ""}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
+  // Deduplicate assignments and overdue separately
+  const dedupedAssignments = dedup(assignments);
+  const dedupedOverdue = dedup(overdue);
+  const allItems = [...dedupedAssignments, ...dedupedOverdue];
+
+  // 1. Save the full scraped data (assignments + overdue + newsfeed)
+  const { error: scrapeError } = await admin.from("scraped_assignments").insert({
+    user_id: user.id,
+    assignments: {
+      upcoming: dedupedAssignments,
+      overdue: dedupedOverdue,
+      newsfeed,
+      stats,
+    },
+    scraped_at: new Date().toISOString(),
   });
 
-  // 1. Save the deduplicated scraped assignments (if any)
-  if (dedupedAssignments.length > 0) {
-    const { error: scrapeError } = await admin.from("scraped_assignments").insert({
-      user_id: user.id,
-      assignments: dedupedAssignments,
-      scraped_at: new Date().toISOString(),
-    });
-
-    if (scrapeError) {
-      return NextResponse.json({ error: scrapeError.message }, { status: 500 });
-    }
+  if (scrapeError) {
+    return NextResponse.json({ error: scrapeError.message }, { status: 500 });
   }
 
-  // 2. Collect ALL course names from both scraped courses AND assignment data
+  // 2. Collect ALL course names from scraped courses + assignment data
   const courseNames = new Set<string>();
 
-  // From the directly scraped course list (Classes section on Teamie dashboard)
+  // From directly scraped course list (Classes section)
   if (Array.isArray(scrapedCourses)) {
-    for (const c of scrapedCourses) {
+    for (const c of scrapedCourses as ScrapedCourse[]) {
       const name = typeof c === "string" ? c : c?.name;
       if (name && typeof name === "string") {
         const cleaned = cleanCourseName(name);
@@ -83,10 +108,18 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // From assignment course fields
-  for (const a of dedupedAssignments) {
+  // From assignment + overdue course fields
+  for (const a of allItems) {
     if (a.course && typeof a.course === "string") {
       const cleaned = cleanCourseName(a.course);
+      if (cleaned) courseNames.add(cleaned);
+    }
+  }
+
+  // From newsfeed course fields
+  for (const n of newsfeed) {
+    if (n.course && typeof n.course === "string") {
+      const cleaned = cleanCourseName(n.course);
       if (cleaned) courseNames.add(cleaned);
     }
   }
@@ -116,7 +149,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 3. Save as a plan entry so it shows on the Plan page
+  // 3. Save as a plan entry (upcoming only, not overdue)
   if (type === "assignments" && dedupedAssignments.length > 0) {
     await admin.from("plans").insert({
       user_id: user.id,
@@ -129,6 +162,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     status: "synced",
     count: dedupedAssignments.length,
+    overdue_count: dedupedOverdue.length,
     courses_created: coursesCreated,
     total_courses: courseNames.size,
   });

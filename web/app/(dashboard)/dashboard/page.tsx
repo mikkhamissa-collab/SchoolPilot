@@ -11,24 +11,25 @@ interface Assignment {
   course?: string;
   date?: string;
   day?: string;
+  isOverdue?: boolean;
 }
 
-interface Stats {
+interface DashStats {
   courseCount: number;
   activeSprint: string | null;
   recentPlanDate: string | null;
   upcomingCount: number;
+  overdueCount: number;
 }
 
 export default function DashboardPage() {
   const [user, setUser] = useState<{ name: string } | null>(null);
-  const [stats, setStats] = useState<Stats>({
-    courseCount: 0,
-    activeSprint: null,
-    recentPlanDate: null,
-    upcomingCount: 0,
+  const [stats, setStats] = useState<DashStats>({
+    courseCount: 0, activeSprint: null, recentPlanDate: null,
+    upcomingCount: 0, overdueCount: 0,
   });
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [upcoming, setUpcoming] = useState<Assignment[]>([]);
+  const [overdue, setOverdue] = useState<Assignment[]>([]);
   const [courseNames, setCourseNames] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -40,7 +41,6 @@ export default function DashboardPage() {
 
       setUser({ name: user.user_metadata?.full_name || user.email?.split("@")[0] || "Student" });
 
-      // Fetch stats in parallel
       const [coursesRes, sprints, plans, assignmentsRes] = await Promise.all([
         supabase.from("courses").select("id, name").eq("user_id", user.id),
         supabase.from("sprints").select("test_name").eq("user_id", user.id).eq("completed", false).limit(1),
@@ -48,24 +48,45 @@ export default function DashboardPage() {
         supabase.from("scraped_assignments").select("assignments").eq("user_id", user.id).order("scraped_at", { ascending: false }).limit(1),
       ]);
 
-      const rawAssignments: Assignment[] = assignmentsRes.data?.[0]?.assignments || [];
-      // Deduplicate by title + course + date
-      const seen = new Set<string>();
-      const assignmentList = rawAssignments.filter((a) => {
-        const key = `${a.title}|${a.course || ""}|${a.date || ""}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
+      // Handle both old format (flat array) and new format ({ upcoming, overdue, ... })
+      const rawData = assignmentsRes.data?.[0]?.assignments;
+      let upcomingList: Assignment[] = [];
+      let overdueList: Assignment[] = [];
+
+      if (Array.isArray(rawData)) {
+        // Old format: flat array
+        upcomingList = rawData;
+      } else if (rawData && typeof rawData === "object") {
+        // New format: { upcoming: [], overdue: [], newsfeed: [], stats: {} }
+        upcomingList = rawData.upcoming || [];
+        overdueList = rawData.overdue || [];
+      }
+
+      // Deduplicate
+      const dedup = (items: Assignment[]) => {
+        const seen = new Set<string>();
+        return items.filter((a) => {
+          const key = `${a.title}|${a.course || ""}|${a.date || ""}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      };
+
+      upcomingList = dedup(upcomingList);
+      overdueList = dedup(overdueList);
+
       const courseList = coursesRes.data || [];
       setCourseNames(courseList.map((c: { name: string }) => c.name));
-      setAssignments(assignmentList);
+      setUpcoming(upcomingList);
+      setOverdue(overdueList);
 
       setStats({
         courseCount: courseList.length,
         activeSprint: sprints.data?.[0]?.test_name || null,
         recentPlanDate: plans.data?.[0]?.created_at || null,
-        upcomingCount: assignmentList.length,
+        upcomingCount: upcomingList.length,
+        overdueCount: overdueList.length,
       });
       setLoading(false);
     };
@@ -85,20 +106,67 @@ export default function DashboardPage() {
     );
   }
 
-  // Clean course name (first line only)
   const cleanCourse = (c?: string) => c?.split("\n")[0]?.trim() || "";
 
   // Group assignments by date
-  const grouped: Record<string, Assignment[]> = {};
-  for (const a of assignments) {
-    const key = a.day && a.date ? `${a.day} ${a.date}` : "Upcoming";
-    if (!grouped[key]) grouped[key] = [];
-    grouped[key].push(a);
-  }
+  const groupByDate = (items: Assignment[]) => {
+    const grouped: Record<string, Assignment[]> = {};
+    for (const a of items) {
+      const key = a.day && a.date ? `${a.day} ${a.date}` : "Upcoming";
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(a);
+    }
+    return grouped;
+  };
+
+  const typeBadgeColor = (type?: string) => {
+    const t = (type || "").toLowerCase();
+    if (t.includes("assess") || t.includes("test") || t.includes("exam") || t.includes("offline")) return "bg-error/15 text-error";
+    if (t.includes("quiz")) return "bg-warning/15 text-warning";
+    if (t.includes("assignment")) return "bg-accent/15 text-accent";
+    if (t.includes("task")) return "bg-blue-500/15 text-blue-400";
+    return "bg-bg-hover text-text-muted";
+  };
+
+  const renderAssignment = (a: Assignment, i: number, isOverdue = false) => (
+    <div
+      key={`${a.title}-${i}`}
+      className={`flex items-center justify-between p-3 rounded-xl border ${
+        isOverdue ? "bg-error/5 border-error/20" : "bg-bg-card border-border"
+      }`}
+    >
+      <div className="min-w-0 flex-1">
+        <p className="text-white text-sm font-medium truncate">{a.title}</p>
+        <div className="flex items-center gap-2 mt-1">
+          {a.type && (
+            <span className={`px-2 py-0.5 rounded text-xs font-medium ${typeBadgeColor(a.type)}`}>
+              {a.type.split("\n")[0]}
+            </span>
+          )}
+          {isOverdue && (
+            <span className="px-2 py-0.5 rounded text-xs font-medium bg-error/20 text-error">
+              Overdue
+            </span>
+          )}
+          {cleanCourse(a.course) && (
+            <span className="text-text-muted text-xs truncate">{cleanCourse(a.course)}</span>
+          )}
+        </div>
+      </div>
+      {a.due && (
+        <span className={`text-xs ml-3 flex-shrink-0 ${isOverdue ? "text-error" : "text-text-secondary"}`}>
+          {a.due}
+        </span>
+      )}
+    </div>
+  );
+
+  const hasData = upcoming.length > 0 || overdue.length > 0;
 
   const statCards = [
     { label: "Courses", value: stats.courseCount, icon: "📊", href: "/grades", color: "text-accent" },
     { label: "Upcoming", value: stats.upcomingCount, icon: "📅", href: "/plan", color: "text-warning" },
+    { label: "Overdue", value: stats.overdueCount, icon: "🔴", href: "/plan", color: stats.overdueCount > 0 ? "text-error" : "text-text-muted" },
     {
       label: "Active Sprint",
       value: stats.activeSprint ? "Active" : "None",
@@ -107,23 +175,7 @@ export default function DashboardPage() {
       color: stats.activeSprint ? "text-success" : "text-text-muted",
       sub: stats.activeSprint,
     },
-    {
-      label: "Last Plan",
-      value: stats.recentPlanDate ? new Date(stats.recentPlanDate).toLocaleDateString() : "Never",
-      icon: "📋",
-      href: "/plan",
-      color: stats.recentPlanDate ? "text-accent" : "text-text-muted",
-    },
   ];
-
-  // Type-based badge color
-  const typeBadgeColor = (type?: string) => {
-    const t = (type || "").toLowerCase();
-    if (t.includes("assess") || t.includes("test") || t.includes("exam")) return "bg-error/15 text-error";
-    if (t.includes("quiz")) return "bg-warning/15 text-warning";
-    if (t.includes("homework") || t.includes("assignment")) return "bg-accent/15 text-accent";
-    return "bg-bg-hover text-text-muted";
-  };
 
   return (
     <div className="space-y-8 max-w-4xl">
@@ -148,9 +200,7 @@ export default function DashboardPage() {
               <span className="text-xl">{s.icon}</span>
             </div>
             <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
-            {s.sub && (
-              <p className="text-text-muted text-xs mt-1 truncate">{s.sub}</p>
-            )}
+            {s.sub && <p className="text-text-muted text-xs mt-1 truncate">{s.sub}</p>}
           </Link>
         ))}
       </div>
@@ -161,9 +211,7 @@ export default function DashboardPage() {
           <h3 className="text-lg font-semibold text-white mb-3">Your Courses</h3>
           <div className="flex flex-wrap gap-2">
             {courseNames.map((name) => (
-              <Link
-                key={name}
-                href="/grades"
+              <Link key={name} href="/grades"
                 className="px-4 py-2 rounded-lg bg-bg-card border border-border text-sm text-white hover:border-accent/30 transition-colors"
               >
                 {name}
@@ -173,47 +221,39 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Upcoming Assignments */}
-      {assignments.length > 0 ? (
+      {/* Overdue Assignments */}
+      {overdue.length > 0 && (
         <div>
-          <h3 className="text-lg font-semibold text-white mb-3">Upcoming Assignments</h3>
+          <h3 className="text-lg font-semibold text-error mb-3">
+            Overdue ({overdue.length})
+          </h3>
+          <div className="space-y-2">
+            {overdue.map((a, i) => renderAssignment(a, i, true))}
+          </div>
+        </div>
+      )}
+
+      {/* Upcoming Assignments */}
+      {upcoming.length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold text-white mb-3">Upcoming</h3>
           <div className="space-y-4">
-            {Object.entries(grouped).map(([dateLabel, items]) => (
+            {Object.entries(groupByDate(upcoming)).map(([dateLabel, items]) => (
               <div key={dateLabel}>
                 <p className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-2">
                   {dateLabel}
                 </p>
                 <div className="space-y-2">
-                  {items.map((a, i) => (
-                    <div
-                      key={`${a.title}-${i}`}
-                      className="flex items-center justify-between p-3 rounded-xl bg-bg-card border border-border"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-white text-sm font-medium truncate">{a.title}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          {a.type && (
-                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${typeBadgeColor(a.type)}`}>
-                              {a.type.split("\n")[0]}
-                            </span>
-                          )}
-                          {cleanCourse(a.course) && (
-                            <span className="text-text-muted text-xs">{cleanCourse(a.course)}</span>
-                          )}
-                        </div>
-                      </div>
-                      {a.due && (
-                        <span className="text-text-secondary text-xs ml-3 flex-shrink-0">{a.due}</span>
-                      )}
-                    </div>
-                  ))}
+                  {items.map((a, i) => renderAssignment(a, i))}
                 </div>
               </div>
             ))}
           </div>
         </div>
-      ) : (
-        /* No assignments yet — show sync instructions */
+      )}
+
+      {/* No data — sync instructions */}
+      {!hasData && (
         <div className="p-6 rounded-xl bg-accent/5 border border-accent/20">
           <h3 className="text-lg font-semibold text-white mb-3">Sync Your Assignments</h3>
           <p className="text-text-secondary text-sm mb-4">
@@ -240,30 +280,21 @@ export default function DashboardPage() {
       <div>
         <h3 className="text-lg font-semibold text-white mb-3">Quick Actions</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <Link
-            href="/focus"
-            className="flex items-center gap-3 p-4 rounded-xl bg-bg-card border border-border hover:border-accent/30 transition-colors"
-          >
+          <Link href="/focus" className="flex items-center gap-3 p-4 rounded-xl bg-bg-card border border-border hover:border-accent/30 transition-colors">
             <span className="text-2xl">🎯</span>
             <div>
               <p className="text-white font-medium">Break down an assignment</p>
               <p className="text-text-muted text-sm">Get actionable chunks</p>
             </div>
           </Link>
-          <Link
-            href="/study"
-            className="flex items-center gap-3 p-4 rounded-xl bg-bg-card border border-border hover:border-accent/30 transition-colors"
-          >
+          <Link href="/study" className="flex items-center gap-3 p-4 rounded-xl bg-bg-card border border-border hover:border-accent/30 transition-colors">
             <span className="text-2xl">📖</span>
             <div>
               <p className="text-white font-medium">Generate a study guide</p>
               <p className="text-text-muted text-sm">AI-powered study material</p>
             </div>
           </Link>
-          <Link
-            href="/sprint"
-            className="flex items-center gap-3 p-4 rounded-xl bg-bg-card border border-border hover:border-accent/30 transition-colors"
-          >
+          <Link href="/sprint" className="flex items-center gap-3 p-4 rounded-xl bg-bg-card border border-border hover:border-accent/30 transition-colors">
             <span className="text-2xl">🏃</span>
             <div>
               <p className="text-white font-medium">Start a study sprint</p>

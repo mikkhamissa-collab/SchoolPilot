@@ -304,8 +304,10 @@ scanBtn.addEventListener('click', async () => {
     }
     const [result] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
     const scraped = result?.result;
-    // Support both old format (array) and new format ({ courses, assignments })
-    const assignments = Array.isArray(scraped) ? scraped : (scraped?.assignments || []);
+    // Support both old format (array) and new format ({ courses, assignments, overdue })
+    const upcoming = Array.isArray(scraped) ? scraped : (scraped?.assignments || []);
+    const overdue = Array.isArray(scraped) ? [] : (scraped?.overdue || []);
+    const assignments = [...upcoming, ...overdue];
     if (!assignments || assignments.length === 0) {
       setStatus(planStatus, 'No assignments found. Are you on lms.asl.org/dash?', 'error');
       scanBtn.disabled = false;
@@ -341,19 +343,21 @@ if (syncWebBtn) {
       }
       const [result] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
       const scraped = result?.result;
-      // Support both old format (array) and new format ({ courses, assignments, newsfeed })
+      // Support both old format (array) and new format ({ courses, assignments, overdue, newsfeed })
       const assignments = Array.isArray(scraped) ? scraped : (scraped?.assignments || []);
+      const overdue = Array.isArray(scraped) ? [] : (scraped?.overdue || []);
       const scrapedCourses = Array.isArray(scraped) ? [] : (scraped?.courses || []);
       const newsfeed = Array.isArray(scraped) ? [] : (scraped?.newsfeed || []);
+      const stats = Array.isArray(scraped) ? {} : (scraped?.stats || {});
 
-      if (assignments.length === 0 && scrapedCourses.length === 0) {
+      if (assignments.length === 0 && scrapedCourses.length === 0 && overdue.length === 0) {
         setStatus(planStatus, 'No data found. Are you on lms.asl.org/dash?', 'error');
         syncWebBtn.disabled = false;
         return;
       }
 
-      const totalItems = assignments.length + scrapedCourses.length;
-      setStatus(planStatus, `Found ${scrapedCourses.length} courses, ${assignments.length} assignments. Syncing...`, 'loading');
+      const totalAssign = assignments.length + overdue.length;
+      setStatus(planStatus, `Found ${scrapedCourses.length} courses, ${totalAssign} assignments${overdue.length ? ` (${overdue.length} overdue)` : ''}. Syncing...`, 'loading');
 
       const { webAuthToken } = await chrome.storage.local.get(['webAuthToken']);
       if (!webAuthToken) {
@@ -369,7 +373,7 @@ if (syncWebBtn) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${webAuthToken}`
         },
-        body: JSON.stringify({ assignments, courses: scrapedCourses, newsfeed, type: 'assignments' })
+        body: JSON.stringify({ assignments, overdue, courses: scrapedCourses, newsfeed, stats, type: 'assignments' })
       });
 
       if (!res.ok) {
@@ -386,9 +390,10 @@ if (syncWebBtn) {
 
       const data = await res.json();
       const parts = [];
-      if (data.courses_created > 0) parts.push(`${data.courses_created} courses`);
+      if (data.courses_created > 0) parts.push(`${data.courses_created} new courses`);
       parts.push(`${data.count} assignments`);
-      setStatus(planStatus, `Synced ${parts.join(', ')} to schoolpilot.co!`, 'success');
+      if (data.overdue_count > 0) parts.push(`${data.overdue_count} overdue`);
+      setStatus(planStatus, `✓ Synced ${parts.join(', ')} to schoolpilot.co!`, 'success');
       planTimestamp.textContent = `Last synced: ${new Date().toLocaleTimeString()}`;
     } catch (err) {
       setStatus(planStatus, handleFetchError(err), 'error');

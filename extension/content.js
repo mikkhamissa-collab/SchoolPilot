@@ -1,166 +1,241 @@
-// content.js — Deep scraper for Teamie LMS. Extracts courses, assignments,
-// and newsfeed tasks from the dashboard at lms.asl.org/dash.
+// content.js — Comprehensive deep scraper for Teamie LMS (lms.asl.org).
+// Extracts: all courses, all sidebar events (overdue + upcoming),
+// all newsfeed posts with due dates, and teacher task details.
 (() => {
-  const result = {
+  const data = {
     courses: [],
     assignments: [],
     newsfeed: [],
+    overdue: [],
+    stats: {},
   };
 
-  const seenCourses = new Set();
   const seenAssignments = new Set();
+  const seenCourses = new Set();
 
   // ============================================================
-  // 1. SCRAPE COURSES — from the "Classes" section on the dashboard
+  // 1. COURSES — from the Classes section
   // ============================================================
-  // The dashboard shows course cards/tiles in a grid. Each has a name.
-  // Selectors based on the Teamie dashboard structure:
-
-  // Try multiple selectors for course cards/tiles
-  const courseCardSelectors = [
-    '.classroom-card',
-    '.classroom-tile',
-    '.class-card',
-    '.course-card',
-    '[class*="classroom-"] a',
-    '[class*="class-item"]',
-  ];
-
-  for (const selector of courseCardSelectors) {
-    try {
-      const cards = document.querySelectorAll(selector);
-      for (const card of cards) {
-        const name = card.textContent.trim().replace(/\s+/g, ' ');
-        if (name && name.length > 2 && name.length < 120 && !seenCourses.has(name)) {
-          seenCourses.add(name);
-          result.courses.push({ name, href: card.href || '' });
-        }
-      }
-    } catch { /* ignore */ }
+  // First, click "View all X Classes" to expand from starred to full list
+  const viewAllBtn = document.querySelector('.btn.toggle-all');
+  if (viewAllBtn && viewAllBtn.textContent.includes('View all')) {
+    viewAllBtn.click();
   }
 
-  // Try: Links to classroom pages (href contains "classroom")
-  try {
-    const classroomLinks = document.querySelectorAll('a[href*="classroom"]');
-    for (const link of classroomLinks) {
-      // Get the visible text, clean it up
-      let name = link.textContent.trim().replace(/\s+/g, ' ');
-      // Skip navigation/UI links (very short or very long)
-      if (!name || name.length < 3 || name.length > 120) continue;
-      // Skip if it's a button like "View Class Catalogue"
-      if (name.includes('Catalogue') || name.includes('View all')) continue;
+  // Small delay won't help in sync execution, but the DOM updates instantly
+  // since it's just toggling a CSS class. Get all classroom links.
+  const classroomLinks = document.querySelectorAll('a.classroom.list-group-item');
+  for (const link of classroomLinks) {
+    const name = link.textContent.trim().replace(/\s+/g, ' ');
+    const idMatch = link.href && link.href.match(/classroom\/(\d+)/);
+    const id = idMatch ? idMatch[1] : null;
+    if (name && name.length > 2 && !seenCourses.has(name)) {
+      seenCourses.add(name);
+      data.courses.push({ name, id, href: link.href || '' });
+    }
+  }
 
+  // Fallback: also try generic classroom links if above found nothing
+  if (data.courses.length === 0) {
+    const fallbackLinks = document.querySelectorAll('a[href*="classroom/"]');
+    for (const link of fallbackLinks) {
+      const name = link.textContent.trim().replace(/\s+/g, ' ');
+      if (!name || name.length < 3 || name.length > 120) continue;
+      if (name.includes('Catalogue') || name.includes('View all')) continue;
+      const idMatch = link.href && link.href.match(/classroom\/(\d+)/);
       if (!seenCourses.has(name)) {
         seenCourses.add(name);
-        result.courses.push({ name, href: link.href || '' });
+        data.courses.push({ name, id: idMatch ? idMatch[1] : null, href: link.href || '' });
       }
     }
-  } catch { /* ignore */ }
+  }
 
-  // Try: Starred section — look for course names in the starred area
-  try {
-    const starred = document.querySelector('.starred, [class*="starred"]');
-    if (starred) {
-      const items = starred.querySelectorAll('a, .item, .card, [class*="class"]');
-      for (const item of items) {
-        const name = item.textContent.trim().replace(/\s+/g, ' ');
-        if (name && name.length > 2 && name.length < 120 && !seenCourses.has(name)) {
-          seenCourses.add(name);
-          result.courses.push({ name, href: item.href || '' });
-        }
+  // ============================================================
+  // 2. SIDEBAR EVENTS — Overdue + Next 7 Days from event panels
+  // ============================================================
+  // Events are in .user-events-container sections, each with a .panel-heading
+  // showing "Overdue X" or "Next 7 Days X"
+  const eventContainers = document.querySelectorAll('.user-events-container');
+
+  for (const container of eventContainers) {
+    const headingEl = container.querySelector('.panel-heading');
+    const headingText = headingEl ? headingEl.textContent.trim().replace(/\s+/g, ' ') : '';
+    const isOverdue = headingText.toLowerCase().includes('overdue');
+    const targetArray = isOverdue ? data.overdue : data.assignments;
+
+    const wrappers = container.querySelectorAll('.event-wrapper');
+    let currentDate = null;
+    let currentDay = null;
+
+    for (const wrapper of wrappers) {
+      const dateEl = wrapper.querySelector('.date-block .date');
+      const dayEl = wrapper.querySelector('.date-block .day');
+
+      if (dateEl && dateEl.textContent.trim()) currentDate = dateEl.textContent.trim();
+      if (dayEl && dayEl.textContent.trim()) currentDay = dayEl.textContent.trim();
+
+      const titleEl = wrapper.querySelector('.title span') || wrapper.querySelector('.title');
+      const title = titleEl ? titleEl.textContent.trim() : null;
+      if (!title) continue;
+
+      // Type is first line of first .meta element
+      const metaEl = wrapper.querySelector('.meta');
+      let type = null;
+      if (metaEl) {
+        const lines = metaEl.textContent.split('\n').map(l => l.trim()).filter(Boolean);
+        type = lines.length > 0 ? lines[0] : null;
       }
-    }
-  } catch { /* ignore */ }
 
-  // ============================================================
-  // 2. SCRAPE ASSIGNMENTS — from the events/todos sidebar
-  // ============================================================
-  const wrappers = document.querySelectorAll('.event-wrapper');
-  let currentDate = null;
-  let currentDay = null;
+      // Due time
+      const dueEl = wrapper.querySelector('.text-primary span') || wrapper.querySelector('.text-primary');
+      const due = dueEl ? dueEl.textContent.trim() : null;
 
-  for (const wrapper of wrappers) {
-    const dateEl = wrapper.querySelector('.date-block .date');
-    const dayEl = wrapper.querySelector('.date-block .day');
+      // Course name is the last .meta element
+      const courseEl = wrapper.querySelector('.meta:last-of-type');
+      const course = courseEl ? courseEl.textContent.trim().replace(/\s+/g, ' ') : null;
 
-    if (dateEl) currentDate = dateEl.textContent.trim() || currentDate;
-    if (dayEl) currentDay = dayEl.textContent.trim() || currentDay;
+      // Icon class tells us the type (mdi-home = task, mdi-file = assignment, etc.)
+      const iconEl = wrapper.querySelector('.event-icons .mdi');
+      const iconClass = iconEl ? iconEl.className : '';
 
-    const titleEl = wrapper.querySelector('.event-tile .title span');
-    const metaEl = wrapper.querySelector('.event-tile .meta');
-    const dueEl = wrapper.querySelector('.sub-meta .text-primary span');
-    const courseEl = wrapper.querySelector('.event-tile .meta:last-of-type');
-
-    const title = titleEl ? titleEl.textContent.trim() : null;
-
-    let type = null;
-    if (metaEl) {
-      const lines = metaEl.textContent.split('\n').map(l => l.trim()).filter(Boolean);
-      type = lines.length > 0 ? lines[0] : null;
-    }
-
-    const due = dueEl ? dueEl.textContent.trim() : null;
-    const course = courseEl ? courseEl.textContent.trim() : null;
-
-    if (title) {
       const key = `${title}|${course || ''}|${currentDate || ''}`;
       if (!seenAssignments.has(key)) {
         seenAssignments.add(key);
-        result.assignments.push({
-          title, type, due, course,
+        targetArray.push({
+          title,
+          type,
+          due,
+          course,
           date: currentDate,
           day: currentDay,
+          isOverdue,
+          icon: iconClass,
         });
+
+        // Extract course from event if not seen
+        if (course) {
+          const cleaned = course.split('\n')[0].trim();
+          if (cleaned && !seenCourses.has(cleaned)) {
+            seenCourses.add(cleaned);
+            data.courses.push({ name: cleaned, id: null, href: '' });
+          }
+        }
       }
     }
   }
 
-  // ============================================================
-  // 3. SCRAPE NEWSFEED — posts with tasks/assignments from teachers
-  // ============================================================
-  // The newsfeed shows posts like "Reminder to do the review..."
-  // with "Due on: Feb 3 at 8:30 AM" and course info
-  try {
-    const feedPosts = document.querySelectorAll('.feed-post, .post, .activity, [class*="feed"] > div, .newsfeed-item');
-    for (const post of feedPosts) {
-      const bodyEl = post.querySelector('.post-body, .body, .content, p');
-      const courseLink = post.querySelector('a[href*="classroom"]');
-      const dueEl = post.querySelector('.due, [class*="due"], .deadline');
-      const authorEl = post.querySelector('.author, .name, [class*="author"]');
+  // Also get events from the visible .event-wrapper elements outside containers
+  // (in case the page structure differs)
+  const topLevelWrappers = document.querySelectorAll('.panel-group.event-list .event-wrapper');
+  let currentDate = null;
+  let currentDay = null;
 
-      const body = bodyEl ? bodyEl.textContent.trim() : null;
-      const courseName = courseLink ? courseLink.textContent.trim() : null;
-      const due = dueEl ? dueEl.textContent.trim() : null;
-      const author = authorEl ? authorEl.textContent.trim() : null;
+  for (const wrapper of topLevelWrappers) {
+    const dateEl = wrapper.querySelector('.date-block .date');
+    const dayEl = wrapper.querySelector('.date-block .day');
+    if (dateEl && dateEl.textContent.trim()) currentDate = dateEl.textContent.trim();
+    if (dayEl && dayEl.textContent.trim()) currentDay = dayEl.textContent.trim();
 
-      if (body && body.length > 5) {
-        result.newsfeed.push({
-          body: body.substring(0, 300),
-          course: courseName,
-          due,
-          author,
-        });
-      }
+    const titleEl = wrapper.querySelector('.title span') || wrapper.querySelector('.title');
+    const title = titleEl ? titleEl.textContent.trim() : null;
+    if (!title) continue;
+
+    const metaEl = wrapper.querySelector('.meta');
+    let type = null;
+    if (metaEl) {
+      const lines = metaEl.textContent.split('\n').map(l => l.trim()).filter(Boolean);
+      type = lines[0] || null;
     }
-  } catch { /* ignore */ }
 
-  // Also try to grab task posts specifically (the "Task" filtered view)
-  try {
-    const taskPosts = document.querySelectorAll('[class*="task"], [class*="assignment-post"]');
-    for (const post of taskPosts) {
-      const title = post.querySelector('.title, h3, h4, .post-title')?.textContent?.trim();
-      const course = post.querySelector('a[href*="classroom"]')?.textContent?.trim();
-      const due = post.querySelector('[class*="due"]')?.textContent?.trim();
+    const dueEl = wrapper.querySelector('.text-primary span') || wrapper.querySelector('.text-primary');
+    const due = dueEl ? dueEl.textContent.trim() : null;
+    const courseEl = wrapper.querySelector('.meta:last-of-type');
+    const course = courseEl ? courseEl.textContent.trim().replace(/\s+/g, ' ') : null;
 
-      if (title && !seenAssignments.has(title)) {
-        seenAssignments.add(title);
-        result.assignments.push({
-          title, type: 'Task', due: due || null,
-          course: course || null, date: null, day: null,
-        });
-      }
+    const key = `${title}|${course || ''}|${currentDate || ''}`;
+    if (!seenAssignments.has(key)) {
+      seenAssignments.add(key);
+      data.assignments.push({
+        title, type, due, course,
+        date: currentDate, day: currentDay,
+        isOverdue: false, icon: '',
+      });
     }
-  } catch { /* ignore */ }
+  }
 
-  return result;
+  // ============================================================
+  // 3. NEWSFEED — Teacher posts with tasks, announcements, due dates
+  // ============================================================
+  // Posts are .node-post elements with .post-header containing course links
+  const nodePosts = document.querySelectorAll('.node-post');
+  for (const post of nodePosts) {
+    const courseLink = post.querySelector('a[href*="classroom"]');
+    const courseName = courseLink ? courseLink.textContent.trim() : null;
+    const courseId = courseLink ? (courseLink.href.match(/classroom\/(\d+)/)?.[1] || null) : null;
+
+    // Body text: all <p> tags except the first (which is often the author)
+    const allP = post.querySelectorAll('p');
+    const bodyParts = [];
+    for (const p of allP) {
+      const text = p.textContent.trim();
+      if (text.length > 10) bodyParts.push(text);
+    }
+    const body = bodyParts.join(' ').substring(0, 500);
+    if (!body) continue;
+
+    // Due date: match "Due on: Feb 3 at 8:30 AM" pattern
+    const fullText = post.textContent;
+    const dueMatch = fullText.match(/Due on:\s*(.+?)(?:\n|Mark)/);
+    const dueDate = dueMatch ? dueMatch[1].trim() : null;
+
+    // Is it a task? (has "Mark as Done" button)
+    const isTask = fullText.includes('Mark as Done');
+
+    // Post type from class
+    const cls = post.className || '';
+    let postType = 'post';
+    if (cls.includes('announcement')) postType = 'announcement';
+    else if (cls.includes('thought')) postType = 'thought';
+    else if (cls.includes('task')) postType = 'task';
+
+    // Author name from .field-post-title
+    const authorEl = post.querySelector('.field-post-title a');
+    const author = authorEl ? authorEl.textContent.trim() : null;
+
+    data.newsfeed.push({
+      author,
+      course: courseName,
+      courseId,
+      body,
+      dueDate,
+      isTask,
+      postType,
+    });
+
+    // Extract course if not seen
+    if (courseName && !seenCourses.has(courseName)) {
+      seenCourses.add(courseName);
+      data.courses.push({ name: courseName, id: courseId, href: '' });
+    }
+  }
+
+  // ============================================================
+  // 4. STATS — summary counts
+  // ============================================================
+  // Overdue badge count
+  const overdueCountEl = document.querySelector('.user-events-container .panel-heading');
+  const overdueMatch = overdueCountEl?.textContent?.match(/Overdue\s+(\d+)/i);
+  const todoCountEl = document.querySelector('.user-todo-count');
+
+  data.stats = {
+    totalCourses: data.courses.length,
+    totalAssignments: data.assignments.length,
+    totalOverdue: data.overdue.length,
+    overdueReported: overdueMatch ? parseInt(overdueMatch[1]) : null,
+    todosCount: todoCountEl ? parseInt(todoCountEl.textContent.trim()) : null,
+    newsfeedPosts: data.newsfeed.length,
+    scrapedAt: new Date().toISOString(),
+  };
+
+  return data;
 })();
