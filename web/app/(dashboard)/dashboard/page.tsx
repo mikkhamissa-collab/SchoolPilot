@@ -4,6 +4,15 @@ import { createClient } from "@/lib/supabase-client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
+interface Assignment {
+  title: string;
+  type?: string;
+  due?: string;
+  course?: string;
+  date?: string;
+  day?: string;
+}
+
 interface Stats {
   courseCount: number;
   activeSprint: string | null;
@@ -19,6 +28,8 @@ export default function DashboardPage() {
     recentPlanDate: null,
     upcomingCount: 0,
   });
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [courseNames, setCourseNames] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,19 +41,23 @@ export default function DashboardPage() {
       setUser({ name: user.user_metadata?.full_name || user.email?.split("@")[0] || "Student" });
 
       // Fetch stats in parallel
-      const [courses, sprints, plans, assignments] = await Promise.all([
-        supabase.from("courses").select("id", { count: "exact", head: true }).eq("user_id", user.id),
+      const [coursesRes, sprints, plans, assignmentsRes] = await Promise.all([
+        supabase.from("courses").select("id, name").eq("user_id", user.id),
         supabase.from("sprints").select("test_name").eq("user_id", user.id).eq("completed", false).limit(1),
         supabase.from("plans").select("created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(1),
         supabase.from("scraped_assignments").select("assignments").eq("user_id", user.id).order("scraped_at", { ascending: false }).limit(1),
       ]);
 
-      const assignmentList = assignments.data?.[0]?.assignments;
+      const assignmentList: Assignment[] = assignmentsRes.data?.[0]?.assignments || [];
+      const courseList = coursesRes.data || [];
+      setCourseNames(courseList.map((c: { name: string }) => c.name));
+      setAssignments(assignmentList);
+
       setStats({
-        courseCount: courses.count || 0,
+        courseCount: courseList.length,
         activeSprint: sprints.data?.[0]?.test_name || null,
         recentPlanDate: plans.data?.[0]?.created_at || null,
-        upcomingCount: Array.isArray(assignmentList) ? assignmentList.length : 0,
+        upcomingCount: assignmentList.length,
       });
       setLoading(false);
     };
@@ -62,15 +77,20 @@ export default function DashboardPage() {
     );
   }
 
+  // Clean course name (first line only)
+  const cleanCourse = (c?: string) => c?.split("\n")[0]?.trim() || "";
+
+  // Group assignments by date
+  const grouped: Record<string, Assignment[]> = {};
+  for (const a of assignments) {
+    const key = a.day && a.date ? `${a.day} ${a.date}` : "Upcoming";
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(a);
+  }
+
   const statCards = [
     { label: "Courses", value: stats.courseCount, icon: "📊", href: "/grades", color: "text-accent" },
-    {
-      label: "Upcoming",
-      value: stats.upcomingCount,
-      icon: "📅",
-      href: "/plan",
-      color: "text-warning",
-    },
+    { label: "Upcoming", value: stats.upcomingCount, icon: "📅", href: "/plan", color: "text-warning" },
     {
       label: "Active Sprint",
       value: stats.activeSprint ? "Active" : "None",
@@ -81,14 +101,21 @@ export default function DashboardPage() {
     },
     {
       label: "Last Plan",
-      value: stats.recentPlanDate
-        ? new Date(stats.recentPlanDate).toLocaleDateString()
-        : "Never",
+      value: stats.recentPlanDate ? new Date(stats.recentPlanDate).toLocaleDateString() : "Never",
       icon: "📋",
       href: "/plan",
       color: stats.recentPlanDate ? "text-accent" : "text-text-muted",
     },
   ];
+
+  // Type-based badge color
+  const typeBadgeColor = (type?: string) => {
+    const t = (type || "").toLowerCase();
+    if (t.includes("assess") || t.includes("test") || t.includes("exam")) return "bg-error/15 text-error";
+    if (t.includes("quiz")) return "bg-warning/15 text-warning";
+    if (t.includes("homework") || t.includes("assignment")) return "bg-accent/15 text-accent";
+    return "bg-bg-hover text-text-muted";
+  };
 
   return (
     <div className="space-y-8 max-w-4xl">
@@ -119,6 +146,87 @@ export default function DashboardPage() {
           </Link>
         ))}
       </div>
+
+      {/* Your Courses */}
+      {courseNames.length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold text-white mb-3">Your Courses</h3>
+          <div className="flex flex-wrap gap-2">
+            {courseNames.map((name) => (
+              <Link
+                key={name}
+                href="/grades"
+                className="px-4 py-2 rounded-lg bg-bg-card border border-border text-sm text-white hover:border-accent/30 transition-colors"
+              >
+                {name}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Upcoming Assignments */}
+      {assignments.length > 0 ? (
+        <div>
+          <h3 className="text-lg font-semibold text-white mb-3">Upcoming Assignments</h3>
+          <div className="space-y-4">
+            {Object.entries(grouped).map(([dateLabel, items]) => (
+              <div key={dateLabel}>
+                <p className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-2">
+                  {dateLabel}
+                </p>
+                <div className="space-y-2">
+                  {items.map((a, i) => (
+                    <div
+                      key={`${a.title}-${i}`}
+                      className="flex items-center justify-between p-3 rounded-xl bg-bg-card border border-border"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-white text-sm font-medium truncate">{a.title}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          {a.type && (
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${typeBadgeColor(a.type)}`}>
+                              {a.type.split("\n")[0]}
+                            </span>
+                          )}
+                          {cleanCourse(a.course) && (
+                            <span className="text-text-muted text-xs">{cleanCourse(a.course)}</span>
+                          )}
+                        </div>
+                      </div>
+                      {a.due && (
+                        <span className="text-text-secondary text-xs ml-3 flex-shrink-0">{a.due}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        /* No assignments yet — show sync instructions */
+        <div className="p-6 rounded-xl bg-accent/5 border border-accent/20">
+          <h3 className="text-lg font-semibold text-white mb-3">Sync Your Assignments</h3>
+          <p className="text-text-secondary text-sm mb-4">
+            Your dashboard will show your classes and upcoming work once you sync from Teamie.
+          </p>
+          <div className="space-y-3">
+            <div className="flex items-start gap-3">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-accent/20 text-accent flex items-center justify-center text-xs font-bold">1</span>
+              <p className="text-text-secondary text-sm">Make sure you&apos;re signed in here at schoolpilot.co</p>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-accent/20 text-accent flex items-center justify-center text-xs font-bold">2</span>
+              <p className="text-text-secondary text-sm">Go to <span className="text-white">lms.asl.org/dash</span> in Chrome</p>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-accent/20 text-accent flex items-center justify-center text-xs font-bold">3</span>
+              <p className="text-text-secondary text-sm">Click the SchoolPilot extension and hit <span className="text-accent font-medium">&quot;Sync to schoolpilot.co&quot;</span></p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Quick Actions */}
       <div>
@@ -156,36 +264,6 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
-
-      {/* Getting Started — show when no courses exist */}
-      {stats.courseCount === 0 && (
-        <div className="p-6 rounded-xl bg-accent/5 border border-accent/20">
-          <h3 className="text-lg font-semibold text-white mb-4">Get Started</h3>
-          <div className="space-y-4">
-            <div className="flex items-start gap-3">
-              <span className="flex-shrink-0 w-7 h-7 rounded-full bg-accent/20 text-accent flex items-center justify-center text-sm font-bold">1</span>
-              <div>
-                <p className="text-white font-medium">Add your courses</p>
-                <p className="text-text-secondary text-sm">Go to the <Link href="/grades" className="text-accent hover:underline">Grades</Link> page and add your courses with grade categories (Tests, Homework, etc.).</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <span className="flex-shrink-0 w-7 h-7 rounded-full bg-accent/20 text-accent flex items-center justify-center text-sm font-bold">2</span>
-              <div>
-                <p className="text-white font-medium">Sync from Teamie (optional)</p>
-                <p className="text-text-secondary text-sm">Use the SchoolPilot Chrome extension on <span className="text-text-primary">lms.asl.org</span> to sync your assignments automatically.</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <span className="flex-shrink-0 w-7 h-7 rounded-full bg-accent/20 text-accent flex items-center justify-center text-sm font-bold">3</span>
-              <div>
-                <p className="text-white font-medium">Use AI features</p>
-                <p className="text-text-secondary text-sm">Break down assignments, generate study guides, and create sprint plans.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

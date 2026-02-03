@@ -1,6 +1,21 @@
-// Sync endpoint — receives scraped data from extension
+// Sync endpoint — receives scraped data from extension and auto-creates courses
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+
+// Default grade categories for auto-created courses
+const DEFAULT_CATEGORIES = [
+  { name: "Assessments", weight: 0.4 },
+  { name: "Assignments", weight: 0.35 },
+  { name: "Participation", weight: 0.25 },
+];
+
+// Clean course name (Teamie often includes teacher name on next line)
+function cleanCourseName(raw: string): string {
+  // Take only the first line, trim whitespace
+  const firstLine = raw.split("\n")[0].trim();
+  // Remove trailing teacher names like "Mr. Smith" or "Ms. Jones"
+  return firstLine;
+}
 
 export async function POST(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -28,23 +43,69 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Missing assignments array" }, { status: 400 });
   }
 
-  // Use service role for insert (bypasses RLS)
+  // Use service role for inserts (bypasses RLS)
   const admin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_KEY!
   );
 
-  if (type === "assignments") {
-    const { error } = await admin.from("scraped_assignments").insert({
-      user_id: user.id,
-      assignments,
-      scraped_at: new Date().toISOString(),
-    });
+  // 1. Save the raw scraped assignments
+  const { error: scrapeError } = await admin.from("scraped_assignments").insert({
+    user_id: user.id,
+    assignments,
+    scraped_at: new Date().toISOString(),
+  });
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+  if (scrapeError) {
+    return NextResponse.json({ error: scrapeError.message }, { status: 500 });
+  }
+
+  // 2. Auto-create courses from assignment data
+  const courseNames = new Set<string>();
+  for (const a of assignments) {
+    if (a.course && typeof a.course === "string") {
+      const cleaned = cleanCourseName(a.course);
+      if (cleaned) courseNames.add(cleaned);
     }
   }
 
-  return NextResponse.json({ status: "synced", count: assignments.length });
+  if (courseNames.size > 0) {
+    // Get existing courses for this user
+    const { data: existingCourses } = await admin
+      .from("courses")
+      .select("name")
+      .eq("user_id", user.id);
+
+    const existingNames = new Set((existingCourses || []).map((c: { name: string }) => c.name));
+
+    // Create courses that don't exist yet
+    const newCourses = [...courseNames]
+      .filter((name) => !existingNames.has(name))
+      .map((name) => ({
+        user_id: user.id,
+        name,
+        categories: DEFAULT_CATEGORIES,
+        policies: {},
+      }));
+
+    if (newCourses.length > 0) {
+      await admin.from("courses").insert(newCourses);
+    }
+  }
+
+  // 3. Also save as a plan entry so it shows on the Plan page
+  if (type === "assignments") {
+    await admin.from("plans").insert({
+      user_id: user.id,
+      assignments,
+      ai_response: null,
+      emailed: false,
+    });
+  }
+
+  return NextResponse.json({
+    status: "synced",
+    count: assignments.length,
+    courses_created: courseNames.size,
+  });
 }
