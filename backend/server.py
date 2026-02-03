@@ -1055,6 +1055,156 @@ def send_autopilot_email():
         return jsonify({'error': f'Failed to send autopilot: {e}'}), 502
 
 
+# ---------------------------------------------------------------------------
+# Adaptive Practice Test Generation
+# ---------------------------------------------------------------------------
+
+ADAPTIVE_TEST_PROMPT: str = """Generate practice test questions for a student studying {course} - {topic}.
+
+The test should be ADAPTIVE based on the student's current mastery levels and weak spots.
+
+STUDENT CONTEXT:
+{student_context}
+
+QUESTION REQUIREMENTS:
+1. Generate {question_count} questions
+2. Mix difficulty levels appropriately:
+   - If student has weak spots, include more questions on those areas
+   - Balance: 30% easy, 50% medium, 20% hard (adjust based on mastery)
+3. Question types: multiple_choice, true_false, free_response, worked_problem
+4. Each question must test a specific concept
+5. Include hints for harder questions
+6. Explanations must be thorough and educational
+
+DIFFICULTY SCORING (1-10):
+- 1-3: Easy (basic recall, simple application)
+- 4-6: Medium (application, understanding relationships)
+- 7-10: Hard (analysis, synthesis, complex problems)
+
+Respond ONLY with valid JSON. Format:
+{"questions": [
+  {"id": "q1", "conceptName": "...", "difficulty": "easy", "difficultyScore": 3,
+   "type": "multiple_choice", "question": "...", "options": ["A...", "B...", "C...", "D..."],
+   "correctAnswer": "A...", "explanation": "...", "hints": ["hint1", "hint2"],
+   "relatedConcepts": ["concept1", "concept2"]}
+]}"""
+
+
+@app.route('/practice-test/generate', methods=['POST'])
+def generate_adaptive_practice_test():
+    """Generate an adaptive practice test based on student's mastery levels."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    try:
+        course_name = validate_str(data.get('course_name', ''), 200, 'course_name')
+        topic_name = validate_str(data.get('topic_name', ''), 200, 'topic_name')
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+    difficulty_level = data.get('difficulty_level', 'adaptive')
+    question_count = min(max(int(data.get('question_count', 10)), 5), 25)
+    include_concepts = data.get('include_concepts', [])
+    weak_concepts = data.get('weak_concepts', [])
+    concept_mastery = data.get('concept_mastery', {})
+
+    # Build student context
+    context_parts = []
+
+    if weak_concepts:
+        context_parts.append(f"WEAK SPOTS (prioritize these!): {', '.join(weak_concepts[:10])}")
+
+    if concept_mastery:
+        mastered = [c for c, m in concept_mastery.items() if m.get('mastery', 0) >= 80]
+        struggling = [c for c, m in concept_mastery.items() if m.get('mastery', 0) < 50]
+        if mastered:
+            context_parts.append(f"MASTERED CONCEPTS (can use harder questions): {', '.join(mastered[:5])}")
+        if struggling:
+            context_parts.append(f"STRUGGLING CONCEPTS (need more practice): {', '.join(struggling[:5])}")
+
+    if difficulty_level != 'adaptive':
+        context_parts.append(f"TARGET DIFFICULTY: {difficulty_level}")
+
+    if include_concepts:
+        context_parts.append(f"MUST INCLUDE THESE CONCEPTS: {', '.join(include_concepts[:10])}")
+
+    student_context = '\n'.join(context_parts) if context_parts else 'No specific mastery data available.'
+
+    prompt = ADAPTIVE_TEST_PROMPT.format(
+        course=course_name,
+        topic=topic_name,
+        student_context=student_context,
+        question_count=question_count
+    )
+
+    try:
+        result = call_claude_json(prompt, "", max_tokens=4096)
+        return jsonify(result)
+    except (ValueError, KeyError):
+        return jsonify({'error': 'Failed to parse AI response'}), 502
+    except Exception as e:
+        return jsonify({'error': f'Claude API error: {e}'}), 502
+
+
+# ---------------------------------------------------------------------------
+# Weak Spot Recommendations
+# ---------------------------------------------------------------------------
+
+WEAK_SPOT_RECOMMEND_PROMPT: str = """A student is struggling with a specific concept. Provide personalized recommendations to help them master it.
+
+CONCEPT: {concept_name}
+TOPIC: {topic_name}
+COURSE: {course_name}
+TIMES MISSED: {times_missed}
+ERROR PATTERN: {error_pattern}
+COMMON MISTAKES: {common_mistakes}
+
+Provide recommendations including:
+1. Specific YouTube video searches that would help
+2. Step-by-step practice approach
+3. Common misconceptions to address
+4. Study tips specific to this concept
+
+Respond ONLY with valid JSON. Format:
+{{"video_searches": ["search query 1", "search query 2"],
+"practice_steps": ["step 1", "step 2", "step 3"],
+"misconceptions": ["common mistake 1 and how to fix it"],
+"study_tips": ["tip 1", "tip 2"],
+"estimated_sessions_to_master": 3,
+"key_insight": "The most important thing to understand about this concept is..."}}"""
+
+
+@app.route('/weak-spot/recommend', methods=['POST'])
+def weak_spot_recommend():
+    """Generate personalized recommendations for improving a weak spot."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    concept_name = data.get('concept_name', '')
+    topic_name = data.get('topic_name', '')
+    course_name = data.get('course_name', '')
+    error_pattern = data.get('error_pattern', 'Unknown')
+    common_mistakes = data.get('common_mistakes', [])
+    times_missed = data.get('times_missed', 0)
+
+    prompt = WEAK_SPOT_RECOMMEND_PROMPT.format(
+        concept_name=concept_name,
+        topic_name=topic_name,
+        course_name=course_name,
+        times_missed=times_missed,
+        error_pattern=error_pattern,
+        common_mistakes=', '.join(common_mistakes[:5]) if common_mistakes else 'None recorded'
+    )
+
+    try:
+        result = call_claude_json(prompt, "", max_tokens=1024)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': f'Failed to generate recommendations: {e}'}), 502
+
+
 @app.route('/autopilot/schedule', methods=['POST'])
 def schedule_autopilot():
     """Schedule daily autopilot emails for a user (stores preference, actual scheduling done by cron)."""

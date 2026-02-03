@@ -138,3 +138,112 @@ CREATE POLICY "own_materials" ON course_materials FOR ALL USING (auth.uid() = us
 CREATE POLICY "own_extracted" ON extracted_documents FOR ALL USING (
   material_id IN (SELECT id FROM course_materials WHERE user_id = auth.uid())
 );
+
+-- =============================================================================
+-- MASTERY TRACKING WITH SPACED REPETITION
+-- =============================================================================
+
+-- Individual concepts/skills that students are learning
+CREATE TABLE study_concepts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  course_name TEXT NOT NULL,
+  topic_name TEXT NOT NULL,
+  concept_name TEXT NOT NULL,
+  -- SM-2 algorithm fields
+  ease_factor DECIMAL DEFAULT 2.5,      -- How easy the concept is (min 1.3)
+  interval_days INTEGER DEFAULT 1,       -- Days until next review
+  repetitions INTEGER DEFAULT 0,         -- Successful reviews in a row
+  -- Review tracking
+  next_review DATE DEFAULT CURRENT_DATE,
+  last_reviewed TIMESTAMPTZ,
+  -- Performance stats
+  total_reviews INTEGER DEFAULT 0,
+  correct_count INTEGER DEFAULT 0,
+  streak INTEGER DEFAULT 0,              -- Current correct streak
+  best_streak INTEGER DEFAULT 0,
+  -- Difficulty assessment
+  difficulty_rating TEXT DEFAULT 'medium', -- 'easy', 'medium', 'hard'
+  mastery_level INTEGER DEFAULT 0,        -- 0-100%
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, course_name, topic_name, concept_name)
+);
+
+-- Individual review sessions/attempts
+CREATE TABLE concept_reviews (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  concept_id UUID REFERENCES study_concepts(id) ON DELETE CASCADE NOT NULL,
+  -- Review details
+  quality INTEGER NOT NULL,              -- 0-5 (SM-2 quality rating)
+  time_taken_seconds INTEGER,
+  -- For questions
+  question_type TEXT,                    -- 'multiple_choice', 'free_response', 'worked_problem'
+  question_text TEXT,
+  user_answer TEXT,
+  correct_answer TEXT,
+  was_correct BOOLEAN,
+  -- Feedback
+  hint_used BOOLEAN DEFAULT FALSE,
+  reviewed_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Practice test sessions
+CREATE TABLE practice_tests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  course_name TEXT NOT NULL,
+  topic_name TEXT,
+  -- Test configuration
+  difficulty_level TEXT DEFAULT 'adaptive', -- 'easy', 'medium', 'hard', 'adaptive'
+  total_questions INTEGER NOT NULL,
+  -- Results
+  questions JSONB NOT NULL,               -- Array of questions with answers
+  score INTEGER,
+  time_taken_seconds INTEGER,
+  completed BOOLEAN DEFAULT FALSE,
+  -- Analysis
+  weak_areas JSONB DEFAULT '[]',          -- Concepts that need work
+  strong_areas JSONB DEFAULT '[]',        -- Concepts that are mastered
+  started_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+
+-- Weak spots detected over time
+CREATE TABLE weak_spots (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  course_name TEXT NOT NULL,
+  topic_name TEXT NOT NULL,
+  concept_name TEXT NOT NULL,
+  -- Detection
+  error_pattern TEXT,                     -- "You keep forgetting to..."
+  common_mistakes JSONB DEFAULT '[]',     -- Array of common mistakes
+  times_missed INTEGER DEFAULT 1,
+  -- Resolution
+  resolved BOOLEAN DEFAULT FALSE,
+  resolved_at TIMESTAMPTZ,
+  -- Timestamps
+  first_detected TIMESTAMPTZ DEFAULT NOW(),
+  last_occurred TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for mastery system
+CREATE INDEX idx_concepts_user ON study_concepts(user_id);
+CREATE INDEX idx_concepts_review ON study_concepts(user_id, next_review);
+CREATE INDEX idx_concepts_course ON study_concepts(user_id, course_name);
+CREATE INDEX idx_reviews_concept ON concept_reviews(concept_id, reviewed_at DESC);
+CREATE INDEX idx_tests_user ON practice_tests(user_id, completed_at DESC);
+CREATE INDEX idx_weak_spots_user ON weak_spots(user_id, resolved);
+
+-- RLS for mastery tables
+ALTER TABLE study_concepts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE concept_reviews ENABLE ROW LEVEL SECURITY;
+ALTER TABLE practice_tests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE weak_spots ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "own_concepts" ON study_concepts FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "own_reviews" ON concept_reviews FOR ALL USING (
+  concept_id IN (SELECT id FROM study_concepts WHERE user_id = auth.uid())
+);
+CREATE POLICY "own_tests" ON practice_tests FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "own_weak_spots" ON weak_spots FOR ALL USING (auth.uid() = user_id);
