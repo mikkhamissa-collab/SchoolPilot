@@ -20,6 +20,7 @@ export default function Sidebar() {
 
   useEffect(() => {
     const supabase = createClient();
+    // Get user info for display
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
         setUser({
@@ -29,11 +30,39 @@ export default function Sidebar() {
         });
       }
     });
+    // Write access token to localStorage so the Chrome extension can read it
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.access_token) {
+        try {
+          localStorage.setItem("schoolpilot_ext_token", session.access_token);
+        } catch {
+          // Ignore localStorage errors
+        }
+      }
+    });
+    // Listen for token refreshes so extension always has a valid token
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.access_token) {
+        try {
+          localStorage.setItem("schoolpilot_ext_token", session.access_token);
+        } catch {
+          // Ignore
+        }
+      } else {
+        try {
+          localStorage.removeItem("schoolpilot_ext_token");
+        } catch {
+          // Ignore
+        }
+      }
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
   const handleSignOut = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
+    try { localStorage.removeItem("schoolpilot_ext_token"); } catch { /* ignore */ }
     window.location.href = "/";
   };
 
