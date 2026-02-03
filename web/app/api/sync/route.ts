@@ -11,9 +11,7 @@ const DEFAULT_CATEGORIES = [
 
 // Clean course name (Teamie often includes teacher name on next line)
 function cleanCourseName(raw: string): string {
-  // Take only the first line, trim whitespace
   const firstLine = raw.split("\n")[0].trim();
-  // Remove trailing teacher names like "Mr. Smith" or "Ms. Jones"
   return firstLine;
 }
 
@@ -37,9 +35,9 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { assignments, type } = body;
+  const { assignments = [], courses: scrapedCourses = [], type } = body;
 
-  if (!assignments || !Array.isArray(assignments)) {
+  if (!Array.isArray(assignments)) {
     return NextResponse.json({ error: "Missing assignments array" }, { status: 400 });
   }
 
@@ -58,19 +56,34 @@ export async function POST(request: NextRequest) {
     return true;
   });
 
-  // 1. Save the deduplicated scraped assignments
-  const { error: scrapeError } = await admin.from("scraped_assignments").insert({
-    user_id: user.id,
-    assignments: dedupedAssignments,
-    scraped_at: new Date().toISOString(),
-  });
+  // 1. Save the deduplicated scraped assignments (if any)
+  if (dedupedAssignments.length > 0) {
+    const { error: scrapeError } = await admin.from("scraped_assignments").insert({
+      user_id: user.id,
+      assignments: dedupedAssignments,
+      scraped_at: new Date().toISOString(),
+    });
 
-  if (scrapeError) {
-    return NextResponse.json({ error: scrapeError.message }, { status: 500 });
+    if (scrapeError) {
+      return NextResponse.json({ error: scrapeError.message }, { status: 500 });
+    }
   }
 
-  // 2. Auto-create courses from assignment data
+  // 2. Collect ALL course names from both scraped courses AND assignment data
   const courseNames = new Set<string>();
+
+  // From the directly scraped course list (Classes section on Teamie dashboard)
+  if (Array.isArray(scrapedCourses)) {
+    for (const c of scrapedCourses) {
+      const name = typeof c === "string" ? c : c?.name;
+      if (name && typeof name === "string") {
+        const cleaned = cleanCourseName(name);
+        if (cleaned && cleaned.length > 2) courseNames.add(cleaned);
+      }
+    }
+  }
+
+  // From assignment course fields
   for (const a of dedupedAssignments) {
     if (a.course && typeof a.course === "string") {
       const cleaned = cleanCourseName(a.course);
@@ -78,8 +91,9 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Create courses that don't exist yet
+  let coursesCreated = 0;
   if (courseNames.size > 0) {
-    // Get existing courses for this user
     const { data: existingCourses } = await admin
       .from("courses")
       .select("name")
@@ -87,7 +101,6 @@ export async function POST(request: NextRequest) {
 
     const existingNames = new Set((existingCourses || []).map((c: { name: string }) => c.name));
 
-    // Create courses that don't exist yet
     const newCourses = [...courseNames]
       .filter((name) => !existingNames.has(name))
       .map((name) => ({
@@ -99,11 +112,12 @@ export async function POST(request: NextRequest) {
 
     if (newCourses.length > 0) {
       await admin.from("courses").insert(newCourses);
+      coursesCreated = newCourses.length;
     }
   }
 
-  // 3. Also save as a plan entry so it shows on the Plan page
-  if (type === "assignments") {
+  // 3. Save as a plan entry so it shows on the Plan page
+  if (type === "assignments" && dedupedAssignments.length > 0) {
     await admin.from("plans").insert({
       user_id: user.id,
       assignments: dedupedAssignments,
@@ -115,6 +129,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     status: "synced",
     count: dedupedAssignments.length,
-    courses_created: courseNames.size,
+    courses_created: coursesCreated,
+    total_courses: courseNames.size,
   });
 }

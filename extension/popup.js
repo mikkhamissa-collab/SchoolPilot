@@ -303,7 +303,9 @@ scanBtn.addEventListener('click', async () => {
       return;
     }
     const [result] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
-    const assignments = result?.result;
+    const scraped = result?.result;
+    // Support both old format (array) and new format ({ courses, assignments })
+    const assignments = Array.isArray(scraped) ? scraped : (scraped?.assignments || []);
     if (!assignments || assignments.length === 0) {
       setStatus(planStatus, 'No assignments found. Are you on lms.asl.org/dash?', 'error');
       scanBtn.disabled = false;
@@ -338,13 +340,20 @@ if (syncWebBtn) {
         return;
       }
       const [result] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
-      const assignments = result?.result;
-      if (!assignments || assignments.length === 0) {
-        setStatus(planStatus, 'No assignments found. Are you on lms.asl.org/dash?', 'error');
+      const scraped = result?.result;
+      // Support both old format (array) and new format ({ courses, assignments, newsfeed })
+      const assignments = Array.isArray(scraped) ? scraped : (scraped?.assignments || []);
+      const scrapedCourses = Array.isArray(scraped) ? [] : (scraped?.courses || []);
+      const newsfeed = Array.isArray(scraped) ? [] : (scraped?.newsfeed || []);
+
+      if (assignments.length === 0 && scrapedCourses.length === 0) {
+        setStatus(planStatus, 'No data found. Are you on lms.asl.org/dash?', 'error');
         syncWebBtn.disabled = false;
         return;
       }
-      setStatus(planStatus, `Found ${assignments.length} assignments. Syncing to web...`, 'loading');
+
+      const totalItems = assignments.length + scrapedCourses.length;
+      setStatus(planStatus, `Found ${scrapedCourses.length} courses, ${assignments.length} assignments. Syncing...`, 'loading');
 
       const { webAuthToken } = await chrome.storage.local.get(['webAuthToken']);
       if (!webAuthToken) {
@@ -360,7 +369,7 @@ if (syncWebBtn) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${webAuthToken}`
         },
-        body: JSON.stringify({ assignments, type: 'assignments' })
+        body: JSON.stringify({ assignments, courses: scrapedCourses, newsfeed, type: 'assignments' })
       });
 
       if (!res.ok) {
@@ -376,7 +385,10 @@ if (syncWebBtn) {
       }
 
       const data = await res.json();
-      setStatus(planStatus, `Synced ${data.count} assignments to schoolpilot.co!`, 'success');
+      const parts = [];
+      if (data.courses_created > 0) parts.push(`${data.courses_created} courses`);
+      parts.push(`${data.count} assignments`);
+      setStatus(planStatus, `Synced ${parts.join(', ')} to schoolpilot.co!`, 'success');
       planTimestamp.textContent = `Last synced: ${new Date().toLocaleTimeString()}`;
     } catch (err) {
       setStatus(planStatus, handleFetchError(err), 'error');
