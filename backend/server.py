@@ -197,17 +197,19 @@ SPRINT_PROMPT: str = (
 
 COMPREHENSIVE_STUDY_GUIDE_PROMPT: str = (
     "Create a comprehensive study guide that builds knowledge from the ground up. "
-    "The student has provided course materials, assignments, and topics. Your job is to:\n\n"
-    "1. LEARNING PATH: Create a step-by-step learning progression starting from fundamentals\n"
-    "2. RESOURCES: Recommend specific YouTube videos and Khan Academy topics for each concept\n"
-    "3. PRACTICE PROBLEMS: Create worked example problems with step-by-step solutions\n"
-    "4. PRACTICE TEST: Generate a realistic practice test matching the course style\n\n"
-    "Rules:\n"
-    "- Start with foundational concepts before advanced ones\n"
-    "- Each concept should have a 'Learn' section with video recommendations\n"
-    "- Include 2-3 worked examples per major topic showing full solutions\n"
-    "- Practice test should mirror what they'd see on an actual exam\n"
-    "- Be specific with YouTube search terms that will find quality educational content\n\n"
+    "The student has provided ACTUAL course materials, assignments, and extracted content from their class. "
+    "Your job is to create a study guide that DIRECTLY matches what they'll be tested on.\n\n"
+    "1. LEARNING PATH: Create a step-by-step learning progression based on their actual unit objectives\n"
+    "2. RESOURCES: Recommend specific YouTube videos and Khan Academy topics that teach the EXACT skills listed\n"
+    "3. PRACTICE PROBLEMS: Create worked example problems in the SAME STYLE as their actual assignments\n"
+    "4. PRACTICE TEST: Generate a realistic practice test that MIRRORS their actual homework format\n\n"
+    "CRITICAL RULES:\n"
+    "- Use the EXACT concepts, formulas, and terminology from their course materials\n"
+    "- Practice problems must match the difficulty and style of their actual assignments\n"
+    "- If they provided assignment instructions, model your problems after those\n"
+    "- Reference specific topics from their unit descriptions\n"
+    "- The practice test should feel like it came from their actual teacher\n"
+    "- YouTube searches should find videos teaching the SPECIFIC skills they need\n\n"
     "Respond ONLY with valid JSON, no markdown. Format:\n"
     '{"course": "...", "unit": "...", "overview": "...", '
     '"learning_path": [{"order": 1, "topic": "...", "description": "...", "prerequisites": [], '
@@ -580,14 +582,17 @@ def extract_topics():
 
 @app.route('/study-guide/comprehensive', methods=['POST'])
 def comprehensive_study_guide():
-    """Generate a comprehensive study guide with learning path, videos, examples, and practice test."""
+    """Generate a comprehensive study guide with learning path, videos, examples, and practice test.
+
+    Now accepts REAL extracted content from course materials for mind-blowing accuracy.
+    """
     data = request.get_json(silent=True)
     if not data or 'course' not in data:
         return jsonify({'error': 'No course provided'}), 400
 
     try:
         course = validate_str(data['course'], 100, 'course')
-        unit = validate_str(data.get('unit', ''), 200, 'unit')
+        unit = validate_str(data.get('unit', ''), 500, 'unit')
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
 
@@ -595,23 +600,77 @@ def comprehensive_study_guide():
     materials = data.get('materials', [])
     student_notes = data.get('notes', '')
 
-    # Build a comprehensive prompt
+    # NEW: Accept deep-scraped content
+    unit_description = data.get('unit_description', '')  # Full unit description with objectives
+    unit_objectives = data.get('unit_objectives', [])    # Learning objectives list
+    assignment_instructions = data.get('assignment_instructions', [])  # Actual HW instructions
+    extracted_content = data.get('extracted_content', [])  # Content from PDFs/docs
+    resource_list = data.get('resources', [])  # YouTube, Khan Academy links found
+
+    # Build a comprehensive prompt with REAL content
     parts = [f"Course: {course}"]
     if unit:
         parts.append(f"Unit: {unit}")
 
+    # Include full unit description if provided
+    if unit_description:
+        parts.append(f"\n=== UNIT DESCRIPTION (from course) ===\n{unit_description[:2000]}")
+
+    # Include learning objectives
+    if unit_objectives:
+        parts.append(f"\n=== LEARNING OBJECTIVES (what students must master) ===")
+        for i, obj in enumerate(unit_objectives, 1):
+            parts.append(f"  {i}. {obj}")
+
     if topics:
-        parts.append(f"\nTopics to cover ({len(topics)}):")
+        parts.append(f"\n=== KEY TOPICS ({len(topics)}) ===")
         for i, t in enumerate(topics, 1):
             if isinstance(t, str):
                 parts.append(f"  {i}. {t}")
             else:
                 name = t.get('name', t.get('topic', 'Unknown'))
                 details = t.get('details', '')
-                parts.append(f"  {i}. {name}: {details}" if details else f"  {i}. {name}")
+                importance = t.get('importance', '')
+                line = f"  {i}. {name}"
+                if importance:
+                    line += f" [{importance}]"
+                if details:
+                    line += f": {details}"
+                parts.append(line)
+
+    # Include actual assignment instructions - this is GOLD
+    if assignment_instructions:
+        parts.append(f"\n=== ACTUAL ASSIGNMENT INSTRUCTIONS (model problems after these!) ===")
+        for i, instr in enumerate(assignment_instructions[:5], 1):  # Limit to 5
+            title = instr.get('title', f'Assignment {i}')
+            text = instr.get('instructions', instr.get('text', ''))
+            due = instr.get('dueDate', '')
+            parts.append(f"\n--- {title} ---")
+            if due:
+                parts.append(f"Due: {due}")
+            if text:
+                parts.append(text[:1500])  # Limit each instruction
+
+    # Include extracted content from PDFs/docs
+    if extracted_content:
+        parts.append(f"\n=== EXTRACTED CONTENT FROM COURSE MATERIALS ===")
+        for i, content in enumerate(extracted_content[:10], 1):
+            title = content.get('title', f'Document {i}')
+            text = content.get('text', content.get('extracted_text', ''))
+            parts.append(f"\n--- {title} ---")
+            parts.append(text[:2000])  # Limit each doc
+
+    # Include found resources for reference
+    if resource_list:
+        parts.append(f"\n=== RESOURCES FOUND IN COURSE ({len(resource_list)}) ===")
+        for r in resource_list[:15]:
+            rtype = r.get('type', 'resource')
+            name = r.get('name', 'Untitled')
+            url = r.get('url', '')
+            parts.append(f"  - [{rtype}] {name}: {url}")
 
     if materials:
-        parts.append(f"\nCourse materials and assignments ({len(materials)}):")
+        parts.append(f"\n=== COURSE MATERIALS/ASSIGNMENTS ({len(materials)}) ===")
         for i, m in enumerate(materials, 1):
             if isinstance(m, str):
                 parts.append(f"  {i}. {m}")
@@ -621,7 +680,7 @@ def comprehensive_study_guide():
                 parts.append(f"  {i}. [{mtype}] {name}" if mtype else f"  {i}. {name}")
 
     if student_notes:
-        parts.append(f"\nStudent's notes/areas of difficulty: {student_notes[:500]}")
+        parts.append(f"\n=== STUDENT'S NOTES/AREAS OF DIFFICULTY ===\n{student_notes[:500]}")
 
     try:
         result = call_claude_json(COMPREHENSIVE_STUDY_GUIDE_PROMPT, '\n'.join(parts), max_tokens=4096)
@@ -634,14 +693,14 @@ def comprehensive_study_guide():
 
 @app.route('/study-guide/practice-test', methods=['POST'])
 def generate_practice_test():
-    """Generate a standalone practice test for a topic/unit."""
+    """Generate a standalone practice test that MIRRORS actual course homework style."""
     data = request.get_json(silent=True)
     if not data or 'course' not in data:
         return jsonify({'error': 'No course provided'}), 400
 
     try:
         course = validate_str(data['course'], 100, 'course')
-        unit = validate_str(data.get('unit', ''), 200, 'unit')
+        unit = validate_str(data.get('unit', ''), 500, 'unit')
         num_questions = min(max(int(data.get('num_questions', 10)), 5), 25)
     except (ValueError, TypeError) as e:
         return jsonify({'error': str(e)}), 400
@@ -649,15 +708,55 @@ def generate_practice_test():
     topics = data.get('topics', [])
     difficulty = data.get('difficulty', 'medium')  # easy, medium, hard, mixed
 
+    # NEW: Accept real homework examples to mirror
+    sample_problems = data.get('sample_problems', [])  # Actual problems from their HW
+    assignment_style = data.get('assignment_style', '')  # Description of HW format
+    unit_objectives = data.get('unit_objectives', [])  # What they need to master
+    formulas = data.get('formulas', [])  # Formulas they need to know
+
     prompt = (
         f"Generate a {num_questions}-question practice test for {course}"
         + (f" - {unit}" if unit else "")
         + f". Difficulty: {difficulty}.\n\n"
-        "Rules:\n"
-        "- Mix question types: multiple choice, free response, and calculations\n"
+    )
+
+    # Add real context if provided
+    if unit_objectives:
+        prompt += "=== LEARNING OBJECTIVES (test these!) ===\n"
+        for obj in unit_objectives[:10]:
+            prompt += f"- {obj}\n"
+        prompt += "\n"
+
+    if formulas:
+        prompt += "=== FORMULAS STUDENTS MUST KNOW ===\n"
+        for f in formulas[:10]:
+            name = f.get('name', '') if isinstance(f, dict) else str(f)
+            formula = f.get('formula', '') if isinstance(f, dict) else ''
+            prompt += f"- {name}: {formula}\n" if formula else f"- {name}\n"
+        prompt += "\n"
+
+    if sample_problems:
+        prompt += "=== SAMPLE PROBLEMS FROM THEIR ACTUAL HOMEWORK (MIRROR THIS STYLE!) ===\n"
+        for i, prob in enumerate(sample_problems[:5], 1):
+            if isinstance(prob, str):
+                prompt += f"{i}. {prob}\n"
+            else:
+                prompt += f"{i}. {prob.get('problem', prob.get('text', str(prob)))}\n"
+        prompt += "\n"
+
+    if assignment_style:
+        prompt += f"=== ASSIGNMENT STYLE NOTES ===\n{assignment_style}\n\n"
+
+    prompt += (
+        "CRITICAL RULES:\n"
+        "- Questions MUST match the style of their actual homework\n"
+        "- Use the SAME terminology and problem formats they see in class\n"
+        "- If sample problems were provided, create similar problems (not copies)\n"
+        "- Test the EXACT learning objectives listed\n"
         "- Include point values that sum to 100\n"
         "- Provide detailed explanations for each answer\n"
-        "- Questions should progressively increase in difficulty\n\n"
+        "- Questions should progressively increase in difficulty\n"
+        "- This should feel like it came from their actual teacher\n\n"
         "Respond ONLY with valid JSON. Format:\n"
         '{"title": "...", "course": "...", "unit": "...", "time_limit_minutes": 45, '
         '"total_points": 100, "instructions": "...", '

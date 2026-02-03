@@ -67,6 +67,42 @@ CREATE TABLE scraped_assignments (
   scraped_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Deep scraped course materials for AI-powered study guides
+CREATE TABLE course_materials (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  course_id TEXT NOT NULL,
+  course_name TEXT NOT NULL,
+  course_url TEXT,
+  -- Unit information
+  units JSONB DEFAULT '[]',
+  -- Lessons with links
+  lessons JSONB DEFAULT '[]',
+  -- All resources (Google Drive, YouTube, PDFs, etc.)
+  resources JSONB DEFAULT '[]',
+  -- Assignment page content (instructions, due dates)
+  assignments JSONB DEFAULT '[]',
+  -- Extracted text from PDFs/docs (the gold!)
+  extracted_content JSONB DEFAULT '[]',
+  -- Metadata
+  scraped_at TIMESTAMPTZ DEFAULT NOW(),
+  last_sync TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, course_id)
+);
+
+-- Extracted document content for study guides
+CREATE TABLE extracted_documents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  material_id UUID REFERENCES course_materials(id) ON DELETE CASCADE NOT NULL,
+  source_type TEXT NOT NULL, -- 'google_drive', 'pdf', 'youtube_transcript'
+  source_url TEXT,
+  source_id TEXT, -- file ID or video ID
+  title TEXT,
+  extracted_text TEXT,
+  metadata JSONB DEFAULT '{}',
+  extracted_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Indexes
 CREATE INDEX idx_courses_user ON courses(user_id);
 CREATE INDEX idx_grades_course ON grades(course_id);
@@ -74,6 +110,9 @@ CREATE INDEX idx_plans_user ON plans(user_id, created_at DESC);
 CREATE INDEX idx_chunks_user ON chunks(user_id, created_at DESC);
 CREATE INDEX idx_sprints_user ON sprints(user_id, completed);
 CREATE INDEX idx_scraped_user ON scraped_assignments(user_id, scraped_at DESC);
+CREATE INDEX idx_materials_user ON course_materials(user_id);
+CREATE INDEX idx_materials_course ON course_materials(user_id, course_id);
+CREATE INDEX idx_extracted_material ON extracted_documents(material_id);
 
 -- Row Level Security
 ALTER TABLE courses ENABLE ROW LEVEL SECURITY;
@@ -83,6 +122,8 @@ ALTER TABLE chunks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE study_guides ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sprints ENABLE ROW LEVEL SECURITY;
 ALTER TABLE scraped_assignments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE course_materials ENABLE ROW LEVEL SECURITY;
+ALTER TABLE extracted_documents ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "own_data" ON courses FOR ALL USING (auth.uid() = user_id);
 CREATE POLICY "own_data" ON plans FOR ALL USING (auth.uid() = user_id);
@@ -92,4 +133,8 @@ CREATE POLICY "own_data" ON sprints FOR ALL USING (auth.uid() = user_id);
 CREATE POLICY "own_data" ON scraped_assignments FOR ALL USING (auth.uid() = user_id);
 CREATE POLICY "own_grades" ON grades FOR ALL USING (
   course_id IN (SELECT id FROM courses WHERE user_id = auth.uid())
+);
+CREATE POLICY "own_materials" ON course_materials FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "own_extracted" ON extracted_documents FOR ALL USING (
+  material_id IN (SELECT id FROM course_materials WHERE user_id = auth.uid())
 );

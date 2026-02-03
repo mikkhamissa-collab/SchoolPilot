@@ -2,7 +2,53 @@
 
 import { createClient } from "@/lib/supabase-client";
 import { apiFetch } from "@/lib/api";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+
+// Types for deep-scraped materials
+interface ScrapedUnit {
+  number?: number;
+  name: string;
+  fullName?: string;
+  description?: string;
+  objectives?: string[];
+}
+
+interface ScrapedLesson {
+  name: string;
+  lessonId?: string;
+  href?: string;
+  pageCount?: number;
+  unitNumber?: number;
+}
+
+interface ScrapedResource {
+  type: string;
+  name?: string;
+  url?: string;
+  fileId?: string;
+  videoId?: string;
+}
+
+interface ScrapedAssignment {
+  pageId?: string;
+  lessonId?: string;
+  title?: string;
+  instructions?: string;
+  dueDate?: string;
+  resources?: ScrapedResource[];
+}
+
+interface CourseMaterial {
+  id: string;
+  course_id: string;
+  course_name: string;
+  units: ScrapedUnit[];
+  lessons: ScrapedLesson[];
+  resources: ScrapedResource[];
+  assignments: ScrapedAssignment[];
+  extracted_content: Array<{ source_id: string; title: string; preview?: string }>;
+  last_sync: string;
+}
 
 // Types for the comprehensive study guide
 interface LearningStep {
@@ -60,7 +106,6 @@ interface ComprehensiveGuide {
 interface Course {
   id: string;
   name: string;
-  policies: { units?: string[]; } | null;
 }
 
 interface SavedGuide {
@@ -71,15 +116,14 @@ interface SavedGuide {
   course_id: string | null;
 }
 
-type ViewState = "course" | "unit" | "generating" | "guide";
+type ViewState = "course" | "materials" | "unit" | "generating" | "guide";
 type GuideTab = "learn" | "examples" | "test";
 
 export default function StudyPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
-  const [units, setUnits] = useState<string[]>([]);
-  const [selectedUnit, setSelectedUnit] = useState<string>("");
-  const [customUnit, setCustomUnit] = useState("");
+  const [courseMaterial, setCourseMaterial] = useState<CourseMaterial | null>(null);
+  const [selectedUnit, setSelectedUnit] = useState<ScrapedUnit | null>(null);
   const [customNotes, setCustomNotes] = useState("");
   const [viewState, setViewState] = useState<ViewState>("course");
   const [activeTab, setActiveTab] = useState<GuideTab>("learn");
@@ -89,6 +133,7 @@ export default function StudyPage() {
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [error, setError] = useState("");
+  const [syncStatus, setSyncStatus] = useState("");
 
   // Learning path progress
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
@@ -108,7 +153,7 @@ export default function StudyPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const [coursesRes, guidesRes] = await Promise.all([
-        supabase.from("courses").select("id, name, policies").eq("user_id", user.id),
+        supabase.from("courses").select("id, name").eq("user_id", user.id),
         supabase.from("study_guides").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
       ]);
       if (coursesRes.data) setCourses(coursesRes.data);
@@ -118,18 +163,47 @@ export default function StudyPage() {
     load();
   }, []);
 
-  const selectCourse = (course: Course) => {
+  const loadCourseMaterials = useCallback(async (course: Course) => {
     setSelectedCourse(course);
-    setUnits(course.policies?.units || []);
-    setSelectedUnit("");
-    setCustomUnit("");
+    setLoading(true);
+    setError("");
+
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Not authenticated");
+
+      // Try to find materials by matching course name
+      const { data } = await supabase
+        .from("course_materials")
+        .select("*")
+        .ilike("course_name", `%${course.name.split(" ")[0]}%`)
+        .order("last_sync", { ascending: false })
+        .limit(1);
+
+      if (data && data.length > 0) {
+        setCourseMaterial(data[0]);
+        setViewState("materials");
+      } else {
+        // No materials yet - show empty state
+        setCourseMaterial(null);
+        setViewState("materials");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load materials");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const selectUnit = (unit: ScrapedUnit) => {
+    setSelectedUnit(unit);
     setViewState("unit");
   };
 
   const generateGuide = async () => {
-    const unitToUse = selectedUnit || customUnit.trim();
-    if (!selectedCourse || !unitToUse) {
-      setError("Select or enter a unit/topic");
+    if (!selectedCourse || !selectedUnit) {
+      setError("Select a unit first");
       return;
     }
 
@@ -139,10 +213,51 @@ export default function StudyPage() {
     resetGuideState();
 
     try {
+      // Gather ALL real content for this unit
+      const unitNumber = selectedUnit.number;
+
+      // Get assignments for this unit
+      const unitAssignments = courseMaterial?.assignments?.filter(a => {
+        // Match by lesson ID or by title containing unit info
+        return a.title?.toLowerCase().includes(`unit ${unitNumber}`) ||
+               a.title?.toLowerCase().includes(selectedUnit.name.toLowerCase());
+      }) || [];
+
+      // Get resources for this unit
+      const unitResources = courseMaterial?.resources?.filter(r => {
+        return r.name?.toLowerCase().includes(`unit ${unitNumber}`) ||
+               r.name?.toLowerCase().includes(selectedUnit.name.toLowerCase());
+      }) || [];
+
+      // Get lessons for this unit
+      const unitLessons = courseMaterial?.lessons?.filter(l =>
+        l.unitNumber === unitNumber ||
+        l.name?.toLowerCase().includes(`unit ${unitNumber}`) ||
+        l.name?.toLowerCase().includes(selectedUnit.name.toLowerCase())
+      ) || [];
+
+      // Build the comprehensive request with REAL content
       const result = await apiFetch<ComprehensiveGuide>("study-guide/comprehensive", {
         course: selectedCourse.name,
-        unit: unitToUse,
+        unit: selectedUnit.fullName || selectedUnit.name,
         notes: customNotes,
+        // NEW: Send real scraped content
+        unit_description: selectedUnit.description || "",
+        unit_objectives: selectedUnit.objectives || [],
+        assignment_instructions: unitAssignments.map(a => ({
+          title: a.title,
+          instructions: a.instructions,
+          dueDate: a.dueDate,
+        })),
+        resources: [
+          ...unitResources,
+          ...(courseMaterial?.resources || []).slice(0, 10), // Include some general resources too
+        ],
+        materials: unitLessons.map(l => ({
+          name: l.name,
+          type: "lesson",
+          pageCount: l.pageCount,
+        })),
       });
 
       // Save to DB
@@ -154,7 +269,7 @@ export default function StudyPage() {
           .insert({
             user_id: user.id,
             course_id: selectedCourse.id,
-            unit: unitToUse,
+            unit: selectedUnit.fullName || selectedUnit.name,
             guide: result,
           })
           .select()
@@ -185,9 +300,13 @@ export default function StudyPage() {
   };
 
   const goBack = () => {
-    if (viewState === "unit") {
+    if (viewState === "materials") {
       setViewState("course");
       setSelectedCourse(null);
+      setCourseMaterial(null);
+    } else if (viewState === "unit") {
+      setViewState("materials");
+      setSelectedUnit(null);
     } else if (viewState === "guide") {
       setViewState("unit");
       setGuide(null);
@@ -200,7 +319,6 @@ export default function StudyPage() {
     resetGuideState();
     const course = courses.find(c => c.id === h.course_id);
     if (course) setSelectedCourse(course);
-    setSelectedUnit(h.unit || "");
   };
 
   const toggleStep = (order: number) => {
@@ -233,7 +351,6 @@ export default function StudyPage() {
       const userAnswer = (testAnswers[q.number] || "").trim().toLowerCase();
       const correctAnswer = q.correct_answer.toLowerCase();
 
-      // For multiple choice, check if they selected the right letter
       if (q.type === "multiple_choice") {
         const letterMatch = userAnswer.match(/^([a-d])/i);
         const correctLetter = correctAnswer.match(/^([a-d])/i);
@@ -242,7 +359,6 @@ export default function StudyPage() {
           points += q.points;
         }
       } else {
-        // For other types, check if answer contains key parts
         if (userAnswer && correctAnswer.includes(userAnswer.substring(0, 20))) {
           correct++;
           points += q.points;
@@ -256,7 +372,7 @@ export default function StudyPage() {
 
   if (pageLoading) {
     return (
-      <div className="max-w-3xl space-y-4">
+      <div className="max-w-4xl space-y-4">
         <div className="h-8 w-32 bg-bg-card rounded animate-pulse" />
         <div className="h-48 bg-bg-card rounded-xl animate-pulse" />
       </div>
@@ -265,8 +381,8 @@ export default function StudyPage() {
 
   if (courses.length === 0) {
     return (
-      <div className="max-w-3xl space-y-6">
-        <h2 className="text-2xl font-bold text-white">Study</h2>
+      <div className="max-w-4xl space-y-6">
+        <h2 className="text-2xl font-bold text-white">Study Guide Builder</h2>
         <div className="p-8 rounded-xl bg-bg-card border border-border text-center">
           <p className="text-text-muted">
             Sync your assignments from Teamie first to see your courses here.
@@ -279,22 +395,25 @@ export default function StudyPage() {
   const inputClass = "px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent text-sm";
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="max-w-4xl space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-white">Study Guide Builder</h2>
+          <p className="text-text-muted text-sm mt-1">
+            AI-powered guides built from your actual course materials
+          </p>
           {viewState !== "course" && selectedCourse && (
-            <div className="flex items-center gap-2 text-sm text-text-muted mt-1">
+            <div className="flex items-center gap-2 text-sm text-text-muted mt-2">
               <button onClick={() => { setViewState("course"); setSelectedCourse(null); }} className="hover:text-accent cursor-pointer">
                 Courses
               </button>
               <span>→</span>
               <span className="text-white">{selectedCourse.name}</span>
-              {(selectedUnit || customUnit) && viewState === "guide" && (
+              {selectedUnit && viewState !== "materials" && (
                 <>
                   <span>→</span>
-                  <span className="text-accent">{selectedUnit || customUnit}</span>
+                  <span className="text-accent">{selectedUnit.name}</span>
                 </>
               )}
             </div>
@@ -314,23 +433,23 @@ export default function StudyPage() {
         <div className="p-3 rounded-lg bg-error/10 text-error text-sm">{error}</div>
       )}
 
+      {syncStatus && (
+        <div className="p-3 rounded-lg bg-accent/10 text-accent text-sm">{syncStatus}</div>
+      )}
+
       {/* Step 1: Select Course */}
       {viewState === "course" && (
         <div className="space-y-4">
-          <p className="text-text-secondary">Choose a course to create a comprehensive study guide:</p>
-          <div className="grid gap-3">
+          <p className="text-text-secondary">Choose a course to build a study guide:</p>
+          <div className="grid gap-3 sm:grid-cols-2">
             {courses.map((c) => (
               <button
                 key={c.id}
-                onClick={() => selectCourse(c)}
-                className="p-4 rounded-xl bg-bg-card border border-border hover:border-accent/40 transition-colors text-left cursor-pointer"
+                onClick={() => loadCourseMaterials(c)}
+                disabled={loading}
+                className="p-4 rounded-xl bg-bg-card border border-border hover:border-accent/40 transition-colors text-left cursor-pointer disabled:opacity-50"
               >
                 <span className="text-white font-medium">{c.name}</span>
-                {c.policies?.units && c.policies.units.length > 0 && (
-                  <p className="text-text-muted text-xs mt-1">
-                    {c.policies.units.length} units available
-                  </p>
-                )}
               </button>
             ))}
           </div>
@@ -357,44 +476,188 @@ export default function StudyPage() {
         </div>
       )}
 
-      {/* Step 2: Select Unit & Generate */}
-      {viewState === "unit" && selectedCourse && (
-        <div className="space-y-4">
-          <p className="text-text-secondary">What topic or unit do you want to master?</p>
+      {/* Step 2: View Course Materials */}
+      {viewState === "materials" && selectedCourse && (
+        <div className="space-y-6">
+          {/* Materials Overview */}
+          {courseMaterial ? (
+            <>
+              {/* Stats Bar */}
+              <div className="p-4 rounded-xl bg-gradient-to-r from-accent/10 to-success/10 border border-accent/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-white font-semibold">Course Materials Loaded</h3>
+                    <p className="text-text-muted text-sm mt-1">
+                      Last synced: {new Date(courseMaterial.last_sync).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="flex gap-4 text-center">
+                    <div>
+                      <div className="text-2xl font-bold text-accent">{courseMaterial.units?.length || 0}</div>
+                      <div className="text-xs text-text-muted">Units</div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-success">{courseMaterial.assignments?.length || 0}</div>
+                      <div className="text-xs text-text-muted">Assignments</div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-warning">{courseMaterial.resources?.length || 0}</div>
+                      <div className="text-xs text-text-muted">Resources</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-          {units.length > 0 && (
-            <div className="grid gap-2">
-              {units.map((u, i) => (
-                <button
-                  key={i}
-                  onClick={() => setSelectedUnit(u)}
-                  className={`p-3 rounded-lg border transition-colors text-left cursor-pointer ${
-                    selectedUnit === u
-                      ? "bg-accent/10 border-accent/40 text-accent"
-                      : "bg-bg-card border-border hover:border-accent/20 text-white"
-                  }`}
-                >
-                  {u}
-                </button>
-              ))}
+              {/* Units List */}
+              <div>
+                <h4 className="text-sm font-semibold text-text-secondary mb-3">Select a Unit to Study</h4>
+                <div className="grid gap-3">
+                  {courseMaterial.units?.length > 0 ? (
+                    courseMaterial.units.map((unit, i) => (
+                      <button
+                        key={i}
+                        onClick={() => selectUnit(unit)}
+                        className="p-4 rounded-xl bg-bg-card border border-border hover:border-accent/40 transition-all text-left cursor-pointer group"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h5 className="text-white font-medium group-hover:text-accent transition-colors">
+                              {unit.fullName || unit.name}
+                            </h5>
+                            {unit.description && (
+                              <p className="text-text-muted text-sm mt-2 line-clamp-2">
+                                {unit.description.substring(0, 200)}...
+                              </p>
+                            )}
+                            {unit.objectives && unit.objectives.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {unit.objectives.slice(0, 3).map((obj, oi) => (
+                                  <span key={oi} className="px-2 py-0.5 rounded-full bg-accent/10 text-accent text-xs">
+                                    {obj.length > 30 ? obj.substring(0, 30) + "..." : obj}
+                                  </span>
+                                ))}
+                                {unit.objectives.length > 3 && (
+                                  <span className="text-text-muted text-xs">+{unit.objectives.length - 3} more</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <span className="text-text-muted group-hover:text-accent transition-colors">→</span>
+                        </div>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="p-4 rounded-xl bg-bg-card border border-border text-center">
+                      <p className="text-text-muted">No units found. Scrape the course materials page on Teamie first.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Resources Preview */}
+              {courseMaterial.resources?.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-text-secondary mb-3">Available Resources</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {courseMaterial.resources.slice(0, 12).map((r, i) => (
+                      <span
+                        key={i}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium ${
+                          r.type === "google_drive" ? "bg-blue-500/10 text-blue-400" :
+                          r.type === "youtube" ? "bg-red-500/10 text-red-400" :
+                          r.type === "khan_academy" ? "bg-green-500/10 text-green-400" :
+                          "bg-bg-card text-text-muted border border-border"
+                        }`}
+                      >
+                        {r.type === "youtube" && "▶ "}
+                        {r.type === "google_drive" && "📄 "}
+                        {r.name || r.type}
+                      </span>
+                    ))}
+                    {courseMaterial.resources.length > 12 && (
+                      <span className="px-3 py-1.5 text-text-muted text-xs">
+                        +{courseMaterial.resources.length - 12} more
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="p-8 rounded-xl bg-bg-card border border-border text-center">
+              <div className="text-4xl mb-4">📚</div>
+              <h3 className="text-white font-semibold mb-2">No Course Materials Yet</h3>
+              <p className="text-text-muted text-sm mb-4">
+                To build accurate study guides, we need to scan your course materials from Teamie.
+              </p>
+              <div className="p-4 rounded-lg bg-bg-dark border border-border text-left max-w-md mx-auto">
+                <p className="text-white text-sm font-medium mb-2">How to scan:</p>
+                <ol className="text-text-muted text-sm space-y-1 list-decimal list-inside">
+                  <li>Go to your course on Teamie</li>
+                  <li>Navigate to the Course Materials section</li>
+                  <li>Click &quot;Sync&quot; in the SchoolPilot extension</li>
+                  <li>Return here to generate study guides</li>
+                </ol>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Step 3: Unit Details & Generate */}
+      {viewState === "unit" && selectedUnit && (
+        <div className="space-y-6">
+          {/* Unit Header */}
+          <div className="p-5 rounded-xl bg-gradient-to-br from-accent/10 to-bg-card border border-accent/20">
+            <h3 className="text-xl font-bold text-white">{selectedUnit.fullName || selectedUnit.name}</h3>
+            {selectedUnit.description && (
+              <p className="text-text-secondary text-sm mt-2 leading-relaxed">
+                {selectedUnit.description}
+              </p>
+            )}
+          </div>
+
+          {/* Learning Objectives */}
+          {selectedUnit.objectives && selectedUnit.objectives.length > 0 && (
+            <div className="p-4 rounded-xl bg-bg-card border border-border">
+              <h4 className="text-sm font-semibold text-text-secondary mb-3">Learning Objectives</h4>
+              <ul className="space-y-2">
+                {selectedUnit.objectives.map((obj, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm">
+                    <span className="text-success mt-0.5">✓</span>
+                    <span className="text-white">{obj}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 
-          <div className="pt-2">
-            <label className="text-text-secondary text-sm block mb-2">Or enter a custom topic:</label>
-            <input
-              type="text"
-              placeholder="e.g., Unit 1: One Variable Statistics"
-              value={customUnit}
-              onChange={(e) => { setCustomUnit(e.target.value); setSelectedUnit(""); }}
-              className={`w-full ${inputClass}`}
-            />
-          </div>
+          {/* Related Assignments */}
+          {courseMaterial?.assignments && courseMaterial.assignments.length > 0 && (
+            <div className="p-4 rounded-xl bg-bg-card border border-border">
+              <h4 className="text-sm font-semibold text-text-secondary mb-3">
+                Related Assignments ({courseMaterial.assignments.length})
+              </h4>
+              <div className="space-y-2">
+                {courseMaterial.assignments.slice(0, 5).map((a, i) => (
+                  <div key={i} className="p-3 rounded-lg bg-bg-dark border border-border">
+                    <p className="text-white text-sm font-medium">{a.title || "Untitled Assignment"}</p>
+                    {a.dueDate && (
+                      <p className="text-text-muted text-xs mt-1">Due: {a.dueDate}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
-          <div className="pt-2">
-            <label className="text-text-secondary text-sm block mb-2">Any areas you&apos;re struggling with? (optional)</label>
+          {/* Custom Notes */}
+          <div>
+            <label className="text-text-secondary text-sm block mb-2">
+              Any areas you&apos;re struggling with? (optional)
+            </label>
             <textarea
-              placeholder="e.g., I don't understand standard deviation, confused about when to use mean vs median..."
+              placeholder="e.g., I don't understand conditional probability, confused about when to use tree diagrams vs Venn diagrams..."
               value={customNotes}
               onChange={(e) => setCustomNotes(e.target.value)}
               rows={3}
@@ -402,16 +665,17 @@ export default function StudyPage() {
             />
           </div>
 
+          {/* Generate Button */}
           <button
             onClick={generateGuide}
-            disabled={loading || (!selectedUnit && !customUnit.trim())}
-            className="w-full py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+            disabled={loading}
+            className="w-full py-4 rounded-xl bg-gradient-to-r from-accent to-accent-hover hover:from-accent-hover hover:to-accent text-white font-semibold text-lg transition-all disabled:opacity-50 cursor-pointer shadow-lg shadow-accent/20"
           >
             Generate Comprehensive Study Guide
           </button>
 
           <p className="text-text-muted text-xs text-center">
-            Includes: Learning path with videos, worked examples, and a practice test
+            Built from your actual course materials: unit objectives, assignments, and resources
           </p>
         </div>
       )}
@@ -422,12 +686,19 @@ export default function StudyPage() {
           <div className="animate-spin w-12 h-12 border-4 border-accent border-t-transparent rounded-full mx-auto mb-4" />
           <h3 className="text-white font-semibold text-lg mb-2">Building Your Study Guide</h3>
           <p className="text-text-muted text-sm">
-            Creating learning path, worked examples, and practice test...
+            Analyzing your course materials, unit objectives, and assignments...
           </p>
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            {["📚 Reading materials", "🎯 Mapping objectives", "✍️ Creating problems", "📝 Building test"].map((step, i) => (
+              <span key={i} className="px-3 py-1 rounded-full bg-bg-dark text-text-muted text-xs">
+                {step}
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Step 3: Display Guide */}
+      {/* Step 4: Display Guide */}
       {viewState === "guide" && guide && (
         <div className="space-y-5">
           {/* Overview Card */}
@@ -459,7 +730,7 @@ export default function StudyPage() {
             ))}
           </div>
 
-          {/* Learn Tab - Learning Path */}
+          {/* Learn Tab */}
           {activeTab === "learn" && guide.learning_path && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -498,7 +769,6 @@ export default function StudyPage() {
                         <h5 className="text-white font-medium">{step.topic}</h5>
                         <p className="text-text-secondary text-sm mt-1">{step.description}</p>
 
-                        {/* Resource Links */}
                         <div className="flex flex-wrap gap-2 mt-3">
                           {step.youtube_search && (
                             <a
@@ -533,7 +803,6 @@ export default function StudyPage() {
                 ))}
               </div>
 
-              {/* Study Tips */}
               {guide.study_tips && guide.study_tips.length > 0 && (
                 <div className="p-4 rounded-xl bg-bg-card border border-border mt-4">
                   <h5 className="text-sm font-semibold text-text-secondary mb-2">Study Tips</h5>
@@ -550,11 +819,11 @@ export default function StudyPage() {
             </div>
           )}
 
-          {/* Examples Tab - Worked Examples */}
+          {/* Examples Tab */}
           {activeTab === "examples" && guide.worked_examples && (
             <div className="space-y-4">
               <h4 className="text-sm font-semibold text-text-secondary">Worked Examples</h4>
-              <p className="text-text-muted text-xs">Click to expand each problem, then reveal steps one at a time</p>
+              <p className="text-text-muted text-xs">Click to expand, then reveal steps one at a time</p>
 
               <div className="space-y-3">
                 {guide.worked_examples.map((ex, i) => (
@@ -614,7 +883,7 @@ export default function StudyPage() {
             </div>
           )}
 
-          {/* Test Tab - Practice Test */}
+          {/* Test Tab */}
           {activeTab === "test" && guide.practice_test && (
             <div className="space-y-4">
               <div className="p-4 rounded-xl bg-bg-card border border-border">
@@ -751,13 +1020,13 @@ export default function StudyPage() {
           {/* Actions */}
           <div className="pt-4 border-t border-border flex gap-3">
             <button
-              onClick={() => { setViewState("unit"); setGuide(null); }}
+              onClick={() => { setViewState("materials"); setSelectedUnit(null); setGuide(null); }}
               className="flex-1 py-2.5 rounded-lg bg-bg-card border border-border text-white font-medium hover:border-accent/30 transition-colors cursor-pointer"
             >
-              New Guide
+              Different Unit
             </button>
             <button
-              onClick={() => { setViewState("course"); setSelectedCourse(null); setGuide(null); }}
+              onClick={() => { setViewState("course"); setSelectedCourse(null); setGuide(null); setCourseMaterial(null); }}
               className="flex-1 py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium transition-colors cursor-pointer"
             >
               Different Course
