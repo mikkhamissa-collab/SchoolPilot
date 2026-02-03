@@ -21,17 +21,38 @@ export default function SettingsPage() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [editingUnits, setEditingUnits] = useState<EditingUnits | null>(null);
 
+  // Autopilot settings
+  const [autoEmailEnabled, setAutoEmailEnabled] = useState(false);
+  const [autoEmailTime, setAutoEmailTime] = useState("6:30 AM");
+  const [wakeTime, setWakeTime] = useState("7:00 AM");
+  const [studyHours, setStudyHours] = useState(2);
+  const [userEmail, setUserEmail] = useState("");
+
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+
+      setUserEmail(user.email || "");
+
       const { data } = await supabase
         .from("courses")
         .select("id, name, policies")
         .eq("user_id", user.id)
         .order("name");
       if (data) setCourses(data);
+
+      // Load autopilot preferences from localStorage
+      const savedPrefs = localStorage.getItem("autopilot_prefs");
+      if (savedPrefs) {
+        const prefs = JSON.parse(savedPrefs);
+        setWakeTime(prefs.wakeTime || "7:00 AM");
+        setStudyHours(prefs.studyHours || 2);
+        setAutoEmailEnabled(prefs.autoEmailEnabled || false);
+        setAutoEmailTime(prefs.autoEmailTime || "6:30 AM");
+      }
+
       setLoading(false);
     };
     load();
@@ -334,6 +355,123 @@ export default function SettingsPage() {
         )}
       </div>
 
+      {/* Daily Autopilot Settings */}
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-lg font-semibold text-white mb-1">⚡ Daily Autopilot</h3>
+          <p className="text-text-muted text-sm">
+            Wake up to a personalized daily plan. No decision-making required - just follow the checklist.
+          </p>
+        </div>
+
+        <div className="p-5 rounded-xl bg-bg-card border border-border space-y-5">
+          {/* Morning Email Toggle */}
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-white font-medium">Daily Morning Email</div>
+              <div className="text-text-muted text-sm">Receive your plan every morning at a set time</div>
+            </div>
+            <button
+              onClick={() => {
+                const newValue = !autoEmailEnabled;
+                setAutoEmailEnabled(newValue);
+                localStorage.setItem("autopilot_prefs", JSON.stringify({
+                  wakeTime, studyHours, autoEmailEnabled: newValue, autoEmailTime
+                }));
+              }}
+              className={`w-14 h-7 rounded-full transition-colors cursor-pointer relative ${
+                autoEmailEnabled ? "bg-accent" : "bg-bg-dark border border-border"
+              }`}
+            >
+              <span
+                className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${
+                  autoEmailEnabled ? "left-8" : "left-1"
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Email Time */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-text-secondary text-sm block mb-2">Email Send Time</label>
+              <select
+                value={autoEmailTime}
+                onChange={(e) => {
+                  setAutoEmailTime(e.target.value);
+                  localStorage.setItem("autopilot_prefs", JSON.stringify({
+                    wakeTime, studyHours, autoEmailEnabled, autoEmailTime: e.target.value
+                  }));
+                }}
+                className="w-full px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-white text-sm focus:outline-none focus:border-accent"
+              >
+                {["5:00 AM", "5:30 AM", "6:00 AM", "6:30 AM", "7:00 AM", "7:30 AM", "8:00 AM"].map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-text-secondary text-sm block mb-2">Your Wake Time</label>
+              <select
+                value={wakeTime}
+                onChange={(e) => {
+                  setWakeTime(e.target.value);
+                  localStorage.setItem("autopilot_prefs", JSON.stringify({
+                    wakeTime: e.target.value, studyHours, autoEmailEnabled, autoEmailTime
+                  }));
+                }}
+                className="w-full px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-white text-sm focus:outline-none focus:border-accent"
+              >
+                {["5:00 AM", "5:30 AM", "6:00 AM", "6:30 AM", "7:00 AM", "7:30 AM", "8:00 AM", "8:30 AM", "9:00 AM"].map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Study Hours */}
+          <div>
+            <label className="text-text-secondary text-sm block mb-2">Daily Study Hours Available</label>
+            <div className="flex gap-2">
+              {[1, 1.5, 2, 2.5, 3, 4, 5].map(h => (
+                <button
+                  key={h}
+                  onClick={() => {
+                    setStudyHours(h);
+                    localStorage.setItem("autopilot_prefs", JSON.stringify({
+                      wakeTime, studyHours: h, autoEmailEnabled, autoEmailTime
+                    }));
+                  }}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                    studyHours === h
+                      ? "bg-accent text-white"
+                      : "bg-bg-dark border border-border text-text-muted hover:border-accent/30"
+                  }`}
+                >
+                  {h}h
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Email recipient */}
+          <div className="pt-3 border-t border-border/50">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-text-secondary text-sm">Email recipient</div>
+                <div className="text-white text-sm font-medium">{userEmail || "Not set"}</div>
+              </div>
+              <a
+                href="/today"
+                className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
+              >
+                Open Today&apos;s Plan →
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* About */}
       <div className="p-5 rounded-xl bg-bg-card border border-border">
         <h3 className="text-sm font-semibold text-text-secondary mb-2">About SchoolPilot</h3>
@@ -343,7 +481,7 @@ export default function SettingsPage() {
         <div className="mt-4 flex items-center gap-4 text-xs text-text-muted">
           <a href="https://schoolpilot.co" className="hover:text-accent transition-colors">Website</a>
           <span>•</span>
-          <span>v1.0.0</span>
+          <span>v2.0.0</span>
         </div>
       </div>
     </div>

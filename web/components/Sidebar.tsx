@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase-client";
 import { useEffect, useState } from "react";
 
 const navItems = [
+  { href: "/today", label: "Today", icon: "⚡", highlight: true },
   { href: "/dashboard", label: "Dashboard", icon: "🏠" },
   { href: "/plan", label: "Plan", icon: "📋" },
   { href: "/focus", label: "Focus", icon: "🎯" },
@@ -85,11 +86,16 @@ export default function Sidebar() {
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                 active
                   ? "bg-accent/15 text-accent"
-                  : "text-text-secondary hover:text-white hover:bg-bg-hover"
+                  : (item as { highlight?: boolean }).highlight
+                    ? "text-white bg-accent/10 hover:bg-accent/20"
+                    : "text-text-secondary hover:text-white hover:bg-bg-hover"
               }`}
             >
               <span className="text-base">{item.icon}</span>
               {item.label}
+              {(item as { highlight?: boolean }).highlight && !active && (
+                <span className="ml-auto px-1.5 py-0.5 rounded text-xs bg-accent text-white">NEW</span>
+              )}
             </Link>
           );
         })}

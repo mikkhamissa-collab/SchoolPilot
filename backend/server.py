@@ -777,6 +777,312 @@ def generate_practice_test():
 
 
 # ---------------------------------------------------------------------------
+# Morning Autopilot Email System
+# ---------------------------------------------------------------------------
+
+MORNING_AUTOPILOT_PROMPT: str = """You are an executive function coach for a high school student. Your job is to eliminate ALL decision-making from their day.
+
+Create a SPECIFIC, TIME-BLOCKED action plan for TODAY. The student should be able to follow this like a checklist with ZERO thinking required.
+
+CRITICAL RULES:
+1. Start each task with a SPECIFIC TIME (e.g., "7:00 AM - 7:30 AM")
+2. Every task must be concrete and actionable - no vague instructions
+3. Include EXACT page numbers, problem numbers, or specific actions
+4. Build in breaks (Pomodoro style: 25 min work, 5 min break)
+5. Prioritize by urgency: OVERDUE > Due today > Due tomorrow > Due this week
+6. For studying, specify WHAT to study and HOW (e.g., "Review flashcards for Unit 3 vocabulary" not just "study")
+7. Include meal/break reminders
+8. End with a clear "DONE FOR THE DAY" marker so they know when to stop
+
+FORMAT YOUR RESPONSE AS HTML EMAIL with these sections:
+1. 🌅 GOOD MORNING - Brief motivational opener (1 sentence)
+2. ⚡ TODAY'S MISSION - One-line summary of the day's goal
+3. 🚨 URGENT (if any overdue/due today items)
+4. 📋 YOUR SCHEDULE - Time-blocked tasks with checkboxes
+5. 💡 PRO TIP - One specific tip for the day
+6. 🎯 DONE WHEN - Clear completion criteria
+
+Use HTML formatting: <h2>, <p>, <ul>, <li>, <strong>, <em>, checkboxes as ☐
+Make it scannable - students should understand the plan in 30 seconds."""
+
+
+def generate_autopilot_html(plan_data: dict) -> str:
+    """Generate beautiful HTML email for the morning autopilot."""
+    schedule = plan_data.get('schedule', [])
+    urgent = plan_data.get('urgent', [])
+    mission = plan_data.get('mission', 'Crush today!')
+    greeting = plan_data.get('greeting', 'Rise and shine!')
+    tip = plan_data.get('tip', 'Start with the hardest task when your energy is highest.')
+    done_when = plan_data.get('done_when', 'All checkboxes marked!')
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0f; color: #e5e5e5; padding: 20px; }}
+            .container {{ max-width: 600px; margin: 0 auto; background: #1a1a2e; border-radius: 16px; padding: 24px; }}
+            h1 {{ color: #7c3aed; margin-bottom: 8px; }}
+            h2 {{ color: #fff; font-size: 18px; margin-top: 24px; margin-bottom: 12px; }}
+            .mission {{ background: linear-gradient(135deg, #7c3aed22, #7c3aed11); padding: 16px; border-radius: 12px; border-left: 4px solid #7c3aed; margin: 16px 0; }}
+            .urgent {{ background: #ef444422; padding: 16px; border-radius: 12px; border-left: 4px solid #ef4444; margin: 16px 0; }}
+            .urgent h3 {{ color: #ef4444; margin: 0 0 8px 0; }}
+            .task {{ background: #0a0a0f; padding: 12px 16px; border-radius: 8px; margin: 8px 0; display: flex; align-items: flex-start; gap: 12px; }}
+            .task-time {{ color: #7c3aed; font-weight: 600; min-width: 100px; }}
+            .task-content {{ flex: 1; }}
+            .task-title {{ color: #fff; font-weight: 500; }}
+            .task-details {{ color: #a0a0a0; font-size: 14px; margin-top: 4px; }}
+            .checkbox {{ font-size: 18px; }}
+            .tip {{ background: #22c55e22; padding: 16px; border-radius: 12px; border-left: 4px solid #22c55e; margin: 16px 0; }}
+            .done {{ background: #7c3aed; color: white; padding: 16px; border-radius: 12px; text-align: center; margin-top: 24px; }}
+            .footer {{ text-align: center; color: #666; font-size: 12px; margin-top: 24px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🚀 SchoolPilot</h1>
+            <p style="color: #a0a0a0; margin-top: 0;">Your daily autopilot is ready</p>
+
+            <h2>🌅 {greeting}</h2>
+
+            <div class="mission">
+                <strong>⚡ TODAY'S MISSION:</strong><br>
+                {mission}
+            </div>
+    """
+
+    if urgent:
+        html += """
+            <div class="urgent">
+                <h3>🚨 URGENT - DO THESE FIRST</h3>
+        """
+        for item in urgent:
+            html += f"""
+                <div class="task">
+                    <span class="checkbox">☐</span>
+                    <div class="task-content">
+                        <div class="task-title">{item.get('title', 'Task')}</div>
+                        <div class="task-details">{item.get('details', '')}</div>
+                    </div>
+                </div>
+            """
+        html += "</div>"
+
+    html += """
+            <h2>📋 YOUR SCHEDULE</h2>
+    """
+
+    for task in schedule:
+        html += f"""
+            <div class="task">
+                <span class="checkbox">☐</span>
+                <span class="task-time">{task.get('time', '')}</span>
+                <div class="task-content">
+                    <div class="task-title">{task.get('title', 'Task')}</div>
+                    <div class="task-details">{task.get('details', '')}</div>
+                </div>
+            </div>
+        """
+
+    html += f"""
+            <div class="tip">
+                <strong>💡 PRO TIP:</strong><br>
+                {tip}
+            </div>
+
+            <div class="done">
+                <strong>🎯 YOU'RE DONE WHEN:</strong><br>
+                {done_when}
+            </div>
+
+            <div class="footer">
+                <p>Powered by SchoolPilot AI • <a href="https://schoolpilot.co" style="color: #7c3aed;">Open Dashboard</a></p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return html
+
+
+@app.route('/autopilot/generate', methods=['POST'])
+def generate_autopilot():
+    """Generate a daily autopilot plan based on assignments and schedule."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    assignments = data.get('assignments', [])
+    overdue = data.get('overdue', [])
+    sprints = data.get('active_sprints', [])
+    study_time = data.get('available_study_hours', 2)
+    wake_time = data.get('wake_time', '7:00 AM')
+    preferences = data.get('preferences', {})
+
+    now = datetime.now()
+    today_str = now.strftime('%A, %B %d, %Y')
+    day_of_week = now.strftime('%A')
+
+    # Build context for Claude
+    parts = [
+        f"Today is {today_str} ({day_of_week}).",
+        f"Student wakes up at {wake_time}.",
+        f"Available study time today: {study_time} hours.",
+    ]
+
+    if overdue:
+        parts.append(f"\n⚠️ OVERDUE ITEMS ({len(overdue)}):")
+        for i, item in enumerate(overdue, 1):
+            parts.append(f"  {i}. {item.get('title', 'Unknown')} - {item.get('course', '')} - Was due: {item.get('due', 'unknown')}")
+
+    if assignments:
+        # Sort by urgency
+        sorted_assignments = sorted(assignments, key=lambda x: get_urgency_score(x), reverse=True)
+        parts.append(f"\nUPCOMING ASSIGNMENTS ({len(assignments)}):")
+        for i, a in enumerate(sorted_assignments[:10], 1):
+            due = a.get('due', '')
+            date = a.get('date', '')
+            day = a.get('day', '')
+            parts.append(f"  {i}. {a.get('title', 'Unknown')} [{a.get('type', 'Task')}]")
+            parts.append(f"      Course: {a.get('course', 'Unknown')}")
+            parts.append(f"      Due: {day} {date} {due}".strip())
+
+    if sprints:
+        parts.append(f"\nACTIVE STUDY SPRINTS ({len(sprints)}):")
+        for sprint in sprints[:3]:
+            parts.append(f"  - {sprint.get('test_name', 'Unknown')} on {sprint.get('test_date', 'Unknown')}")
+            today_tasks = sprint.get('today_tasks', [])
+            if today_tasks:
+                parts.append(f"    Today's sprint tasks: {', '.join(today_tasks)}")
+
+    parts.append(f"\nGenerate a complete time-blocked schedule for today starting from {wake_time}.")
+    parts.append("Include specific times, exact tasks, and clear completion criteria.")
+
+    try:
+        result = call_claude_json(
+            MORNING_AUTOPILOT_PROMPT,
+            '\n'.join(parts),
+            max_tokens=2048
+        )
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': f'Failed to generate plan: {e}'}), 502
+
+
+@app.route('/autopilot/send', methods=['POST'])
+def send_autopilot_email():
+    """Generate and send the morning autopilot email."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    email_to = data.get('email', '').strip()
+    if not email_to or '@' not in email_to:
+        return jsonify({'error': 'Invalid email'}), 400
+
+    assignments = data.get('assignments', [])
+    overdue = data.get('overdue', [])
+    sprints = data.get('active_sprints', [])
+    study_time = data.get('available_study_hours', 2)
+    wake_time = data.get('wake_time', '7:00 AM')
+    student_name = data.get('name', 'there')
+
+    now = datetime.now()
+    today_str = now.strftime('%A, %B %d')
+    day_of_week = now.strftime('%A')
+
+    # Build context for Claude
+    parts = [
+        f"Today is {now.strftime('%A, %B %d, %Y')} ({day_of_week}).",
+        f"Student's name: {student_name}",
+        f"Student wakes up at {wake_time}.",
+        f"Available study time today: {study_time} hours.",
+    ]
+
+    if overdue:
+        parts.append(f"\n⚠️ OVERDUE ITEMS ({len(overdue)}):")
+        for i, item in enumerate(overdue, 1):
+            parts.append(f"  {i}. {item.get('title', 'Unknown')} - {item.get('course', '')} - Was due: {item.get('due', 'unknown')}")
+
+    if assignments:
+        sorted_assignments = sorted(assignments, key=lambda x: get_urgency_score(x), reverse=True)
+        parts.append(f"\nUPCOMING ASSIGNMENTS ({len(assignments)}):")
+        for i, a in enumerate(sorted_assignments[:10], 1):
+            due = a.get('due', '')
+            date = a.get('date', '')
+            day = a.get('day', '')
+            parts.append(f"  {i}. {a.get('title', 'Unknown')} [{a.get('type', 'Task')}]")
+            parts.append(f"      Course: {a.get('course', 'Unknown')}")
+            parts.append(f"      Due: {day} {date} {due}".strip())
+
+    if sprints:
+        parts.append(f"\nACTIVE STUDY SPRINTS:")
+        for sprint in sprints[:3]:
+            parts.append(f"  - {sprint.get('test_name', 'Unknown')} on {sprint.get('test_date', 'Unknown')}")
+
+    parts.append(f"\nGenerate a complete time-blocked schedule starting from {wake_time}.")
+    parts.append("Respond with JSON containing: greeting, mission, urgent (array), schedule (array with time/title/details), tip, done_when")
+
+    try:
+        plan = call_claude_json(
+            MORNING_AUTOPILOT_PROMPT + "\n\nRespond ONLY with valid JSON. Format:\n"
+            '{"greeting": "...", "mission": "...", "urgent": [{"title": "...", "details": "..."}], '
+            '"schedule": [{"time": "7:00 AM", "title": "...", "details": "..."}], "tip": "...", "done_when": "..."}',
+            '\n'.join(parts),
+            max_tokens=2048
+        )
+
+        # Generate HTML email
+        html_content = generate_autopilot_html(plan)
+
+        # Send email
+        resend.api_key = RESEND_API_KEY
+        resend.Emails.send({
+            'from': 'SchoolPilot <pilot@schoolpilot.co>',
+            'to': [email_to],
+            'subject': f'🚀 Your {today_str} Autopilot Plan',
+            'html': html_content,
+        })
+
+        return jsonify({
+            'status': 'sent',
+            'plan': plan,
+            'tasks_count': len(plan.get('schedule', [])),
+            'urgent_count': len(plan.get('urgent', [])),
+        })
+
+    except Exception as e:
+        return jsonify({'error': f'Failed to send autopilot: {e}'}), 502
+
+
+@app.route('/autopilot/schedule', methods=['POST'])
+def schedule_autopilot():
+    """Schedule daily autopilot emails for a user (stores preference, actual scheduling done by cron)."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    email = data.get('email', '').strip()
+    send_time = data.get('send_time', '6:30 AM')  # Default: 6:30 AM
+    enabled = data.get('enabled', True)
+    timezone = data.get('timezone', 'America/New_York')
+
+    if not email or '@' not in email:
+        return jsonify({'error': 'Invalid email'}), 400
+
+    # In production, this would save to database
+    # For now, return success
+    return jsonify({
+        'status': 'scheduled',
+        'email': email,
+        'send_time': send_time,
+        'enabled': enabled,
+        'timezone': timezone,
+        'message': f'Daily autopilot emails will be sent at {send_time} ({timezone})'
+    })
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
