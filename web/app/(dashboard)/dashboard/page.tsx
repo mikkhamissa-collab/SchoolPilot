@@ -157,15 +157,33 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Extension CTA */}
-      {stats.upcomingCount === 0 && (
-        <div className="p-6 rounded-xl bg-accent/5 border border-accent/20 text-center">
-          <p className="text-white font-medium mb-2">
-            Install the SchoolPilot extension to sync assignments from Teamie
-          </p>
-          <p className="text-text-secondary text-sm">
-            The extension scrapes your Teamie dashboard and syncs data here automatically.
-          </p>
+      {/* Getting Started — show when no courses exist */}
+      {stats.courseCount === 0 && (
+        <div className="p-6 rounded-xl bg-accent/5 border border-accent/20">
+          <h3 className="text-lg font-semibold text-white mb-4">Get Started</h3>
+          <div className="space-y-4">
+            <div className="flex items-start gap-3">
+              <span className="flex-shrink-0 w-7 h-7 rounded-full bg-accent/20 text-accent flex items-center justify-center text-sm font-bold">1</span>
+              <div>
+                <p className="text-white font-medium">Add your courses</p>
+                <p className="text-text-secondary text-sm">Go to the <Link href="/grades" className="text-accent hover:underline">Grades</Link> page and add your courses with grade categories (Tests, Homework, etc.).</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="flex-shrink-0 w-7 h-7 rounded-full bg-accent/20 text-accent flex items-center justify-center text-sm font-bold">2</span>
+              <div>
+                <p className="text-white font-medium">Sync from Teamie (optional)</p>
+                <p className="text-text-secondary text-sm">Use the SchoolPilot Chrome extension on <span className="text-text-primary">lms.asl.org</span> to sync your assignments automatically.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="flex-shrink-0 w-7 h-7 rounded-full bg-accent/20 text-accent flex items-center justify-center text-sm font-bold">3</span>
+              <div>
+                <p className="text-white font-medium">Use AI features</p>
+                <p className="text-text-secondary text-sm">Break down assignments, generate study guides, and create sprint plans.</p>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
