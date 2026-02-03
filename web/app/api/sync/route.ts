@@ -49,10 +49,19 @@ export async function POST(request: NextRequest) {
     process.env.SUPABASE_SERVICE_KEY!
   );
 
-  // 1. Save the raw scraped assignments
+  // Deduplicate assignments by title + course + date
+  const seen = new Set<string>();
+  const dedupedAssignments = assignments.filter((a: { title?: string; course?: string; date?: string }) => {
+    const key = `${a.title || ""}|${a.course || ""}|${a.date || ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  // 1. Save the deduplicated scraped assignments
   const { error: scrapeError } = await admin.from("scraped_assignments").insert({
     user_id: user.id,
-    assignments,
+    assignments: dedupedAssignments,
     scraped_at: new Date().toISOString(),
   });
 
@@ -62,7 +71,7 @@ export async function POST(request: NextRequest) {
 
   // 2. Auto-create courses from assignment data
   const courseNames = new Set<string>();
-  for (const a of assignments) {
+  for (const a of dedupedAssignments) {
     if (a.course && typeof a.course === "string") {
       const cleaned = cleanCourseName(a.course);
       if (cleaned) courseNames.add(cleaned);
@@ -97,7 +106,7 @@ export async function POST(request: NextRequest) {
   if (type === "assignments") {
     await admin.from("plans").insert({
       user_id: user.id,
-      assignments,
+      assignments: dedupedAssignments,
       ai_response: null,
       emailed: false,
     });
@@ -105,7 +114,7 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     status: "synced",
-    count: assignments.length,
+    count: dedupedAssignments.length,
     courses_created: courseNames.size,
   });
 }

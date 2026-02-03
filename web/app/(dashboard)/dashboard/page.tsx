@@ -48,7 +48,15 @@ export default function DashboardPage() {
         supabase.from("scraped_assignments").select("assignments").eq("user_id", user.id).order("scraped_at", { ascending: false }).limit(1),
       ]);
 
-      const assignmentList: Assignment[] = assignmentsRes.data?.[0]?.assignments || [];
+      const rawAssignments: Assignment[] = assignmentsRes.data?.[0]?.assignments || [];
+      // Deduplicate by title + course + date
+      const seen = new Set<string>();
+      const assignmentList = rawAssignments.filter((a) => {
+        const key = `${a.title}|${a.course || ""}|${a.date || ""}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
       const courseList = coursesRes.data || [];
       setCourseNames(courseList.map((c: { name: string }) => c.name));
       setAssignments(assignmentList);
