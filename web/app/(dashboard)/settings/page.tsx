@@ -369,7 +369,7 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between">
             <div>
               <div className="text-white font-medium">Daily Morning Email</div>
-              <div className="text-text-muted text-sm">Receive your plan every morning at a set time</div>
+              <div className="text-text-muted text-sm">Send yourself a plan from the Today page (auto-scheduling coming soon)</div>
             </div>
             <button
               onClick={() => {

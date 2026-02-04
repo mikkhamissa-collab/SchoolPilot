@@ -127,10 +127,9 @@ export default function PlanPage() {
                   <div className="px-4 pb-4 border-t border-border">
                     {/* AI response if available */}
                     {plan.ai_response && (
-                      <div
-                        className="mt-3 mb-4 p-3 rounded-lg bg-accent/5 text-text-secondary text-sm leading-relaxed whitespace-pre-wrap"
-                        dangerouslySetInnerHTML={{ __html: plan.ai_response }}
-                      />
+                      <pre
+                        className="mt-3 mb-4 p-3 rounded-lg bg-accent/5 text-text-secondary text-sm leading-relaxed whitespace-pre-wrap font-sans"
+                      >{plan.ai_response}</pre>
                     )}
 
                     {/* Assignment list */}

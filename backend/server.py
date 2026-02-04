@@ -1205,33 +1205,6 @@ def weak_spot_recommend():
         return jsonify({'error': f'Failed to generate recommendations: {e}'}), 502
 
 
-@app.route('/autopilot/schedule', methods=['POST'])
-def schedule_autopilot():
-    """Schedule daily autopilot emails for a user (stores preference, actual scheduling done by cron)."""
-    data = request.get_json(silent=True)
-    if not data:
-        return jsonify({'error': 'No data provided'}), 400
-
-    email = data.get('email', '').strip()
-    send_time = data.get('send_time', '6:30 AM')  # Default: 6:30 AM
-    enabled = data.get('enabled', True)
-    timezone = data.get('timezone', 'America/New_York')
-
-    if not email or '@' not in email:
-        return jsonify({'error': 'Invalid email'}), 400
-
-    # In production, this would save to database
-    # For now, return success
-    return jsonify({
-        'status': 'scheduled',
-        'email': email,
-        'send_time': send_time,
-        'enabled': enabled,
-        'timezone': timezone,
-        'message': f'Daily autopilot emails will be sent at {send_time} ({timezone})'
-    })
-
-
 # ---------------------------------------------------------------------------
 # Feature 3: Grade-Aware Prioritization
 # ---------------------------------------------------------------------------

@@ -422,25 +422,48 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* No data — sync instructions */}
+      {/* No data — setup instructions */}
       {!hasData && (
         <div className="p-6 rounded-xl bg-accent/5 border border-accent/20">
-          <h3 className="text-lg font-semibold text-white mb-3">Sync Your Assignments</h3>
+          <h3 className="text-lg font-semibold text-white mb-3">Get Started</h3>
           <p className="text-text-secondary text-sm mb-4">
-            Your dashboard will show your classes and upcoming work once you sync from Teamie.
+            Set up SchoolPilot in 2 minutes to see your classes and assignments here.
           </p>
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div className="flex items-start gap-3">
               <span className="flex-shrink-0 w-6 h-6 rounded-full bg-accent/20 text-accent flex items-center justify-center text-xs font-bold">1</span>
-              <p className="text-text-secondary text-sm">Make sure you&apos;re signed in here at schoolpilot.co</p>
+              <div>
+                <p className="text-white text-sm font-medium">Install the Chrome Extension</p>
+                <p className="text-text-muted text-xs mt-0.5">
+                  This is what reads your assignments from Teamie.
+                </p>
+                <a
+                  href="https://chromewebstore.google.com/detail/schoolpilot"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-accent/15 text-accent text-xs font-medium hover:bg-accent/25 transition-colors"
+                >
+                  Get Extension &rarr;
+                </a>
+              </div>
             </div>
             <div className="flex items-start gap-3">
               <span className="flex-shrink-0 w-6 h-6 rounded-full bg-accent/20 text-accent flex items-center justify-center text-xs font-bold">2</span>
-              <p className="text-text-secondary text-sm">Go to <span className="text-white">lms.asl.org/dash</span> in Chrome</p>
+              <div>
+                <p className="text-white text-sm font-medium">Go to Teamie</p>
+                <p className="text-text-muted text-xs mt-0.5">
+                  Open <a href="https://lms.asl.org/dash/#/" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">lms.asl.org/dash</a> in Chrome and log in.
+                </p>
+              </div>
             </div>
             <div className="flex items-start gap-3">
               <span className="flex-shrink-0 w-6 h-6 rounded-full bg-accent/20 text-accent flex items-center justify-center text-xs font-bold">3</span>
-              <p className="text-text-secondary text-sm">Click the SchoolPilot extension and hit <span className="text-accent font-medium">&quot;Sync to schoolpilot.co&quot;</span></p>
+              <div>
+                <p className="text-white text-sm font-medium">Click Scan &amp; Send</p>
+                <p className="text-text-muted text-xs mt-0.5">
+                  Open the SchoolPilot extension and hit <span className="text-accent font-medium">&quot;Sync to schoolpilot.co&quot;</span> to pull your assignments in.
+                </p>
+              </div>
             </div>
           </div>
         </div>

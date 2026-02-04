@@ -207,7 +207,8 @@ export async function POST(request: NextRequest) {
 }
 
 // Helper to merge arrays by a key, preferring newer data
-function mergeArrays<T extends Record<string, unknown>>(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mergeArrays<T extends Record<string, any>>(
   existing: T[],
   incoming: T[],
   key: string

@@ -90,7 +90,10 @@ export default function LandingPage() {
       <footer className="border-t border-border px-6 py-6">
         <div className="max-w-5xl mx-auto flex items-center justify-between text-text-muted text-sm">
           <span>SchoolPilot</span>
-          <span>Made for ASL students</span>
+          <div className="flex items-center gap-4">
+            <Link href="/privacy" className="hover:text-white transition-colors">Privacy</Link>
+            <span>Made for ASL students</span>
+          </div>
         </div>
       </footer>
     </div>
