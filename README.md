@@ -1,6 +1,6 @@
 # SchoolPilot
 
-AI-powered study assistant Chrome extension for ASL students. Scrapes assignments from Teamie LMS and provides daily plans, work chunking, grade tracking, study guides, and sprint planning — all powered by Claude.
+AI-powered study assistant Chrome extension. Scrapes assignments from Teamie LMS and provides daily plans, work chunking, grade tracking, study guides, and sprint planning — all powered by Claude.
 
 ## Features
 

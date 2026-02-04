@@ -48,7 +48,7 @@ export default function LandingPage() {
       {/* Hero */}
       <section className="px-6 pt-20 pb-16 max-w-3xl mx-auto text-center">
         <div className="inline-block px-3 py-1 rounded-full bg-accent/10 text-accent text-sm font-medium mb-6">
-          Built for ASL students
+          AI-powered study assistant
         </div>
         <h1 className="text-5xl font-bold text-white leading-tight mb-6">
           Your AI-powered
@@ -92,7 +92,7 @@ export default function LandingPage() {
           <span>SchoolPilot</span>
           <div className="flex items-center gap-4">
             <Link href="/privacy" className="hover:text-white transition-colors">Privacy</Link>
-            <span>Made for ASL students</span>
+            <span>AI-powered study planning</span>
           </div>
         </div>
       </footer>

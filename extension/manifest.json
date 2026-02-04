@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "SchoolPilot",
   "version": "2.0.0",
-  "description": "AI-powered study assistant for ASL — syncs with schoolpilot.co",
+  "description": "AI-powered study assistant — scans your LMS, creates daily plans, tracks grades, and generates study guides.",
   "permissions": [
     "activeTab",
     "scripting",

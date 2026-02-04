@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "SchoolPilot — AI Study Assistant",
-  description: "AI-powered study planning for ASL students. Smart daily plans, grade tracking, study guides, and sprint mode.",
+  description: "AI-powered study planning. Smart daily plans, grade tracking, study guides, and sprint mode.",
 };
 
 export default function RootLayout({
