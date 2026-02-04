@@ -322,6 +322,22 @@ scanBtn.addEventListener('click', async () => {
     await apiFetch('/process', { assignments: upcoming, overdue, email: userEmail });
     setStatus(planStatus, 'Email sent! Check your inbox.', 'success');
     planTimestamp.textContent = `Last scanned: ${new Date().toLocaleTimeString()}`;
+
+    // Store scan data for background service worker
+    await chrome.storage.local.set({
+      lastScanData: { assignments: upcoming, overdue },
+      lastScanTime: Date.now()
+    });
+
+    // Fetch grade-aware priorities after successful scan
+    if (Object.keys(courses).length > 0) {
+      try {
+        const priorities = await fetchGradeAwarePriorities(upcoming, overdue);
+        renderPriorityItems(priorities);
+      } catch (err) {
+        console.error('Failed to fetch priorities:', err);
+      }
+    }
   } catch (err) {
     setStatus(planStatus, handleFetchError(err), 'error');
   } finally {
@@ -820,32 +836,7 @@ function updateStudyCourseSelect() {
   }
 }
 
-studyBtn.addEventListener('click', async () => {
-  const courseName = studyCourseSelect.value;
-  if (!courseName) { setStatus(studyStatus, 'Add a course in the Grades tab first.', 'error'); return; }
-
-  studyBtn.disabled = true;
-  setStatus(studyStatus, 'Generating study guide...', 'loading');
-  studyResults.classList.add('hidden');
-
-  const course = courses[courseName];
-  const assignmentNames = (course.grades || []).map(g => g.name);
-
-  try {
-    const data = await apiFetch('/study-guide', {
-      course: courseName,
-      unit: studyUnit.value.trim() || undefined,
-      assignments: assignmentNames.length > 0 ? assignmentNames : undefined,
-      notes: studyNotes.value.trim() || undefined
-    });
-    renderStudyGuide(data);
-    setStatus(studyStatus, '', '');
-  } catch (err) {
-    setStatus(studyStatus, handleFetchError(err), 'error');
-  } finally {
-    studyBtn.disabled = false;
-  }
-});
+// Note: Study button handler is defined in the Feature 5 section below (multi-mode handler).
 
 function renderStudyGuide(data) {
   studyResults.classList.remove('hidden');
@@ -1062,3 +1053,602 @@ chrome.storage.local.get(['activeSprint'], (result) => {
     renderSprint();
   }
 });
+
+// ============================================================
+// FEATURE 3: GRADE-AWARE PRIORITIZATION
+// ============================================================
+const prioritySection = document.getElementById('priority-section');
+const priorityList = document.getElementById('priority-list');
+
+async function fetchGradeAwarePriorities(assignments, overdue) {
+  if (Object.keys(courses).length === 0) return [];
+
+  try {
+    const data = await apiFetch('/prioritize/grade-aware', {
+      assignments,
+      overdue,
+      courses
+    });
+    return data.prioritized_items || [];
+  } catch (err) {
+    console.error('Grade-aware prioritization error:', err);
+    return [];
+  }
+}
+
+function renderPriorityItems(items) {
+  if (!items || items.length === 0) {
+    prioritySection.classList.add('hidden');
+    return;
+  }
+
+  // Filter to only show grade-critical items
+  const critical = items.filter(i => i.is_grade_critical);
+  if (critical.length === 0) {
+    prioritySection.classList.add('hidden');
+    return;
+  }
+
+  prioritySection.classList.remove('hidden');
+  priorityList.textContent = '';
+
+  critical.slice(0, 5).forEach(item => {
+    const urgency = item.urgency_level || 'medium';
+    const div = el('div', { class: `priority-item ${urgency}` });
+
+    const header = el('div', { class: 'priority-item-header' });
+    header.appendChild(el('span', { class: 'priority-item-title', text: item.title }));
+    if (item.course) {
+      header.appendChild(el('span', { class: 'priority-item-course', text: item.course }));
+    }
+    div.appendChild(header);
+
+    if (item.grade_impact) {
+      div.appendChild(el('div', { class: 'priority-item-impact', text: item.grade_impact }));
+    }
+
+    if (item.current_course_grade) {
+      div.appendChild(el('div', {
+        class: 'priority-item-grade',
+        text: `Current grade: ${item.current_course_grade}%`
+      }));
+    }
+
+    priorityList.appendChild(div);
+  });
+}
+
+// ============================================================
+// FEATURE 4: AUTO-SCAN & NOTIFICATIONS
+// ============================================================
+const autoScanToggle = document.getElementById('auto-scan-toggle');
+const scanIntervalRow = document.getElementById('scan-interval-row');
+const scanIntervalSelect = document.getElementById('scan-interval');
+const lastScanInfo = document.getElementById('last-scan-info');
+
+// Load auto-scan settings
+chrome.storage.local.get(['autoScanEnabled', 'scanIntervalHours', 'lastScanTime'], (result) => {
+  autoScanToggle.checked = result.autoScanEnabled !== false;
+  if (result.scanIntervalHours) {
+    scanIntervalSelect.value = result.scanIntervalHours.toString();
+  }
+  updateScanIntervalVisibility();
+  updateLastScanInfo(result.lastScanTime);
+});
+
+function updateScanIntervalVisibility() {
+  if (autoScanToggle.checked) {
+    scanIntervalRow.classList.remove('hidden');
+  } else {
+    scanIntervalRow.classList.add('hidden');
+  }
+}
+
+function updateLastScanInfo(timestamp) {
+  if (timestamp) {
+    const date = new Date(timestamp);
+    lastScanInfo.textContent = `Last auto-scan: ${date.toLocaleTimeString()}`;
+  } else {
+    lastScanInfo.textContent = '';
+  }
+}
+
+autoScanToggle.addEventListener('change', async () => {
+  updateScanIntervalVisibility();
+  if (autoScanToggle.checked) {
+    const interval = parseInt(scanIntervalSelect.value) || 4;
+    chrome.runtime.sendMessage({ type: 'enableAutoScan', intervalHours: interval });
+  } else {
+    chrome.runtime.sendMessage({ type: 'disableAutoScan' });
+  }
+});
+
+scanIntervalSelect.addEventListener('change', () => {
+  if (autoScanToggle.checked) {
+    const interval = parseInt(scanIntervalSelect.value) || 4;
+    chrome.runtime.sendMessage({ type: 'enableAutoScan', intervalHours: interval });
+  }
+});
+
+// ============================================================
+// FEATURE 4b: TOMORROW PREVIEW
+// ============================================================
+const tomorrowPreviewToggle = document.getElementById('tomorrow-preview-toggle');
+const previewTimeSelect = document.getElementById('preview-time');
+const previewTimeRow = document.getElementById('preview-time-row');
+const testPreviewBtn = document.getElementById('test-preview-btn');
+const previewStatusEl = document.getElementById('preview-status');
+
+// Load tomorrow preview settings
+chrome.storage.local.get(['tomorrowPreviewEnabled', 'previewHour'], (result) => {
+  tomorrowPreviewToggle.checked = result.tomorrowPreviewEnabled !== false;
+  if (result.previewHour != null) {
+    previewTimeSelect.value = result.previewHour.toString();
+  }
+  updatePreviewTimeVisibility();
+});
+
+function updatePreviewTimeVisibility() {
+  if (tomorrowPreviewToggle.checked) {
+    previewTimeRow.classList.remove('hidden');
+    testPreviewBtn.classList.remove('hidden');
+  } else {
+    previewTimeRow.classList.add('hidden');
+    testPreviewBtn.classList.add('hidden');
+  }
+}
+
+tomorrowPreviewToggle.addEventListener('change', () => {
+  updatePreviewTimeVisibility();
+  if (tomorrowPreviewToggle.checked) {
+    const hour = parseInt(previewTimeSelect.value) || 20;
+    chrome.runtime.sendMessage({ type: 'enableTomorrowPreview', hour });
+  } else {
+    chrome.runtime.sendMessage({ type: 'disableTomorrowPreview' });
+  }
+});
+
+previewTimeSelect.addEventListener('change', () => {
+  if (tomorrowPreviewToggle.checked) {
+    const hour = parseInt(previewTimeSelect.value) || 20;
+    chrome.runtime.sendMessage({ type: 'enableTomorrowPreview', hour });
+  }
+});
+
+testPreviewBtn.addEventListener('click', () => {
+  previewStatusEl.textContent = 'Sending test preview...';
+  chrome.runtime.sendMessage({ type: 'testTomorrowPreview' }, (response) => {
+    if (response?.success) {
+      previewStatusEl.textContent = 'Preview sent! Check your notifications.';
+    } else {
+      previewStatusEl.textContent = response?.error || 'Failed to send preview.';
+    }
+    setTimeout(() => { previewStatusEl.textContent = ''; }, 4000);
+  });
+});
+
+// ============================================================
+// FEATURE 5: STUDY CONTENT GENERATION
+// ============================================================
+let currentStudyMode = 'guide';
+let flashcards = [];
+let flashcardIndex = 0;
+let markedCards = new Set();
+let quizQuestions = [];
+let quizAnswers = {};
+let quizSubmitted = false;
+
+// Study Mode DOM refs
+const studyModeBtns = document.querySelectorAll('.study-mode-btn');
+const flashcardOptions = document.getElementById('flashcard-options');
+const quizOptions = document.getElementById('quiz-options');
+const explainOptions = document.getElementById('explain-options');
+const studyContentInput = document.getElementById('study-content-input');
+const flashcardResults = document.getElementById('flashcard-results');
+const quizResults = document.getElementById('quiz-results');
+const explainResults = document.getElementById('explain-results');
+const conceptInput = document.getElementById('concept-input');
+
+// Study mode tab switching
+studyModeBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    studyModeBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentStudyMode = btn.dataset.mode;
+    updateStudyModeUI();
+  });
+});
+
+function updateStudyModeUI() {
+  // Hide all mode-specific options
+  flashcardOptions.classList.add('hidden');
+  quizOptions.classList.add('hidden');
+  explainOptions.classList.add('hidden');
+
+  // Hide all results
+  studyResults.classList.add('hidden');
+  flashcardResults.classList.add('hidden');
+  quizResults.classList.add('hidden');
+  explainResults.classList.add('hidden');
+
+  // Update button text and show relevant options
+  const studyBtnText = {
+    guide: 'Generate Study Guide',
+    flashcards: 'Generate Flashcards',
+    quiz: 'Start Quiz',
+    explain: 'Explain This'
+  };
+  studyBtn.textContent = studyBtnText[currentStudyMode];
+
+  // Show mode-specific options and manage content input visibility
+  studyContentInput.classList.remove('hidden'); // visible by default
+  if (currentStudyMode === 'flashcards') {
+    flashcardOptions.classList.remove('hidden');
+  } else if (currentStudyMode === 'quiz') {
+    quizOptions.classList.remove('hidden');
+  } else if (currentStudyMode === 'explain') {
+    explainOptions.classList.remove('hidden');
+    studyContentInput.classList.add('hidden');
+  }
+}
+
+// Multi-mode study button handler
+studyBtn.addEventListener('click', async () => {
+  const courseName = studyCourseSelect.value;
+  const topic = studyUnit.value.trim();
+  const content = studyNotes.value.trim();
+
+  studyBtn.disabled = true;
+  setStatus(studyStatus, `Generating ${currentStudyMode}...`, 'loading');
+
+  // Hide all results first
+  studyResults.classList.add('hidden');
+  flashcardResults.classList.add('hidden');
+  quizResults.classList.add('hidden');
+  explainResults.classList.add('hidden');
+
+  try {
+    if (currentStudyMode === 'guide') {
+      await generateStudyGuide(courseName, topic, content);
+    } else if (currentStudyMode === 'flashcards') {
+      await generateFlashcards(courseName, topic, content);
+    } else if (currentStudyMode === 'quiz') {
+      await generateQuiz(courseName, topic, content);
+    } else if (currentStudyMode === 'explain') {
+      await explainConcept(courseName, topic);
+    }
+    setStatus(studyStatus, '', '');
+  } catch (err) {
+    setStatus(studyStatus, handleFetchError(err), 'error');
+  } finally {
+    studyBtn.disabled = false;
+  }
+});
+
+async function generateStudyGuide(courseName, topic, content) {
+  const course = courses[courseName];
+  const assignmentNames = (course?.grades || []).map(g => g.name);
+
+  const data = await apiFetch('/study-guide', {
+    course: courseName,
+    unit: topic || undefined,
+    assignments: assignmentNames.length > 0 ? assignmentNames : undefined,
+    notes: content || undefined
+  });
+  renderStudyGuide(data);
+}
+
+async function generateFlashcards(courseName, topic, content) {
+  const count = parseInt(document.getElementById('flashcard-count').value) || 10;
+
+  const data = await apiFetch('/study/flashcards', {
+    course: courseName,
+    topic: topic || 'General review',
+    content: content || '',
+    count
+  });
+
+  flashcards = data.cards || [];
+  flashcardIndex = 0;
+  markedCards = new Set();
+  renderFlashcard();
+  flashcardResults.classList.remove('hidden');
+}
+
+async function generateQuiz(courseName, topic, content) {
+  const count = parseInt(document.getElementById('quiz-count').value) || 5;
+
+  const data = await apiFetch('/study/quick-quiz', {
+    course: courseName,
+    topic: topic || 'General review',
+    content: content || '',
+    count
+  });
+
+  quizQuestions = data.questions || [];
+  quizAnswers = {};
+  quizSubmitted = false;
+  renderQuiz(data);
+  quizResults.classList.remove('hidden');
+}
+
+async function explainConcept(courseName, topic) {
+  const concept = conceptInput.value.trim() || topic;
+  if (!concept) {
+    setStatus(studyStatus, 'Enter a concept to explain.', 'error');
+    return;
+  }
+
+  const data = await apiFetch('/study/explain', {
+    course: courseName,
+    concept,
+    context: studyNotes.value.trim() || ''
+  });
+
+  renderExplanation(data);
+  explainResults.classList.remove('hidden');
+}
+
+// Flashcard rendering and navigation
+function renderFlashcard() {
+  if (flashcards.length === 0) return;
+
+  const card = flashcards[flashcardIndex];
+  document.getElementById('flashcard-progress').textContent = `${flashcardIndex + 1} / ${flashcards.length}`;
+  document.getElementById('flashcard-front-content').textContent = card.front;
+  document.getElementById('flashcard-back-content').textContent = card.back;
+  document.getElementById('flashcard-tip').textContent = card.memory_tip || '';
+
+  const flashcardEl = document.getElementById('current-flashcard');
+  flashcardEl.classList.remove('flipped');
+
+  const markBtn = document.getElementById('flashcard-mark');
+  if (markedCards.has(flashcardIndex)) {
+    markBtn.textContent = 'Unmark';
+    markBtn.classList.add('marked');
+  } else {
+    markBtn.textContent = 'Mark for Review';
+    markBtn.classList.remove('marked');
+  }
+
+  document.getElementById('flashcard-marked').textContent = `${markedCards.size} marked for review`;
+}
+
+document.getElementById('current-flashcard')?.addEventListener('click', () => {
+  document.getElementById('current-flashcard').classList.toggle('flipped');
+});
+
+document.getElementById('flashcard-prev')?.addEventListener('click', () => {
+  if (flashcardIndex > 0) {
+    flashcardIndex--;
+    renderFlashcard();
+  }
+});
+
+document.getElementById('flashcard-next')?.addEventListener('click', () => {
+  if (flashcardIndex < flashcards.length - 1) {
+    flashcardIndex++;
+    renderFlashcard();
+  }
+});
+
+document.getElementById('flashcard-mark')?.addEventListener('click', () => {
+  if (markedCards.has(flashcardIndex)) {
+    markedCards.delete(flashcardIndex);
+  } else {
+    markedCards.add(flashcardIndex);
+  }
+  renderFlashcard();
+});
+
+document.getElementById('flashcard-shuffle')?.addEventListener('click', () => {
+  // Fisher-Yates shuffle
+  for (let i = flashcards.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [flashcards[i], flashcards[j]] = [flashcards[j], flashcards[i]];
+  }
+  flashcardIndex = 0;
+  markedCards = new Set();
+  renderFlashcard();
+});
+
+// Quiz rendering
+function renderQuiz(data) {
+  document.getElementById('quiz-title').textContent = data.topic || 'Quiz';
+  document.getElementById('quiz-score').textContent = '';
+  document.getElementById('quiz-score').className = 'quiz-score-badge';
+
+  const list = document.getElementById('quiz-questions-list');
+  list.textContent = '';
+
+  quizQuestions.forEach((q, idx) => {
+    const qDiv = el('div', { class: 'quiz-question', 'data-idx': idx.toString() });
+
+    // Question text
+    qDiv.appendChild(el('div', {
+      class: 'quiz-question-text',
+      text: `${idx + 1}. ${q.question}`
+    }));
+
+    // Options
+    if (q.type === 'multiple_choice' && q.options) {
+      q.options.forEach((opt, optIdx) => {
+        const optDiv = el('div', {
+          class: 'quiz-option',
+          'data-qidx': idx.toString(),
+          'data-opt': optIdx.toString()
+        });
+        optDiv.appendChild(el('span', { class: 'quiz-option-marker', text: String.fromCharCode(65 + optIdx) }));
+        optDiv.appendChild(el('span', { text: opt.replace(/^[A-D][\.\)]\s*/, '') }));
+        optDiv.addEventListener('click', () => selectQuizOption(idx, optIdx, opt));
+        qDiv.appendChild(optDiv);
+      });
+    } else if (q.type === 'true_false') {
+      ['True', 'False'].forEach((opt, optIdx) => {
+        const optDiv = el('div', {
+          class: 'quiz-option',
+          'data-qidx': idx.toString(),
+          'data-opt': optIdx.toString()
+        });
+        optDiv.appendChild(el('span', { class: 'quiz-option-marker', text: opt[0] }));
+        optDiv.appendChild(el('span', { text: opt }));
+        optDiv.addEventListener('click', () => selectQuizOption(idx, optIdx, opt));
+        qDiv.appendChild(optDiv);
+      });
+    }
+
+    // Explanation (hidden until submitted)
+    const explanation = el('div', {
+      class: 'quiz-explanation',
+      id: `explanation-${idx}`
+    });
+    explanation.textContent = q.explanation || '';
+    qDiv.appendChild(explanation);
+
+    list.appendChild(qDiv);
+  });
+
+  // Submit button
+  const submitBtn = el('button', {
+    class: 'primary-btn quiz-submit-btn',
+    text: 'Submit Quiz',
+    id: 'quiz-submit-btn'
+  });
+  submitBtn.addEventListener('click', submitQuiz);
+  list.appendChild(submitBtn);
+
+  document.getElementById('quiz-summary').classList.add('hidden');
+  document.getElementById('quiz-restart').classList.add('hidden');
+}
+
+function selectQuizOption(qIdx, optIdx, value) {
+  if (quizSubmitted) return;
+
+  quizAnswers[qIdx] = { optIdx, value };
+
+  // Update UI
+  const options = document.querySelectorAll(`.quiz-option[data-qidx="${qIdx}"]`);
+  options.forEach((opt, i) => {
+    opt.classList.toggle('selected', i === optIdx);
+  });
+}
+
+function submitQuiz() {
+  quizSubmitted = true;
+  let correct = 0;
+
+  quizQuestions.forEach((q, idx) => {
+    const answer = quizAnswers[idx];
+    const correctAnswer = q.correct_answer;
+    const options = document.querySelectorAll(`.quiz-option[data-qidx="${idx}"]`);
+
+    options.forEach(opt => {
+      const optText = opt.querySelector('span:last-child').textContent;
+      const fullOpt = q.options ? q.options[parseInt(opt.dataset.opt)] : optText;
+
+      // Check if this option is correct
+      const isCorrect = fullOpt === correctAnswer ||
+        correctAnswer?.startsWith(String.fromCharCode(65 + parseInt(opt.dataset.opt))) ||
+        optText.toLowerCase() === correctAnswer?.toLowerCase();
+
+      if (isCorrect) {
+        opt.classList.add('correct');
+      }
+
+      if (answer && parseInt(opt.dataset.opt) === answer.optIdx) {
+        if (isCorrect) {
+          correct++;
+        } else {
+          opt.classList.add('incorrect');
+        }
+      }
+    });
+
+    // Show explanation
+    document.getElementById(`explanation-${idx}`).classList.add('visible');
+  });
+
+  // Update score
+  const pct = Math.round((correct / quizQuestions.length) * 100);
+  const scoreBadge = document.getElementById('quiz-score');
+  scoreBadge.textContent = `${correct}/${quizQuestions.length} (${pct}%)`;
+  scoreBadge.classList.add(pct >= 70 ? 'pass' : 'fail');
+
+  // Show summary
+  const summary = document.getElementById('quiz-summary');
+  summary.classList.remove('hidden');
+  summary.querySelector('.quiz-summary-score').textContent = `${pct}%`;
+  summary.querySelector('.quiz-summary-review').textContent =
+    pct >= 80 ? 'Great job! You\'re ready for the test.' :
+    pct >= 60 ? 'Good effort. Review the concepts you missed.' :
+    'Keep studying. Focus on the explanations above.';
+
+  // Hide submit, show restart
+  document.getElementById('quiz-submit-btn').classList.add('hidden');
+  document.getElementById('quiz-restart').classList.remove('hidden');
+}
+
+document.getElementById('quiz-restart')?.addEventListener('click', () => {
+  quizAnswers = {};
+  quizSubmitted = false;
+  renderQuiz({ topic: document.getElementById('quiz-title').textContent, questions: quizQuestions });
+});
+
+// Concept explanation rendering
+function renderExplanation(data) {
+  document.getElementById('explain-concept-title').textContent = data.concept || 'Concept';
+  document.getElementById('explain-analogy').textContent = data.simple_analogy || '';
+  document.getElementById('explain-example').textContent = data.real_world_example || '';
+  document.getElementById('explain-insight').textContent = data.key_insight || '';
+
+  // Steps
+  const stepsContainer = document.getElementById('explain-steps');
+  stepsContainer.textContent = '';
+  (data.step_by_step || []).forEach(step => {
+    const stepDiv = el('div', { class: 'explain-step' });
+    const header = el('div', { class: 'explain-step-header' });
+    header.appendChild(el('span', { class: 'explain-step-num', text: step.step.toString() }));
+    header.appendChild(el('span', { class: 'explain-step-title', text: step.title }));
+    stepDiv.appendChild(header);
+    stepDiv.appendChild(el('div', { class: 'explain-step-text', text: step.explanation }));
+    if (step.example) {
+      stepDiv.appendChild(el('div', { class: 'explain-step-example', text: `Example: ${step.example}` }));
+    }
+    stepsContainer.appendChild(stepDiv);
+  });
+
+  // Confusions
+  const confusionsContainer = document.getElementById('explain-confusions');
+  confusionsContainer.textContent = '';
+  (data.common_confusions || []).forEach(c => {
+    const card = el('div', { class: 'confusion-card' });
+    card.appendChild(el('div', { class: 'confusion-wrong', text: `❌ ${c.confusion}` }));
+    card.appendChild(el('div', { class: 'confusion-right', text: `✓ ${c.clarification}` }));
+    confusionsContainer.appendChild(card);
+  });
+
+  // Practice prompts
+  const promptsContainer = document.getElementById('explain-prompts');
+  promptsContainer.textContent = '';
+  (data.practice_prompts || []).forEach(p => {
+    promptsContainer.appendChild(el('div', { class: 'prompt-card', text: p }));
+  });
+}
+
+// Load grade-aware priorities from last scan on popup open
+chrome.storage.local.get(['lastScanData'], async (result) => {
+  if (result.lastScanData && Object.keys(courses).length > 0) {
+    try {
+      const priorities = await fetchGradeAwarePriorities(
+        result.lastScanData.assignments || [],
+        result.lastScanData.overdue || []
+      );
+      renderPriorityItems(priorities);
+    } catch (err) {
+      // Silently fail — priorities are optional
+    }
+  }
+});
+
+// Initialize study mode UI
+updateStudyModeUI();

@@ -22,6 +22,49 @@
     <input type="url" id="backend-url-input" class="form-input" placeholder="http://localhost:5000">
     <button id="save-backend-btn" class="small-btn full-width mt-6">Save URL</button>
     <div id="backend-status"></div>
+
+    <!-- Auto-Scan Settings -->
+    <div class="settings-divider"></div>
+    <label class="settings-section-title">Auto-Scan & Notifications</label>
+    <div class="auto-scan-row">
+      <label class="toggle-label">
+        <input type="checkbox" id="auto-scan-toggle">
+        <span class="toggle-slider"></span>
+        <span class="toggle-text">Auto-scan for new assignments</span>
+      </label>
+    </div>
+    <div id="scan-interval-row" class="hidden">
+      <label for="scan-interval">Scan every</label>
+      <select id="scan-interval" class="form-input">
+        <option value="2">2 hours</option>
+        <option value="4" selected>4 hours</option>
+        <option value="6">6 hours</option>
+        <option value="12">12 hours</option>
+      </select>
+    </div>
+    <div id="last-scan-info" class="scan-info"></div>
+
+    <!-- Tomorrow Preview Settings -->
+    <div class="settings-divider"></div>
+    <label class="settings-section-title">Tomorrow Preview</label>
+    <div class="auto-scan-row">
+      <label class="toggle-label">
+        <input type="checkbox" id="tomorrow-preview-toggle" checked>
+        <span class="toggle-slider"></span>
+        <span class="toggle-text">Evening "What's due tomorrow" alert</span>
+      </label>
+    </div>
+    <div id="preview-time-row">
+      <label for="preview-time">Send at</label>
+      <select id="preview-time" class="form-input">
+        <option value="18">6:00 PM</option>
+        <option value="19">7:00 PM</option>
+        <option value="20" selected>8:00 PM</option>
+        <option value="21">9:00 PM</option>
+      </select>
+    </div>
+    <button id="test-preview-btn" class="small-btn secondary full-width mt-6">Test Preview Now</button>
+    <div id="preview-status" class="scan-info"></div>
   </div>
   <div id="current-email"></div>
 
@@ -38,6 +81,13 @@
   <div id="tab-plan" class="tab-content active">
     <button id="scan-btn" class="primary-btn">&#128225; Scan &amp; Send</button>
     <button id="sync-web-btn" class="small-btn full-width mt-6">&#128260; Sync to schoolpilot.co</button>
+
+    <!-- Grade-Aware Priority Section -->
+    <div id="priority-section" class="grade-section mt-12 hidden">
+      <h3>Grade-Critical Items</h3>
+      <div id="priority-list"></div>
+    </div>
+
     <div id="plan-status" class="status"></div>
     <div id="plan-timestamp" class="timestamp"></div>
     <a href="https://schoolpilot.co/dashboard" target="_blank" class="open-web-link">Open Dashboard &rarr;</a>
@@ -200,25 +250,66 @@
   <!-- Tab: Study Guide -->
   <div id="tab-study" class="tab-content">
     <div id="study-onboarding" class="onboarding-hint hidden">
-      Add a course in the <strong>Grades</strong> tab first, then come back to generate study guides.
+      Add a course in the <strong>Grades</strong> tab first, then come back to generate study materials.
     </div>
+
+    <!-- Study Mode Selector -->
+    <div class="study-mode-tabs">
+      <button class="study-mode-btn active" data-mode="guide">Guide</button>
+      <button class="study-mode-btn" data-mode="flashcards">Flashcards</button>
+      <button class="study-mode-btn" data-mode="quiz">Quiz</button>
+      <button class="study-mode-btn" data-mode="explain">Explain</button>
+    </div>
+
+    <!-- Study Form (shared inputs) -->
     <div id="study-form" class="grade-section">
-      <h3>Generate Study Guide</h3>
       <div class="chunk-input">
         <label>Course</label>
         <select id="study-course-select" class="form-input"></select>
       </div>
       <div class="chunk-input">
-        <label>Unit / Topic (optional)</label>
+        <label>Topic</label>
         <input type="text" id="study-unit" placeholder="e.g. Confidence Intervals, Chapter 5">
       </div>
-      <div class="chunk-input">
-        <label>Extra notes (optional)</label>
-        <textarea id="study-notes" rows="2" placeholder="e.g. Teacher said focus on proofs, skip section 5.4"></textarea>
+      <div class="chunk-input" id="study-content-input">
+        <label>Content to study (paste notes, textbook sections, etc.)</label>
+        <textarea id="study-notes" rows="3" placeholder="Paste your notes, textbook content, or assignment details here..."></textarea>
       </div>
-      <button id="study-btn" class="primary-btn mt-4">Generate Guide</button>
+
+      <!-- Mode-specific options -->
+      <div id="flashcard-options" class="mode-options hidden">
+        <div class="chunk-input">
+          <label>Number of cards</label>
+          <select id="flashcard-count" class="form-input">
+            <option value="5">5 cards (quick review)</option>
+            <option value="10" selected>10 cards (standard)</option>
+            <option value="20">20 cards (comprehensive)</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="quiz-options" class="mode-options hidden">
+        <div class="chunk-input">
+          <label>Number of questions</label>
+          <select id="quiz-count" class="form-input">
+            <option value="5" selected>5 questions (quick check)</option>
+            <option value="10">10 questions (standard)</option>
+            <option value="15">15 questions (thorough)</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="explain-options" class="mode-options hidden">
+        <div class="chunk-input">
+          <label>What concept do you need explained?</label>
+          <input type="text" id="concept-input" placeholder="e.g. Standard deviation, Photosynthesis, Quadratic formula">
+        </div>
+      </div>
+
+      <button id="study-btn" class="primary-btn mt-4">Generate Study Guide</button>
     </div>
 
+    <!-- Study Guide Results -->
     <div id="study-results" class="hidden">
       <div id="study-unit-title" class="sprint-test-name mb-8"></div>
       <div id="study-summary" class="guide-summary"></div>
@@ -231,6 +322,86 @@
 
       <div class="guide-section-title">Practice Questions</div>
       <div id="study-questions"></div>
+    </div>
+
+    <!-- Flashcard Results -->
+    <div id="flashcard-results" class="hidden">
+      <div class="flashcard-header">
+        <span id="flashcard-progress">1 / 10</span>
+        <button id="flashcard-shuffle" class="small-btn secondary">Shuffle</button>
+      </div>
+      <div id="flashcard-container">
+        <div class="flashcard" id="current-flashcard">
+          <div class="flashcard-front">
+            <div class="flashcard-content" id="flashcard-front-content"></div>
+            <div class="flashcard-hint">Click to flip</div>
+          </div>
+          <div class="flashcard-back">
+            <div class="flashcard-content" id="flashcard-back-content"></div>
+            <div class="flashcard-tip" id="flashcard-tip"></div>
+          </div>
+        </div>
+      </div>
+      <div class="flashcard-nav">
+        <button id="flashcard-prev" class="small-btn secondary">&larr; Prev</button>
+        <button id="flashcard-mark" class="small-btn">Mark for Review</button>
+        <button id="flashcard-next" class="small-btn secondary">Next &rarr;</button>
+      </div>
+      <div class="flashcard-stats">
+        <span id="flashcard-marked">0 marked for review</span>
+      </div>
+    </div>
+
+    <!-- Quiz Results -->
+    <div id="quiz-results" class="hidden">
+      <div class="quiz-header">
+        <span id="quiz-title" class="sprint-test-name"></span>
+        <span id="quiz-score" class="quiz-score-badge"></span>
+      </div>
+      <div id="quiz-questions-list"></div>
+      <div id="quiz-summary" class="quiz-summary hidden">
+        <div class="quiz-summary-score"></div>
+        <div class="quiz-summary-review"></div>
+      </div>
+      <button id="quiz-restart" class="small-btn full-width mt-12 hidden">Try Again</button>
+    </div>
+
+    <!-- Concept Explanation Results -->
+    <div id="explain-results" class="hidden">
+      <div id="explain-concept-title" class="sprint-test-name mb-8"></div>
+
+      <div class="explain-section">
+        <div class="explain-icon">&#128161;</div>
+        <div class="explain-content">
+          <div class="explain-label">Think of it like...</div>
+          <div id="explain-analogy" class="explain-text"></div>
+        </div>
+      </div>
+
+      <div class="explain-section">
+        <div class="explain-icon">&#127758;</div>
+        <div class="explain-content">
+          <div class="explain-label">Real-world example</div>
+          <div id="explain-example" class="explain-text"></div>
+        </div>
+      </div>
+
+      <div class="guide-section-title">Step by Step</div>
+      <div id="explain-steps"></div>
+
+      <div class="explain-section key-insight">
+        <div class="explain-icon">&#9733;</div>
+        <div class="explain-content">
+          <div class="explain-label">Key Insight</div>
+          <div id="explain-insight" class="explain-text"></div>
+        </div>
+      </div>
+
+      <div class="guide-section-title">Common Confusions</div>
+      <div id="explain-confusions"></div>
+
+      <div class="guide-section-title">Test Yourself</div>
+      <div id="explain-prompts"></div>
     </div>
 
     <div id="study-status" class="status"></div>

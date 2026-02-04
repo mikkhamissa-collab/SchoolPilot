@@ -1233,6 +1233,440 @@ def schedule_autopilot():
 
 
 # ---------------------------------------------------------------------------
+# Feature 3: Grade-Aware Prioritization
+# ---------------------------------------------------------------------------
+
+GRADE_AWARE_PRIORITY_PROMPT: str = """Analyze these assignments with the student's current grades to create a GRADE-AWARE priority list.
+
+CURRENT GRADES BY COURSE:
+{grade_summary}
+
+ASSIGNMENTS:
+{assignments}
+
+RULES:
+1. Prioritize assignments in courses where the student is:
+   - At a grade boundary (89%, 79%, 69%) - one good/bad grade could change the letter grade
+   - Struggling (below 75%) - every assignment counts
+   - Has weighted high-stakes items (tests > quizzes > homework)
+
+2. For each assignment, explain the grade impact:
+   - "This test could push your 89.2% to an A"
+   - "You're at 79.5% - this quiz is make-or-break for your B"
+   - "Low homework grade in this class - prioritize to protect your buffer"
+
+3. Order by: Overdue > Grade-critical > Due soonest > Regular
+
+Respond ONLY with valid JSON. Format:
+{{"prioritized_items": [
+  {{"title": "...", "course": "...", "type": "...", "due": "...",
+   "priority_rank": 1, "priority_reason": "...", "grade_impact": "...",
+   "current_course_grade": 89.2, "potential_impact": "+1.5% if you get 90%",
+   "is_grade_critical": true, "urgency_level": "critical|high|medium|low"}}
+],
+"grade_summary": {{"at_risk_courses": ["..."], "safe_courses": ["..."],
+"recommendation": "Focus on X first because..."}}}}"""
+
+
+@app.route('/prioritize/grade-aware', methods=['POST'])
+def grade_aware_prioritize():
+    """Prioritize assignments based on current grades and grade boundaries."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    assignments = data.get('assignments', [])
+    overdue = data.get('overdue', [])
+    courses_data = data.get('courses', {})  # {courseName: {categories, grades, policies}}
+
+    if not assignments and not overdue:
+        return jsonify({'error': 'No assignments provided'}), 400
+
+    # Calculate current grade for each course
+    grade_summary_parts = []
+    for course_name, course_info in courses_data.items():
+        try:
+            calc = GradeCalculator(
+                categories=course_info.get('categories', []),
+                grades=course_info.get('grades', []),
+                policies=course_info.get('policies', {})
+            )
+            result = calc.calculate()
+            overall = result.get('overall')
+            letter = result.get('letter', '--')
+            if overall is not None:
+                # Check grade boundary status
+                boundary_status = ''
+                if 87 <= overall < 90:
+                    boundary_status = ' [NEAR A BOUNDARY - 3 pts away]'
+                elif 77 <= overall < 80:
+                    boundary_status = ' [NEAR B BOUNDARY - 3 pts away]'
+                elif 67 <= overall < 70:
+                    boundary_status = ' [NEAR C BOUNDARY - 3 pts away]'
+                elif overall < 70:
+                    boundary_status = ' [AT RISK - below C]'
+
+                grade_summary_parts.append(
+                    f"- {course_name}: {overall}% ({letter}){boundary_status}"
+                )
+        except Exception:
+            grade_summary_parts.append(f"- {course_name}: No grade data")
+
+    # Format assignments
+    all_items = []
+    for item in overdue:
+        item_copy = dict(item)
+        item_copy['isOverdue'] = True
+        all_items.append(item_copy)
+    all_items.extend(assignments)
+
+    assignment_lines = []
+    for i, a in enumerate(all_items, 1):
+        status = '[OVERDUE]' if a.get('isOverdue') else ''
+        line = f"{i}. {status} {a.get('title', 'Untitled')} | {a.get('type', 'Task')} | {a.get('course', 'Unknown')} | Due: {a.get('due', 'Unknown')} {a.get('day', '')} {a.get('date', '')}".strip()
+        assignment_lines.append(line)
+
+    prompt_text = GRADE_AWARE_PRIORITY_PROMPT.format(
+        grade_summary='\n'.join(grade_summary_parts) if grade_summary_parts else 'No grade data available',
+        assignments='\n'.join(assignment_lines)
+    )
+
+    try:
+        result = call_claude_json(prompt_text, "", max_tokens=2048)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': f'Failed to prioritize: {e}'}), 502
+
+
+# ---------------------------------------------------------------------------
+# Feature 5: Study Content Generation (Flashcards, Practice Questions, etc.)
+# ---------------------------------------------------------------------------
+
+FLASHCARD_PROMPT: str = """Generate high-quality flashcards for studying {topic} in {course}.
+
+CONTENT TO STUDY:
+{content}
+
+RULES:
+1. Create {count} flashcards covering the key concepts
+2. Front of card: Question or term
+3. Back of card: Concise answer (1-3 sentences max)
+4. Include a mix of:
+   - Definition cards (term -> definition)
+   - Concept cards (question -> explanation)
+   - Application cards (scenario -> answer)
+5. Order by importance (most likely to be tested first)
+6. Include memory tips where helpful
+
+Respond ONLY with valid JSON. Format:
+{{"topic": "...", "course": "...", "cards": [
+  {{"id": "1", "front": "...", "back": "...", "type": "definition|concept|application",
+   "difficulty": "easy|medium|hard", "memory_tip": "..."}}
+], "study_order": ["1", "2", "3"], "estimated_study_time_minutes": 15}}"""
+
+
+QUICK_QUIZ_PROMPT: str = """Generate a quick {count}-question quiz on {topic} for {course}.
+
+CONTENT TO QUIZ:
+{content}
+
+RULES:
+1. Mix of question types: multiple choice, true/false, fill-in-blank
+2. Progressive difficulty: start easy, end hard
+3. Test the most important concepts
+4. Provide explanations for each answer
+5. Include common mistakes students make
+
+Respond ONLY with valid JSON. Format:
+{{"topic": "...", "course": "...", "questions": [
+  {{"id": "1", "type": "multiple_choice|true_false|fill_blank",
+   "question": "...", "options": ["A...", "B...", "C...", "D..."],
+   "correct_answer": "...", "explanation": "...",
+   "common_mistake": "Students often think X but actually Y",
+   "difficulty": "easy|medium|hard", "points": 5}}
+], "total_points": 50, "passing_score": 35,
+"quick_review": ["Key fact 1", "Key fact 2", "Key fact 3"]}}"""
+
+
+CONCEPT_EXPLAINER_PROMPT: str = """Explain {concept} from {course} in a way that makes it click for a high school student.
+
+CONTEXT:
+{context}
+
+RULES:
+1. Start with a simple analogy or real-world example
+2. Build up the formal definition step by step
+3. Show how it connects to what they already know
+4. Anticipate and address common confusions
+5. End with "The key insight is..." one-liner
+6. Include practice prompts to test understanding
+
+Respond ONLY with valid JSON. Format:
+{{"concept": "...", "course": "...",
+"simple_analogy": "Think of it like...",
+"real_world_example": "In everyday life, this is like...",
+"step_by_step": [
+  {{"step": 1, "title": "...", "explanation": "...", "example": "..."}}
+],
+"formal_definition": "...",
+"common_confusions": [
+  {{"confusion": "...", "clarification": "..."}}
+],
+"key_insight": "The key insight is...",
+"practice_prompts": ["Try to...", "Think about..."],
+"prerequisite_concepts": ["..."],
+"related_concepts": ["..."]}}"""
+
+
+VIDEO_RECOMMENDER_PROMPT: str = """Recommend YouTube video search queries for learning {topic} in {course}.
+
+STUDENT CONTEXT:
+{context}
+
+RULES:
+1. Generate 5-7 specific YouTube search queries that will find helpful videos
+2. Order from foundational to advanced
+3. Include specific video types: explanations, worked examples, crash courses
+4. Prioritize channels known for quality educational content
+5. Include estimated video length preferences
+
+Respond ONLY with valid JSON. Format:
+{{"topic": "...", "course": "...",
+"recommended_searches": [
+  {{"query": "exact youtube search query", "purpose": "what this will teach",
+   "video_type": "explanation|worked_example|crash_course|practice",
+   "suggested_channels": ["Khan Academy", "Organic Chemistry Tutor"],
+   "ideal_length": "5-10 min"}}
+],
+"learning_path": "Watch in this order: 1) Basic explanation, 2) Worked examples, 3) Practice",
+"keywords_to_include": ["..."],
+"keywords_to_avoid": ["college level", "advanced"]}}"""
+
+
+@app.route('/study/flashcards', methods=['POST'])
+def generate_flashcards():
+    """Generate flashcards for a topic."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    try:
+        course = validate_str(data.get('course', ''), 100, 'course')
+        topic = validate_str(data.get('topic', ''), 200, 'topic')
+        content = validate_str(data.get('content', ''), 3000, 'content')
+        count = min(max(int(data.get('count', 10)), 5), 30)
+    except (ValueError, TypeError) as e:
+        return jsonify({'error': str(e)}), 400
+
+    prompt = FLASHCARD_PROMPT.format(
+        course=course,
+        topic=topic,
+        content=content or 'General knowledge of the topic',
+        count=count
+    )
+
+    try:
+        return jsonify(call_claude_json(prompt, "", max_tokens=2048))
+    except Exception as e:
+        return jsonify({'error': f'Failed to generate flashcards: {e}'}), 502
+
+
+@app.route('/study/quick-quiz', methods=['POST'])
+def generate_quick_quiz():
+    """Generate a quick quiz for a topic."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    try:
+        course = validate_str(data.get('course', ''), 100, 'course')
+        topic = validate_str(data.get('topic', ''), 200, 'topic')
+        content = validate_str(data.get('content', ''), 3000, 'content')
+        count = min(max(int(data.get('count', 5)), 3), 15)
+    except (ValueError, TypeError) as e:
+        return jsonify({'error': str(e)}), 400
+
+    prompt = QUICK_QUIZ_PROMPT.format(
+        course=course,
+        topic=topic,
+        content=content or 'General knowledge of the topic',
+        count=count
+    )
+
+    try:
+        return jsonify(call_claude_json(prompt, "", max_tokens=2048))
+    except Exception as e:
+        return jsonify({'error': f'Failed to generate quiz: {e}'}), 502
+
+
+@app.route('/study/explain', methods=['POST'])
+def explain_concept():
+    """Explain a concept in an easy-to-understand way."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    try:
+        course = validate_str(data.get('course', ''), 100, 'course')
+        concept = validate_str(data.get('concept', ''), 200, 'concept')
+        context = validate_str(data.get('context', ''), 1000, 'context')
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+    if not concept:
+        return jsonify({'error': 'No concept provided'}), 400
+
+    prompt = CONCEPT_EXPLAINER_PROMPT.format(
+        course=course or 'General',
+        concept=concept,
+        context=context or 'No additional context provided'
+    )
+
+    try:
+        return jsonify(call_claude_json(prompt, "", max_tokens=2048))
+    except Exception as e:
+        return jsonify({'error': f'Failed to explain concept: {e}'}), 502
+
+
+@app.route('/study/videos', methods=['POST'])
+def recommend_videos():
+    """Recommend YouTube searches for learning a topic."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    try:
+        course = validate_str(data.get('course', ''), 100, 'course')
+        topic = validate_str(data.get('topic', ''), 200, 'topic')
+        context = validate_str(data.get('context', ''), 1000, 'context')
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+    if not topic:
+        return jsonify({'error': 'No topic provided'}), 400
+
+    prompt = VIDEO_RECOMMENDER_PROMPT.format(
+        course=course or 'General',
+        topic=topic,
+        context=context or 'High school student needing to learn this topic'
+    )
+
+    try:
+        return jsonify(call_claude_json(prompt, "", max_tokens=1024))
+    except Exception as e:
+        return jsonify({'error': f'Failed to recommend videos: {e}'}), 502
+
+
+@app.route('/study/summary', methods=['POST'])
+def generate_study_summary():
+    """Generate a one-page study summary for quick review."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    try:
+        course = validate_str(data.get('course', ''), 100, 'course')
+        topic = validate_str(data.get('topic', ''), 200, 'topic')
+        content = validate_str(data.get('content', ''), 5000, 'content')
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+    if not topic:
+        return jsonify({'error': 'No topic provided'}), 400
+
+    prompt = f"""Create a ONE-PAGE study summary for {topic} in {course}.
+
+CONTENT:
+{content or 'General knowledge of the topic'}
+
+FORMAT - Designed for quick review before a test:
+1. KEY FORMULAS/DEFINITIONS (bullet points, formatted for easy scanning)
+2. MUST-KNOW CONCEPTS (3-5 most important ideas)
+3. COMMON TRAPS (mistakes students make)
+4. QUICK EXAMPLES (1-2 worked examples showing the process)
+5. MEMORY TRICKS (mnemonics, patterns, or visualizations)
+
+Keep it CONCISE - this should fit on one printed page. Use short sentences.
+
+Respond ONLY with valid JSON. Format:
+{{"topic": "...", "course": "...",
+"formulas": [{{"name": "...", "formula": "...", "when_to_use": "..."}}],
+"must_know": [{{"concept": "...", "one_liner": "..."}}],
+"common_traps": [{{"trap": "...", "avoid_by": "..."}}],
+"quick_examples": [{{"problem": "...", "solution_steps": ["1...", "2..."], "answer": "..."}}],
+"memory_tricks": [{{"for": "...", "trick": "..."}}],
+"exam_tip": "The most important thing to remember is..."}}"""
+
+    try:
+        return jsonify(call_claude_json(prompt, "", max_tokens=2048))
+    except Exception as e:
+        return jsonify({'error': f'Failed to generate summary: {e}'}), 502
+
+
+# ---------------------------------------------------------------------------
+# Mastery Tracking Endpoints
+# ---------------------------------------------------------------------------
+
+@app.route('/mastery/analyze', methods=['POST'])
+def analyze_mastery():
+    """Analyze student's mastery based on practice test results."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    answers = data.get('answers', [])  # [{question_id, concept, correct, time_taken}]
+    course = data.get('course', '')
+    topic = data.get('topic', '')
+
+    if not answers:
+        return jsonify({'error': 'No answers provided'}), 400
+
+    # Calculate mastery by concept
+    concept_stats = {}
+    for answer in answers:
+        concept = answer.get('concept', 'Unknown')
+        if concept not in concept_stats:
+            concept_stats[concept] = {'correct': 0, 'total': 0, 'times': []}
+        concept_stats[concept]['total'] += 1
+        if answer.get('correct'):
+            concept_stats[concept]['correct'] += 1
+        if answer.get('time_taken'):
+            concept_stats[concept]['times'].append(answer['time_taken'])
+
+    # Calculate mastery percentages and identify weak spots
+    mastery = {}
+    weak_spots = []
+    strong_spots = []
+
+    for concept, stats in concept_stats.items():
+        pct = round((stats['correct'] / stats['total']) * 100) if stats['total'] > 0 else 0
+        avg_time = round(sum(stats['times']) / len(stats['times'])) if stats['times'] else None
+
+        mastery[concept] = {
+            'mastery': pct,
+            'correct': stats['correct'],
+            'total': stats['total'],
+            'avg_time_seconds': avg_time
+        }
+
+        if pct < 70:
+            weak_spots.append({'concept': concept, 'mastery': pct, 'needs_review': True})
+        elif pct >= 90:
+            strong_spots.append({'concept': concept, 'mastery': pct})
+
+    overall = round(sum(m['mastery'] for m in mastery.values()) / len(mastery)) if mastery else 0
+
+    return jsonify({
+        'overall_mastery': overall,
+        'concept_mastery': mastery,
+        'weak_spots': sorted(weak_spots, key=lambda x: x['mastery']),
+        'strong_spots': strong_spots,
+        'recommendation': f"Focus on: {', '.join([w['concept'] for w in weak_spots[:3]])}" if weak_spots else "Great job! All concepts mastered.",
+        'ready_for_test': overall >= 80 and len(weak_spots) == 0
+    })
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 

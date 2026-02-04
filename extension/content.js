@@ -53,17 +53,18 @@
   // ============================================================
   // 2. SIDEBAR EVENTS — Overdue + Next 7 Days from event panels
   // ============================================================
-  // Events are in .user-events-container sections, each with a .panel-heading
-  // showing "Overdue X" or "Next 7 Days X"
-  const eventContainers = document.querySelectorAll('.user-events-container');
+  // The page uses .panel.event-category sections with headings like
+  // "Overdue 29", "Next 7 Days 7", "Next 3 weeks". Each category
+  // contains .event-wrapper elements with assignments.
+  const eventCategories = document.querySelectorAll('.panel.event-category');
 
-  for (const container of eventContainers) {
-    const headingEl = container.querySelector('.panel-heading');
+  for (const category of eventCategories) {
+    const headingEl = category.querySelector('.panel-heading');
     const headingText = headingEl ? headingEl.textContent.trim().replace(/\s+/g, ' ') : '';
     const isOverdue = headingText.toLowerCase().includes('overdue');
     const targetArray = isOverdue ? data.overdue : data.assignments;
 
-    const wrappers = container.querySelectorAll('.event-wrapper');
+    const wrappers = category.querySelectorAll('.event-wrapper');
     let currentDate = null;
     let currentDay = null;
 
@@ -119,6 +120,39 @@
             seenCourses.add(cleaned);
             data.courses.push({ name: cleaned, id: null, href: '' });
           }
+        }
+      }
+    }
+  }
+
+  // Fallback: if no event-category panels found, try user-events-container
+  if (data.assignments.length === 0 && data.overdue.length === 0) {
+    const eventContainers = document.querySelectorAll('.user-events-container');
+    for (const container of eventContainers) {
+      const wrappers = container.querySelectorAll('.event-wrapper');
+      let cd = null, cday = null;
+      for (const wrapper of wrappers) {
+        const dateEl = wrapper.querySelector('.date-block .date');
+        const dayEl = wrapper.querySelector('.date-block .day');
+        if (dateEl && dateEl.textContent.trim()) cd = dateEl.textContent.trim();
+        if (dayEl && dayEl.textContent.trim()) cday = dayEl.textContent.trim();
+        const titleEl = wrapper.querySelector('.title span') || wrapper.querySelector('.title');
+        const title = titleEl ? titleEl.textContent.trim() : null;
+        if (!title) continue;
+        const metaEl = wrapper.querySelector('.meta');
+        let type = null;
+        if (metaEl) {
+          const lines = metaEl.textContent.split('\n').map(l => l.trim()).filter(Boolean);
+          type = lines[0] || null;
+        }
+        const dueEl = wrapper.querySelector('.text-primary span') || wrapper.querySelector('.text-primary');
+        const due = dueEl ? dueEl.textContent.trim() : null;
+        const courseEl = wrapper.querySelector('.meta:last-of-type');
+        const course = courseEl ? courseEl.textContent.trim().replace(/\s+/g, ' ') : null;
+        const key = `${title}|${course || ''}|${cd || ''}`;
+        if (!seenAssignments.has(key)) {
+          seenAssignments.add(key);
+          data.assignments.push({ title, type, due, course, date: cd, day: cday, isOverdue: false, icon: '' });
         }
       }
     }
