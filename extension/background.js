@@ -177,7 +177,7 @@ async function performBackgroundScan() {
 
 async function getGradeAwarePriorities(assignments, overdue, courses) {
   const prioritized = [];
-  const backendUrl = (await chrome.storage.local.get('backendUrl')).backendUrl || 'http://localhost:5000';
+  const backendUrl = (await chrome.storage.local.get('backendUrl')).backendUrl || 'https://schoolpilot-obvu.onrender.com';
 
   for (const assignment of [...overdue, ...assignments]) {
     const courseName = assignment.course;

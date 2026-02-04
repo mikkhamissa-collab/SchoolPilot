@@ -43,7 +43,7 @@ function populateSelect(selectEl, items, emptyText) {
 // ============================================================
 // BACKEND API
 // ============================================================
-let BACKEND_URL = 'http://localhost:5000';
+let BACKEND_URL = 'https://schoolpilot-obvu.onrender.com';
 
 async function apiFetch(path, body) {
   const res = await fetch(`${BACKEND_URL}${path}`, {
