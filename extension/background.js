@@ -23,7 +23,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   if (autoScanEnabled !== false) {
     const interval = scanIntervalHours || DEFAULT_SCAN_INTERVAL_HOURS;
     await setupRecurringAlarm(interval);
-    console.log('[SchoolPilot] Auto-scan enabled, interval:', interval, 'hours');
+    // Auto-scan enabled
   }
 
   // Set up tomorrow preview alarm
@@ -36,11 +36,11 @@ chrome.runtime.onInstalled.addListener(async () => {
 // Handle alarm triggers
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === ALARM_NAME) {
-    console.log('[SchoolPilot] Background scan triggered');
+    // Background scan triggered
     await performBackgroundScan();
   }
   if (alarm.name === PREVIEW_ALARM_NAME) {
-    console.log('[SchoolPilot] Tomorrow preview triggered');
+    // Tomorrow preview triggered
     await sendTomorrowPreview();
   }
 });
@@ -164,12 +164,7 @@ async function performBackgroundScan() {
       }
     }
 
-    console.log('[SchoolPilot] Background scan complete:', {
-      assignments: assignments.length,
-      overdue: overdue.length,
-      newAssignments: newAssignments.length,
-      newOverdue: newOverdue.length
-    });
+    // Background scan complete
 
   } catch (err) {
     console.error('[SchoolPilot] Background scan error:', err);
@@ -324,7 +319,7 @@ async function setupTomorrowPreviewAlarm() {
   });
 
   await chrome.storage.local.set({ tomorrowPreviewEnabled: true });
-  console.log('[SchoolPilot] Tomorrow preview scheduled, next in', delayMinutes, 'minutes');
+  // Tomorrow preview scheduled
 }
 
 async function disableTomorrowPreview() {
@@ -420,11 +415,7 @@ async function sendTomorrowPreview() {
       await sendNotification(title, message, 'tomorrow-preview');
     }
 
-    console.log('[SchoolPilot] Tomorrow preview sent:', {
-      tomorrowItems: tomorrowItems.length,
-      overdue: overdue.length,
-      gradeCritical: gradeCriticalCount
-    });
+    // Tomorrow preview sent
 
   } catch (err) {
     console.error('[SchoolPilot] Tomorrow preview error:', err);

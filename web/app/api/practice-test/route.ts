@@ -13,7 +13,10 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_KEY!
 );
 
-const FLASK_URL = process.env.FLASK_BACKEND_URL || "http://localhost:5000";
+const FLASK_URL = process.env.FLASK_BACKEND_URL;
+if (!FLASK_URL) {
+  console.error("FLASK_BACKEND_URL environment variable is not set");
+}
 
 // POST - Generate or continue practice test
 export async function POST(request: NextRequest) {
@@ -205,7 +208,7 @@ export async function POST(request: NextRequest) {
 
         if (concept) {
           // Record the review
-          await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/mastery`, {
+          await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'https://schoolpilot.co'}/api/mastery`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",

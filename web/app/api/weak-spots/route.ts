@@ -13,7 +13,10 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_KEY!
 );
 
-const FLASK_URL = process.env.FLASK_BACKEND_URL || "http://localhost:5000";
+const FLASK_URL = process.env.FLASK_BACKEND_URL;
+if (!FLASK_URL) {
+  console.error("FLASK_BACKEND_URL environment variable is not set");
+}
 
 // GET - Get weak spots for a user
 export async function GET(request: NextRequest) {

@@ -59,13 +59,46 @@ export default function LandingPage() {
           SchoolPilot connects to Teamie LMS and uses AI to plan your day,
           track your grades, generate study guides, and keep you on track.
         </p>
-        <Link
-          href="/auth/login"
-          className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-semibold text-lg transition-colors"
-        >
-          Get Started
-          <span aria-hidden="true">&rarr;</span>
-        </Link>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <Link
+            href="/auth/login"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-semibold text-lg transition-colors"
+          >
+            Get Started
+            <span aria-hidden="true">&rarr;</span>
+          </Link>
+          <a
+            href="https://chromewebstore.google.com/detail/schoolpilot/biekgfmpoemjlhpmnanondelgappdpbc"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-lg border border-border hover:border-accent/50 text-text-secondary hover:text-white font-medium text-lg transition-colors"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            Get Chrome Extension
+          </a>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="px-6 pb-16 max-w-3xl mx-auto">
+        <h2 className="text-2xl font-bold text-white text-center mb-8">How it works</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
+          <div>
+            <div className="w-10 h-10 rounded-full bg-accent/20 text-accent font-bold flex items-center justify-center mx-auto mb-3">1</div>
+            <h3 className="text-white font-semibold mb-1">Install the extension</h3>
+            <p className="text-text-secondary text-sm">Add SchoolPilot to Chrome from the Web Store.</p>
+          </div>
+          <div>
+            <div className="w-10 h-10 rounded-full bg-accent/20 text-accent font-bold flex items-center justify-center mx-auto mb-3">2</div>
+            <h3 className="text-white font-semibold mb-1">Scan your LMS</h3>
+            <p className="text-text-secondary text-sm">Open Teamie, click Scan &amp; Send. AI reads your assignments.</p>
+          </div>
+          <div>
+            <div className="w-10 h-10 rounded-full bg-accent/20 text-accent font-bold flex items-center justify-center mx-auto mb-3">3</div>
+            <h3 className="text-white font-semibold mb-1">Get your plan</h3>
+            <p className="text-text-secondary text-sm">Receive an AI-prioritized daily plan via email, or view it on your dashboard.</p>
+          </div>
+        </div>
       </section>
 
       {/* Features */}
