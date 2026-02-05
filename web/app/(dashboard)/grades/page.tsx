@@ -223,7 +223,8 @@ export default function GradesPage() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <h2 className="text-2xl font-bold text-white">Grades</h2>
+      <h2 className="text-2xl font-bold text-white">Grade Tracker 📊</h2>
+      <p className="text-text-secondary">Know exactly where you stand. No surprises.</p>
 
       {/* Course chips */}
       <div className="flex flex-wrap gap-2">
@@ -383,14 +384,16 @@ export default function GradesPage() {
               )}
             </div>
           ) : (
-            <div className="p-5 rounded-xl bg-bg-card border border-border text-center text-text-muted">
-              No grades logged yet. Add a grade below.
+            <div className="p-6 rounded-xl bg-bg-card border border-border text-center">
+              <div className="text-3xl mb-3">📝</div>
+              <p className="text-white font-medium mb-1">No grades logged yet</p>
+              <p className="text-text-muted text-sm">Add your first grade below and watch your average come to life.</p>
             </div>
           )}
 
           {/* Log a grade */}
           <div className="p-5 rounded-xl bg-bg-card border border-border space-y-3">
-            <h3 className="text-sm font-semibold text-text-secondary">Log a Grade</h3>
+            <h3 className="text-sm font-semibold text-text-secondary">📥 Log a Grade</h3>
             <div className="grid grid-cols-2 gap-3">
               <select
                 value={gradeCategory}
@@ -431,7 +434,8 @@ export default function GradesPage() {
 
           {/* What Do I Need? */}
           <div className="p-5 rounded-xl bg-bg-card border border-border space-y-3">
-            <h3 className="text-sm font-semibold text-text-secondary">What Do I Need?</h3>
+            <h3 className="text-sm font-semibold text-text-secondary">🎯 What Do I Need?</h3>
+            <p className="text-text-muted text-xs">Find out what score you need on your next assignment to hit your target.</p>
             <div className="flex gap-3 items-center flex-wrap">
               <span className="text-text-muted text-sm">Target</span>
               <input
@@ -457,7 +461,8 @@ export default function GradesPage() {
 
           {/* What If? */}
           <div className="p-5 rounded-xl bg-bg-card border border-border space-y-3">
-            <h3 className="text-sm font-semibold text-text-secondary">What If I Get...</h3>
+            <h3 className="text-sm font-semibold text-text-secondary">🔮 What If I Get...</h3>
+            <p className="text-text-muted text-xs">See how a hypothetical grade would affect your overall average.</p>
             <div className="flex gap-3 items-center flex-wrap">
               <input
                 type="number"

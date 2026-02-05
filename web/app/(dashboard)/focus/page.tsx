@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase-client";
 import { apiFetch } from "@/lib/api";
 import { useEffect, useState } from "react";
+import Confetti from "@/components/Confetti";
 
 interface Chunk {
   step: number;
@@ -28,6 +29,7 @@ export default function FocusPage() {
   const [chunks, setChunks] = useState<Chunk[]>([]);
   const [checked, setChecked] = useState<boolean[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [showConfetti, setShowConfetti] = useState(false);
   const [history, setHistory] = useState<SavedChunk[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -106,6 +108,11 @@ export default function FocusPage() {
       const supabase = createClient();
       await supabase.from("chunks").update({ checked: updated }).eq("id", activeId);
     }
+    // Trigger confetti when all chunks completed
+    if (updated.every(Boolean) && chunks.length > 0) {
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 100);
+    }
   };
 
   const loadSaved = (saved: SavedChunk) => {
@@ -122,14 +129,16 @@ export default function FocusPage() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <h2 className="text-2xl font-bold text-white">Focus Mode</h2>
-      <p className="text-text-secondary">Break any assignment into actionable chunks.</p>
+      <Confetti trigger={showConfetti} />
+
+      <h2 className="text-2xl font-bold text-white">Focus Mode 🎯</h2>
+      <p className="text-text-secondary">That huge assignment? Let&apos;s break it into pieces you can actually start.</p>
 
       {/* Form */}
       <div className="p-5 rounded-xl bg-bg-card border border-border space-y-4">
         <input
           type="text"
-          placeholder="What's the assignment?"
+          placeholder="What assignment is haunting you?"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           className="w-full px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent"
@@ -169,7 +178,7 @@ export default function FocusPage() {
           disabled={loading}
           className="w-full py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white font-semibold transition-colors disabled:opacity-50 cursor-pointer"
         >
-          {loading ? "Breaking it down..." : "Break It Down"}
+          {loading ? "Chopping it up..." : "Make It Manageable"}
         </button>
         {error && <p className="text-error text-sm">{error}</p>}
       </div>
@@ -177,20 +186,40 @@ export default function FocusPage() {
       {/* Results */}
       {chunks.length > 0 && (
         <div className="space-y-4">
-          {/* Progress */}
-          <div className="p-4 rounded-xl bg-bg-card border border-border">
+          {/* Progress with celebration */}
+          <div className={`p-4 rounded-xl border transition-all ${
+            progress === 100
+              ? "bg-gradient-to-r from-success/20 to-accent/20 border-success/30"
+              : "bg-bg-card border-border"
+          }`}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-text-secondary">
                 {doneCount}/{chunks.length} chunks · {doneMins}/{totalMins} min
               </span>
-              <span className="text-sm font-semibold text-accent">{progress}%</span>
+              <span className={`text-sm font-semibold ${progress === 100 ? "text-success" : "text-accent"}`}>
+                {progress}%
+              </span>
             </div>
             <div className="w-full h-2 bg-bg-dark rounded-full overflow-hidden">
               <div
-                className="h-full bg-accent rounded-full transition-all"
+                className={`h-full rounded-full transition-all ${progress === 100 ? "bg-success" : "bg-accent"}`}
                 style={{ width: `${progress}%` }}
               />
             </div>
+            {/* Celebration message */}
+            {progress === 100 ? (
+              <div className="mt-3 text-center">
+                <span className="text-success font-medium">🎉 Assignment conquered! You did it.</span>
+              </div>
+            ) : progress >= 50 ? (
+              <div className="mt-2 text-center text-text-muted text-xs">
+                More than halfway! Keep pushing.
+              </div>
+            ) : doneCount > 0 ? (
+              <div className="mt-2 text-center text-text-muted text-xs">
+                Great start! One chunk at a time.
+              </div>
+            ) : null}
           </div>
 
           {/* Chunks */}

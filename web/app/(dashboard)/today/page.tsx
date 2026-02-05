@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase-client";
 import { apiFetch } from "@/lib/api";
 import { useEffect, useState, useCallback } from "react";
+import Confetti from "@/components/Confetti";
 
 interface ScheduleTask {
   time: string;
@@ -53,6 +54,7 @@ export default function TodayPage() {
   const [userName, setUserName] = useState("");
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   // Settings
   const [wakeTime, setWakeTime] = useState("7:00 AM");
@@ -147,6 +149,15 @@ export default function TodayPage() {
     }
     setCompletedTasks(newCompleted);
     localStorage.setItem("today_completed", JSON.stringify([...newCompleted]));
+
+    // Trigger confetti when all tasks completed
+    if (plan) {
+      const totalTasks = (plan.urgent?.length || 0) + (plan.schedule?.length || 0);
+      if (newCompleted.size === totalTasks && totalTasks > 0) {
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 100);
+      }
+    }
   };
 
   const sendEmailNow = async () => {
@@ -204,6 +215,8 @@ export default function TodayPage() {
 
   return (
     <div className="max-w-3xl space-y-6">
+      <Confetti trigger={showConfetti} />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -237,13 +250,13 @@ export default function TodayPage() {
       {/* No assignments state */}
       {assignments.length === 0 && overdue.length === 0 && !plan && (
         <div className="p-8 rounded-xl bg-bg-card border border-border text-center">
-          <div className="text-4xl mb-4">📚</div>
-          <h3 className="text-white font-semibold mb-2">No Assignments Yet</h3>
+          <div className="text-4xl mb-4">🚀</div>
+          <h3 className="text-white font-semibold mb-2">Let&apos;s Get You Set Up</h3>
           <p className="text-text-muted text-sm mb-4">
-            Sync your assignments from Teamie to get your personalized daily plan.
+            Sync your assignments and I&apos;ll build your daily game plan. Takes 30 seconds.
           </p>
           <p className="text-text-muted text-xs">
-            Go to Teamie → Click the SchoolPilot extension → Sync
+            Teamie → SchoolPilot extension → Sync
           </p>
         </div>
       )}
@@ -347,23 +360,40 @@ export default function TodayPage() {
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
-            {progressPercent === 100 && (
-              <div className="text-center mt-3 text-success font-medium">
-                🎉 You crushed it today!
+            {/* Celebration messages based on progress */}
+            {progressPercent === 100 ? (
+              <div className="text-center mt-3 text-success font-medium animate-pulse">
+                🎉 You crushed it! Take a victory lap.
               </div>
-            )}
+            ) : progressPercent >= 75 ? (
+              <div className="text-center mt-3 text-accent/80 text-sm">
+                🔥 Almost there! Just {totalTasks - completedCount} more to go.
+              </div>
+            ) : progressPercent >= 50 ? (
+              <div className="text-center mt-3 text-accent/60 text-sm">
+                ⚡ Halfway done! Keep the momentum going.
+              </div>
+            ) : progressPercent >= 25 ? (
+              <div className="text-center mt-3 text-text-muted text-sm">
+                💪 Nice start! You&apos;re building momentum.
+              </div>
+            ) : completedCount > 0 ? (
+              <div className="text-center mt-3 text-text-muted text-sm">
+                ✓ First one down! Keep going.
+              </div>
+            ) : null}
           </div>
 
           {/* Mission */}
           <div className="p-4 rounded-xl bg-bg-card border border-border">
-            <div className="text-accent font-medium text-sm mb-1">⚡ TODAY&apos;S MISSION</div>
+            <div className="text-accent font-medium text-sm mb-1">⚡ YOUR MISSION TODAY</div>
             <div className="text-white text-lg">{plan.mission}</div>
           </div>
 
           {/* Urgent Tasks */}
           {plan.urgent && plan.urgent.length > 0 && (
             <div className="p-4 rounded-xl bg-error/10 border border-error/30">
-              <div className="text-error font-semibold mb-3">🚨 DO THESE FIRST</div>
+              <div className="text-error font-semibold mb-3">🚨 HANDLE THESE NOW</div>
               <div className="space-y-2">
                 {plan.urgent.map((task, i) => {
                   const taskId = `urgent-${i}`;

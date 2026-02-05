@@ -1,466 +1,221 @@
 <!DOCTYPE html>
-<!-- popup.html — Extension popup UI for SchoolPilot with tabs. -->
+<!-- popup.html — Minimal SchoolPilot extension popup. Scrapes and syncs to web app. -->
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <link rel="stylesheet" href="styles.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 320px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #e8e8e8;
+      padding: 24px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .logo {
+      font-size: 28px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .logo span {
+      color: #a855f7;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #9ca3af;
+    }
+
+    .sync-btn {
+      width: 100%;
+      padding: 16px 24px;
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .sync-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 20px rgba(168, 85, 247, 0.4);
+    }
+
+    .sync-btn:active {
+      transform: translateY(0);
+    }
+
+    .sync-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .sync-btn .icon {
+      font-size: 20px;
+    }
+
+    .status {
+      text-align: center;
+      margin-top: 16px;
+      font-size: 13px;
+      min-height: 20px;
+      line-height: 1.4;
+    }
+
+    .status.loading { color: #fbbf24; }
+    .status.success { color: #34d399; }
+    .status.error { color: #f87171; }
+
+    .stats {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin-top: 20px;
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .divider {
+      height: 1px;
+      background: rgba(255, 255, 255, 0.1);
+      margin: 20px 0;
+    }
+
+    .open-dashboard {
+      display: block;
+      text-align: center;
+      color: #a855f7;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 12px;
+      border-radius: 8px;
+      transition: background 0.2s ease;
+    }
+
+    .open-dashboard:hover {
+      background: rgba(168, 85, 247, 0.1);
+    }
+
+    .timestamp {
+      text-align: center;
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 12px;
+    }
+
+    .not-on-teamie {
+      text-align: center;
+      padding: 20px;
+      background: rgba(251, 191, 36, 0.1);
+      border-radius: 10px;
+      margin-bottom: 16px;
+    }
+
+    .not-on-teamie p {
+      font-size: 13px;
+      color: #fbbf24;
+      margin-bottom: 12px;
+    }
+
+    .not-on-teamie a {
+      color: #a855f7;
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .hidden { display: none !important; }
+
+    /* Loading spinner */
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+  </style>
 </head>
 <body>
   <div class="header">
-    <h1>SchoolPilot</h1>
-    <button id="settings-btn" title="Settings">&#9881;</button>
-  </div>
-  <p class="subtitle">AI Study Assistant</p>
-
-  <!-- Settings -->
-  <div id="settings-panel">
-    <label for="email-input">Your email</label>
-    <input type="email" id="email-input" class="form-input" placeholder="you@school.org" autocomplete="email">
-    <button id="save-email-btn" class="small-btn full-width mt-10">Save</button>
-    <div id="email-status"></div>
-    <label for="backend-url-input" class="mt-10">Backend URL</label>
-    <input type="url" id="backend-url-input" class="form-input" placeholder="http://localhost:5000">
-    <button id="save-backend-btn" class="small-btn full-width mt-6">Save URL</button>
-    <div id="backend-status"></div>
-
-    <!-- Auto-Scan Settings -->
-    <div class="settings-divider"></div>
-    <label class="settings-section-title">Auto-Scan & Notifications</label>
-    <div class="auto-scan-row">
-      <label class="toggle-label">
-        <input type="checkbox" id="auto-scan-toggle">
-        <span class="toggle-slider"></span>
-        <span class="toggle-text">Auto-scan for new assignments</span>
-      </label>
-    </div>
-    <div id="scan-interval-row" class="hidden">
-      <label for="scan-interval">Scan every</label>
-      <select id="scan-interval" class="form-input">
-        <option value="2">2 hours</option>
-        <option value="4" selected>4 hours</option>
-        <option value="6">6 hours</option>
-        <option value="12">12 hours</option>
-      </select>
-    </div>
-    <div id="last-scan-info" class="scan-info"></div>
-
-    <!-- Tomorrow Preview Settings -->
-    <div class="settings-divider"></div>
-    <label class="settings-section-title">Tomorrow Preview</label>
-    <div class="auto-scan-row">
-      <label class="toggle-label">
-        <input type="checkbox" id="tomorrow-preview-toggle" checked>
-        <span class="toggle-slider"></span>
-        <span class="toggle-text">Evening "What's due tomorrow" alert</span>
-      </label>
-    </div>
-    <div id="preview-time-row">
-      <label for="preview-time">Send at</label>
-      <select id="preview-time" class="form-input">
-        <option value="18">6:00 PM</option>
-        <option value="19">7:00 PM</option>
-        <option value="20" selected>8:00 PM</option>
-        <option value="21">9:00 PM</option>
-      </select>
-    </div>
-    <button id="test-preview-btn" class="small-btn secondary full-width mt-6">Test Preview Now</button>
-    <div id="preview-status" class="scan-info"></div>
-  </div>
-  <div id="current-email"></div>
-
-  <!-- Tabs -->
-  <div class="tabs">
-    <button class="tab-btn active" data-tab="plan">Plan</button>
-    <button class="tab-btn" data-tab="focus">Focus</button>
-    <button class="tab-btn" data-tab="grades">Grades</button>
-    <button class="tab-btn" data-tab="study">Study</button>
-    <button class="tab-btn" data-tab="sprint">Sprint</button>
+    <div class="logo">School<span>Pilot</span></div>
+    <div class="subtitle">AI Study Assistant</div>
   </div>
 
-  <!-- Tab: Daily Plan -->
-  <div id="tab-plan" class="tab-content active">
-    <button id="scan-btn" class="primary-btn">&#128225; Scan &amp; Send</button>
-    <button id="sync-web-btn" class="small-btn full-width mt-6">&#128260; Sync to schoolpilot.co</button>
-
-    <!-- Grade-Aware Priority Section -->
-    <div id="priority-section" class="grade-section mt-12 hidden">
-      <h3>Grade-Critical Items</h3>
-      <div id="priority-list"></div>
-    </div>
-
-    <div id="plan-status" class="status"></div>
-    <div id="plan-timestamp" class="timestamp"></div>
-    <a href="https://schoolpilot.co/dashboard" target="_blank" class="open-web-link">Open Dashboard &rarr;</a>
+  <div id="not-on-teamie" class="not-on-teamie hidden">
+    <p>Navigate to Teamie to sync your assignments</p>
+    <a href="https://lms.asl.org/dash/#/" target="_blank">Open Teamie Dashboard &rarr;</a>
   </div>
 
-  <!-- Tab: Focus (Work Chunking) -->
-  <div id="tab-focus" class="tab-content">
-    <div class="grade-section">
-      <h3>Break Down an Assignment</h3>
-      <div class="chunk-input">
-        <label>What's the assignment?</label>
-        <input type="text" id="chunk-title" placeholder="e.g. Read Ch. 5 and answer questions">
-      </div>
-      <div class="flex-row">
-        <div class="chunk-input flex-1">
-          <label>Type</label>
-          <input type="text" id="chunk-type" placeholder="e.g. Homework">
-        </div>
-        <div class="chunk-input flex-1">
-          <label>Course</label>
-          <input type="text" id="chunk-course" placeholder="e.g. AP History">
-        </div>
-      </div>
-      <div class="chunk-input">
-        <label>Due (optional)</label>
-        <input type="text" id="chunk-due" placeholder="e.g. Tomorrow 8:30 AM">
-      </div>
-      <div class="chunk-input">
-        <label>Extra context (optional)</label>
-        <textarea id="chunk-context" rows="2" placeholder="e.g. It's a 10-page chapter with 15 questions"></textarea>
-      </div>
-      <button id="chunk-btn" class="primary-btn mt-4">Break It Down</button>
-    </div>
+  <button id="sync-btn" class="sync-btn">
+    <span class="icon">&#128260;</span>
+    <span id="btn-text">Sync Assignments</span>
+  </button>
 
-    <div id="chunk-results" class="hidden">
-      <div class="chunk-progress"><div id="chunk-progress-bar" class="chunk-progress-bar"></div></div>
-      <div id="chunk-list"></div>
-      <div id="chunk-total" class="chunk-total"></div>
-    </div>
+  <div id="status" class="status"></div>
 
-    <div id="chunk-status" class="status"></div>
+  <div id="stats" class="stats hidden">
+    <div class="stat">
+      <div class="stat-value" id="stat-assignments">0</div>
+      <div class="stat-label">Assignments</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="stat-overdue">0</div>
+      <div class="stat-label">Overdue</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="stat-courses">0</div>
+      <div class="stat-label">Courses</div>
+    </div>
   </div>
 
-  <!-- Tab: Grades -->
-  <div id="tab-grades" class="tab-content">
-    <!-- Sync from Teamie -->
-    <div class="grade-section mb-12">
-      <h3>Sync from Teamie</h3>
-      <p class="sync-description">Navigate to a course gradebook page on Teamie, then click Sync.</p>
-      <div class="flex-row">
-        <button id="sync-grades-btn" class="small-btn flex-1">Sync Grades</button>
-        <button id="sync-assessments-btn" class="small-btn flex-1">Sync Tests</button>
-      </div>
-      <div id="sync-status" class="status mt-8"></div>
-      <div id="sync-timestamp" class="timestamp"></div>
-    </div>
+  <div class="divider"></div>
 
-    <!-- Upcoming assessments -->
-    <div id="assessments-section" class="grade-section mb-12 hidden">
-      <h3>Upcoming Assessments</h3>
-      <div id="assessments-list"></div>
-    </div>
+  <a href="https://schoolpilot.co/dashboard" target="_blank" class="open-dashboard">
+    Open Dashboard &rarr;
+  </a>
 
-    <!-- Course chips -->
-    <div id="course-list" class="course-list"></div>
-    <button id="add-course-btn" class="add-link">+ Add course</button>
-
-    <!-- Add course form -->
-    <div id="add-course-panel">
-      <div class="form-row">
-        <label>Course name</label>
-        <input type="text" id="new-course-name" class="form-input" placeholder="e.g. AP Statistics">
-      </div>
-      <label class="section-label">Categories &amp; Weights</label>
-      <div id="cat-inputs"></div>
-      <button id="add-cat-btn" class="add-link">+ Add category</button>
-      <div class="flex-row mt-12">
-        <button id="save-course-btn" class="small-btn flex-1">Save Course</button>
-        <button id="cancel-course-btn" class="small-btn secondary flex-1">Cancel</button>
-      </div>
-    </div>
-
-    <!-- Grade display (shown when a course is selected) -->
-    <div id="grade-display" class="hidden">
-      <!-- Current grade overview -->
-      <div class="grade-section">
-        <h3>Current Grade</h3>
-        <div class="grade-overview">
-          <div><span id="grade-pct" class="grade-big">--</span><span id="grade-letter" class="grade-letter">--</span></div>
-        </div>
-        <div id="grade-categories"></div>
-      </div>
-
-      <!-- Add grade -->
-      <div class="grade-section">
-        <h3>Log a Grade</h3>
-        <div class="form-row">
-          <label>Category</label>
-          <select id="grade-cat-select"></select>
-        </div>
-        <div class="form-row">
-          <label>Assignment name</label>
-          <input type="text" id="grade-name" class="form-input" placeholder="e.g. Unit 2 Test">
-        </div>
-        <div class="flex-row">
-          <div class="form-row flex-1">
-            <label>Score</label>
-            <input type="number" id="grade-score" placeholder="87">
-          </div>
-          <div class="form-row flex-1">
-            <label>Out of</label>
-            <input type="number" id="grade-max" value="100">
-          </div>
-        </div>
-        <button id="add-grade-btn" class="small-btn full-width mt-6">Add Grade</button>
-      </div>
-
-      <!-- What do I need? -->
-      <div class="grade-section">
-        <h3>What Do I Need?</h3>
-        <div class="flex-row">
-          <div class="form-row flex-1">
-            <label>Target %</label>
-            <input type="number" id="target-grade" placeholder="90" value="90">
-          </div>
-          <div class="form-row flex-1">
-            <label>In category</label>
-            <select id="target-cat-select"></select>
-          </div>
-        </div>
-        <button id="calc-required-btn" class="small-btn full-width mt-6">Calculate</button>
-        <div id="required-result" class="result-box"></div>
-      </div>
-
-      <!-- What if -->
-      <div class="grade-section">
-        <h3>What If I Get...</h3>
-        <div class="flex-row">
-          <div class="form-row flex-1">
-            <label>Score</label>
-            <input type="number" id="whatif-score" placeholder="85">
-          </div>
-          <div class="form-row flex-1">
-            <label>Out of</label>
-            <input type="number" id="whatif-max" value="100">
-          </div>
-          <div class="form-row flex-1">
-            <label>Category</label>
-            <select id="whatif-cat-select"></select>
-          </div>
-        </div>
-        <button id="calc-whatif-btn" class="small-btn full-width mt-6">Project</button>
-        <div id="whatif-result" class="result-box"></div>
-      </div>
-    </div>
-
-    <div id="grades-status" class="status"></div>
-  </div>
-
-  <!-- Tab: Study Guide -->
-  <div id="tab-study" class="tab-content">
-    <div id="study-onboarding" class="onboarding-hint hidden">
-      Add a course in the <strong>Grades</strong> tab first, then come back to generate study materials.
-    </div>
-
-    <!-- Study Mode Selector -->
-    <div class="study-mode-tabs">
-      <button class="study-mode-btn active" data-mode="guide">Guide</button>
-      <button class="study-mode-btn" data-mode="flashcards">Flashcards</button>
-      <button class="study-mode-btn" data-mode="quiz">Quiz</button>
-      <button class="study-mode-btn" data-mode="explain">Explain</button>
-    </div>
-
-    <!-- Study Form (shared inputs) -->
-    <div id="study-form" class="grade-section">
-      <div class="chunk-input">
-        <label>Course</label>
-        <select id="study-course-select" class="form-input"></select>
-      </div>
-      <div class="chunk-input">
-        <label>Topic</label>
-        <input type="text" id="study-unit" placeholder="e.g. Confidence Intervals, Chapter 5">
-      </div>
-      <div class="chunk-input" id="study-content-input">
-        <label>Content to study (paste notes, textbook sections, etc.)</label>
-        <textarea id="study-notes" rows="3" placeholder="Paste your notes, textbook content, or assignment details here..."></textarea>
-      </div>
-
-      <!-- Mode-specific options -->
-      <div id="flashcard-options" class="mode-options hidden">
-        <div class="chunk-input">
-          <label>Number of cards</label>
-          <select id="flashcard-count" class="form-input">
-            <option value="5">5 cards (quick review)</option>
-            <option value="10" selected>10 cards (standard)</option>
-            <option value="20">20 cards (comprehensive)</option>
-          </select>
-        </div>
-      </div>
-
-      <div id="quiz-options" class="mode-options hidden">
-        <div class="chunk-input">
-          <label>Number of questions</label>
-          <select id="quiz-count" class="form-input">
-            <option value="5" selected>5 questions (quick check)</option>
-            <option value="10">10 questions (standard)</option>
-            <option value="15">15 questions (thorough)</option>
-          </select>
-        </div>
-      </div>
-
-      <div id="explain-options" class="mode-options hidden">
-        <div class="chunk-input">
-          <label>What concept do you need explained?</label>
-          <input type="text" id="concept-input" placeholder="e.g. Standard deviation, Photosynthesis, Quadratic formula">
-        </div>
-      </div>
-
-      <button id="study-btn" class="primary-btn mt-4">Generate Study Guide</button>
-    </div>
-
-    <!-- Study Guide Results -->
-    <div id="study-results" class="hidden">
-      <div id="study-unit-title" class="sprint-test-name mb-8"></div>
-      <div id="study-summary" class="guide-summary"></div>
-
-      <div class="guide-section-title">Key Concepts</div>
-      <div id="study-concepts"></div>
-
-      <div class="guide-section-title">High-Likelihood Topics</div>
-      <div id="study-topics"></div>
-
-      <div class="guide-section-title">Practice Questions</div>
-      <div id="study-questions"></div>
-    </div>
-
-    <!-- Flashcard Results -->
-    <div id="flashcard-results" class="hidden">
-      <div class="flashcard-header">
-        <span id="flashcard-progress">1 / 10</span>
-        <button id="flashcard-shuffle" class="small-btn secondary">Shuffle</button>
-      </div>
-      <div id="flashcard-container">
-        <div class="flashcard" id="current-flashcard">
-          <div class="flashcard-front">
-            <div class="flashcard-content" id="flashcard-front-content"></div>
-            <div class="flashcard-hint">Click to flip</div>
-          </div>
-          <div class="flashcard-back">
-            <div class="flashcard-content" id="flashcard-back-content"></div>
-            <div class="flashcard-tip" id="flashcard-tip"></div>
-          </div>
-        </div>
-      </div>
-      <div class="flashcard-nav">
-        <button id="flashcard-prev" class="small-btn secondary">&larr; Prev</button>
-        <button id="flashcard-mark" class="small-btn">Mark for Review</button>
-        <button id="flashcard-next" class="small-btn secondary">Next &rarr;</button>
-      </div>
-      <div class="flashcard-stats">
-        <span id="flashcard-marked">0 marked for review</span>
-      </div>
-    </div>
-
-    <!-- Quiz Results -->
-    <div id="quiz-results" class="hidden">
-      <div class="quiz-header">
-        <span id="quiz-title" class="sprint-test-name"></span>
-        <span id="quiz-score" class="quiz-score-badge"></span>
-      </div>
-      <div id="quiz-questions-list"></div>
-      <div id="quiz-summary" class="quiz-summary hidden">
-        <div class="quiz-summary-score"></div>
-        <div class="quiz-summary-review"></div>
-      </div>
-      <button id="quiz-restart" class="small-btn full-width mt-12 hidden">Try Again</button>
-    </div>
-
-    <!-- Concept Explanation Results -->
-    <div id="explain-results" class="hidden">
-      <div id="explain-concept-title" class="sprint-test-name mb-8"></div>
-
-      <div class="explain-section">
-        <div class="explain-icon">&#128161;</div>
-        <div class="explain-content">
-          <div class="explain-label">Think of it like...</div>
-          <div id="explain-analogy" class="explain-text"></div>
-        </div>
-      </div>
-
-      <div class="explain-section">
-        <div class="explain-icon">&#127758;</div>
-        <div class="explain-content">
-          <div class="explain-label">Real-world example</div>
-          <div id="explain-example" class="explain-text"></div>
-        </div>
-      </div>
-
-      <div class="guide-section-title">Step by Step</div>
-      <div id="explain-steps"></div>
-
-      <div class="explain-section key-insight">
-        <div class="explain-icon">&#9733;</div>
-        <div class="explain-content">
-          <div class="explain-label">Key Insight</div>
-          <div id="explain-insight" class="explain-text"></div>
-        </div>
-      </div>
-
-      <div class="guide-section-title">Common Confusions</div>
-      <div id="explain-confusions"></div>
-
-      <div class="guide-section-title">Test Yourself</div>
-      <div id="explain-prompts"></div>
-    </div>
-
-    <div id="study-status" class="status"></div>
-  </div>
-
-  <!-- Tab: Sprint Mode -->
-  <div id="tab-sprint" class="tab-content">
-    <div id="sprint-onboarding" class="onboarding-hint hidden">
-      Add a course in the <strong>Grades</strong> tab first to use Sprint mode.
-    </div>
-    <!-- Sprint Setup Form -->
-    <div id="sprint-setup">
-      <div class="grade-section">
-        <h3>Start a 7-Day Sprint</h3>
-        <div class="chunk-input">
-          <label>Test / Assessment Name</label>
-          <input type="text" id="sprint-test-name-input" placeholder="e.g. AP Stats Unit 4 Test">
-        </div>
-        <div class="flex-row">
-          <div class="chunk-input flex-1">
-            <label>Test Date</label>
-            <input type="date" id="sprint-test-date" class="form-input">
-          </div>
-          <div class="chunk-input flex-1">
-            <label>Course</label>
-            <select id="sprint-course-select" class="form-input"></select>
-          </div>
-        </div>
-        <div class="chunk-input">
-          <label>Hours available per day</label>
-          <input type="number" id="sprint-hours" class="form-input" value="2" min="0.5" max="8" step="0.5">
-        </div>
-        <label class="section-label">Topics to Cover</label>
-        <div id="sprint-topics-list"></div>
-        <button id="sprint-add-topic" class="add-link">+ Add topic</button>
-        <button id="sprint-create-btn" class="primary-btn mt-12">Create Sprint Plan</button>
-      </div>
-    </div>
-
-    <!-- Active Sprint View -->
-    <div id="sprint-active" class="hidden">
-      <div class="sprint-header-info">
-        <div id="sprint-active-name" class="sprint-test-name"></div>
-        <div id="sprint-active-date" class="sprint-test-date"></div>
-      </div>
-      <div class="sprint-progress-row">
-        <div class="sprint-progress-bar"><div id="sprint-progress-fill" class="sprint-progress-fill"></div></div>
-        <span id="sprint-progress-text" class="sprint-progress-text">0%</span>
-      </div>
-      <div id="sprint-days-list"></div>
-      <div id="sprint-tips-box" class="sprint-tips hidden">
-        <h4>Tips</h4>
-        <div id="sprint-tips-list"></div>
-      </div>
-      <button id="sprint-end-btn" class="small-btn danger full-width mt-12">End Sprint</button>
-    </div>
-
-    <div id="sprint-status" class="status"></div>
-  </div>
+  <div id="timestamp" class="timestamp"></div>
 
   <script src="popup.js"></script>
 </body>

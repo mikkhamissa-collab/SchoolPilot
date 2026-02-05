@@ -269,9 +269,9 @@ export default function DashboardPage() {
       {/* Header */}
       <div>
         <h2 className="text-2xl font-bold text-white">
-          Hey, {user?.name?.split(" ")[0]} 👋
+          Hey {user?.name?.split(" ")[0]}! 👋
         </h2>
-        <p className="text-text-secondary mt-1">Here&apos;s your overview.</p>
+        <p className="text-text-secondary mt-1">Here&apos;s what&apos;s on your plate.</p>
       </div>
 
       {/* Stat Cards */}
@@ -422,12 +422,25 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Encouragement when things look good */}
+      {hasData && overdue.length === 0 && upcoming.length > 0 && upcoming.length <= 5 && (
+        <div className="p-4 rounded-xl bg-success/10 border border-success/30">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🌟</span>
+            <div>
+              <p className="text-success font-medium">Looking good!</p>
+              <p className="text-text-muted text-sm">No overdue work and your load is manageable. Keep it up!</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* No data — setup instructions */}
       {!hasData && (
         <div className="p-6 rounded-xl bg-accent/5 border border-accent/20">
-          <h3 className="text-lg font-semibold text-white mb-3">Get Started</h3>
+          <h3 className="text-lg font-semibold text-white mb-3">Let&apos;s Get You Set Up</h3>
           <p className="text-text-secondary text-sm mb-4">
-            Set up SchoolPilot in 2 minutes to see your classes and assignments here.
+            Takes 2 minutes. Sync your Teamie assignments and start crushing it.
           </p>
           <div className="space-y-4">
             <div className="flex items-start gap-3">
@@ -471,27 +484,27 @@ export default function DashboardPage() {
 
       {/* Quick Actions */}
       <div>
-        <h3 className="text-lg font-semibold text-white mb-3">Quick Actions</h3>
+        <h3 className="text-lg font-semibold text-white mb-3">What do you need?</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <Link href="/focus" className="flex items-center gap-3 p-4 rounded-xl bg-bg-card border border-border hover:border-accent/30 transition-colors">
             <span className="text-2xl">🎯</span>
             <div>
-              <p className="text-white font-medium">Break down an assignment</p>
-              <p className="text-text-muted text-sm">Get actionable chunks</p>
+              <p className="text-white font-medium">Can&apos;t start a big project?</p>
+              <p className="text-text-muted text-sm">Break it into 25-min chunks</p>
             </div>
           </Link>
           <Link href="/study" className="flex items-center gap-3 p-4 rounded-xl bg-bg-card border border-border hover:border-accent/30 transition-colors">
             <span className="text-2xl">📖</span>
             <div>
-              <p className="text-white font-medium">Generate a study guide</p>
-              <p className="text-text-muted text-sm">AI-powered study material</p>
+              <p className="text-white font-medium">Need to learn something fast?</p>
+              <p className="text-text-muted text-sm">Get a study guide + practice test</p>
             </div>
           </Link>
           <Link href="/sprint" className="flex items-center gap-3 p-4 rounded-xl bg-bg-card border border-border hover:border-accent/30 transition-colors">
             <span className="text-2xl">🏃</span>
             <div>
-              <p className="text-white font-medium">Start a study sprint</p>
-              <p className="text-text-muted text-sm">7-day test prep plan</p>
+              <p className="text-white font-medium">Big test coming up?</p>
+              <p className="text-text-muted text-sm">7-day sprint with spaced repetition</p>
             </div>
           </Link>
         </div>

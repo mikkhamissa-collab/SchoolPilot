@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase-client";
 import { apiFetch } from "@/lib/api";
 import { useEffect, useState } from "react";
+import Confetti from "@/components/Confetti";
 
 interface SprintTask { task: string; minutes: number; type: "learn" | "review" | "practice"; topic: string; }
 interface SprintDay { day: number; date: string; theme: string; tasks: SprintTask[]; total_minutes: number; }
@@ -72,6 +73,7 @@ export default function SprintPage() {
   const [pageLoading, setPageLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [showConfetti, setShowConfetti] = useState(false);
 
   // Current grade for the sprint course
   const [currentGrade, setCurrentGrade] = useState<number | null>(null);
@@ -197,6 +199,14 @@ export default function SprintPage() {
     setActiveSprint({ ...activeSprint, checked });
     const supabase = createClient();
     await supabase.from("sprints").update({ checked }).eq("id", activeSprint.id);
+
+    // Trigger confetti when all tasks completed
+    const totalTasks = activeSprint.plan.days.reduce((sum, d) => sum + d.tasks.length, 0);
+    const doneTasks = Object.values(checked).flat().filter(Boolean).length;
+    if (doneTasks === totalTasks && totalTasks > 0) {
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 100);
+    }
   };
 
   const endSprint = async () => {
@@ -237,7 +247,10 @@ export default function SprintPage() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <h2 className="text-2xl font-bold text-white">Sprint Mode</h2>
+      <Confetti trigger={showConfetti} />
+
+      <h2 className="text-2xl font-bold text-white">Sprint Mode 🏃</h2>
+      <p className="text-text-secondary">Big test coming? 7 days of focused prep with built-in spaced repetition.</p>
 
       {/* Active Sprint */}
       {activeSprint ? (
@@ -258,15 +271,23 @@ export default function SprintPage() {
 
           {/* Progress & Prediction */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 rounded-xl bg-bg-card border border-border">
+            <div className={`p-4 rounded-xl border transition-all ${
+              progress === 100
+                ? "bg-gradient-to-br from-success/20 to-accent/20 border-success/30"
+                : "bg-bg-card border-border"
+            }`}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-text-secondary">Progress</span>
-                <span className="text-sm font-semibold text-accent">{progress}%</span>
+                <span className={`text-sm font-semibold ${progress === 100 ? "text-success" : "text-accent"}`}>
+                  {progress}%
+                </span>
               </div>
               <div className="w-full h-2 bg-bg-dark rounded-full overflow-hidden">
-                <div className="h-full bg-accent rounded-full transition-all" style={{ width: `${progress}%` }} />
+                <div className={`h-full rounded-full transition-all ${progress === 100 ? "bg-success" : "bg-accent"}`} style={{ width: `${progress}%` }} />
               </div>
-              <p className="text-text-muted text-xs mt-2">{doneTasks}/{totalTasks} tasks</p>
+              <p className="text-text-muted text-xs mt-2">
+                {progress === 100 ? "🎉 Sprint complete!" : `${doneTasks}/${totalTasks} tasks`}
+              </p>
             </div>
 
             <div className="p-4 rounded-xl bg-bg-card border border-border">
@@ -449,7 +470,7 @@ export default function SprintPage() {
             disabled={loading}
             className="w-full py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white font-semibold transition-colors disabled:opacity-50 cursor-pointer"
           >
-            {loading ? "Creating Sprint..." : "Create Sprint Plan"}
+            {loading ? "Building your 7-day plan..." : "Let's Crush This Test"}
           </button>
           {error && <p className="text-error text-sm">{error}</p>}
         </div>

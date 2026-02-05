@@ -187,14 +187,16 @@ export default function SettingsPage() {
   return (
     <div className="max-w-2xl space-y-8">
       <div>
-        <h2 className="text-2xl font-bold text-white">Settings</h2>
-        <p className="text-text-secondary mt-1">Customize how SchoolPilot prioritizes your work.</p>
+        <h2 className="text-2xl font-bold text-white">Settings ⚙️</h2>
+        <p className="text-text-secondary mt-1">Make SchoolPilot work the way you do.</p>
       </div>
 
       {message && (
-        <div className={`p-3 rounded-lg text-sm ${
+        <div className={`p-3 rounded-lg text-sm flex items-center gap-2 transition-all ${
           message.type === "success" ? "bg-success/10 text-success" : "bg-error/10 text-error"
         }`}>
+          {message.type === "success" && <span>✓</span>}
+          {message.type === "error" && <span>⚠️</span>}
           {message.text}
         </div>
       )}
@@ -210,8 +212,10 @@ export default function SettingsPage() {
 
         {courses.length === 0 ? (
           <div className="p-6 rounded-xl bg-bg-card border border-border text-center">
-            <p className="text-text-muted">
-              No courses found. Sync your assignments from Teamie first.
+            <div className="text-3xl mb-3">📚</div>
+            <p className="text-white font-medium mb-1">No courses yet</p>
+            <p className="text-text-muted text-sm">
+              Sync your assignments from Teamie and your courses will show up here.
             </p>
           </div>
         ) : (
@@ -230,7 +234,9 @@ export default function SettingsPage() {
                       {course.name}
                     </span>
                     {isSaving && (
-                      <span className="text-text-muted text-xs">Saving...</span>
+                      <span className="text-accent text-xs flex items-center gap-1">
+                        <span className="animate-spin">⏳</span> Saving...
+                      </span>
                     )}
                   </div>
 
@@ -476,12 +482,12 @@ export default function SettingsPage() {
       <div className="p-5 rounded-xl bg-bg-card border border-border">
         <h3 className="text-sm font-semibold text-text-secondary mb-2">About SchoolPilot</h3>
         <p className="text-text-muted text-sm">
-          SchoolPilot is your AI-powered executive function assistant. It helps you organize, prioritize, and tackle your schoolwork more effectively.
+          Built by a student who got tired of staring at a messy todo list. SchoolPilot uses AI to turn chaos into clarity.
         </p>
         <div className="mt-4 flex items-center gap-4 text-xs text-text-muted">
           <a href="https://schoolpilot.co" className="hover:text-accent transition-colors">Website</a>
           <span>•</span>
-          <span>v2.0.0</span>
+          <span>v2.1.0</span>
         </div>
       </div>
     </div>

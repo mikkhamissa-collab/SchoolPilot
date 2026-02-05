@@ -323,16 +323,16 @@ export default function StudyPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-white">
-            {viewState === "dashboard" && "Mastery Dashboard"}
+            {viewState === "dashboard" && "Study Mode 📖"}
             {viewState === "course" && selectedCourse?.name}
             {viewState === "topic" && selectedTopic}
             {viewState === "test" && "Practice Test"}
             {viewState === "review" && "Spaced Review"}
           </h2>
           <p className="text-text-muted text-sm mt-1">
-            {viewState === "dashboard" && "Track your learning progress with spaced repetition"}
-            {viewState === "course" && "Topics and mastery levels"}
-            {viewState === "topic" && "Learn with curated videos and practice"}
+            {viewState === "dashboard" && "Learn smarter, not harder. Science-backed spaced repetition."}
+            {viewState === "course" && "Your weak spots → what to focus on"}
+            {viewState === "topic" && "Videos, practice, and mastery tracking"}
             {viewState === "test" && `Question ${currentQuestionIndex + 1} of ${testQuestions.length}`}
             {viewState === "review" && `Concept ${currentReviewIndex + 1} of ${reviewConcepts.length}`}
           </p>
@@ -419,7 +419,7 @@ export default function StudyPage() {
           {courses.length === 0 && (
             <div className="p-8 rounded-xl bg-bg-card border border-border text-center">
               <p className="text-text-muted">
-                No courses yet. Sync your assignments from Teamie to get started.
+                No courses yet. Sync your assignments first and we&apos;ll set you up.
               </p>
             </div>
           )}
@@ -634,9 +634,9 @@ export default function StudyPage() {
           <div className="p-6 rounded-xl bg-gradient-to-br from-accent/20 to-bg-card border border-accent/30">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-white font-semibold text-lg">Ready to Practice?</h3>
+                <h3 className="text-white font-semibold text-lg">Think you know it?</h3>
                 <p className="text-text-muted text-sm mt-1">
-                  Take an adaptive test that adjusts to your skill level
+                  Prove it. Adaptive test that gets harder as you get better.
                 </p>
               </div>
               <button
@@ -644,7 +644,7 @@ export default function StudyPage() {
                 disabled={loading}
                 className="px-6 py-3 rounded-xl bg-accent hover:bg-accent-hover text-white font-semibold transition-all cursor-pointer disabled:opacity-50 shadow-lg shadow-accent/20"
               >
-                {loading ? "Generating..." : "Start Practice Test"}
+                {loading ? "Building test..." : "Test Yourself"}
               </button>
             </div>
           </div>
@@ -780,7 +780,7 @@ export default function StudyPage() {
       {viewState === "test" && testComplete && (
         <div className="p-8 rounded-xl bg-gradient-to-br from-accent/20 to-bg-card border border-accent/30 text-center">
           <div className="text-5xl mb-4">🎉</div>
-          <h3 className="text-2xl font-bold text-white mb-2">Test Complete!</h3>
+          <h3 className="text-2xl font-bold text-white mb-2">Nice work!</h3>
 
           <div className="flex justify-center gap-8 my-6">
             <div>
