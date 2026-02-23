@@ -49,8 +49,8 @@ export async function POST(request: NextRequest) {
   const token = authHeader.slice(7);
 
   const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ""
   );
 
   const { data: { user }, error: authError } = await supabase.auth.getUser(token);
@@ -69,8 +69,8 @@ export async function POST(request: NextRequest) {
   } = body;
 
   const admin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+    process.env.SUPABASE_SERVICE_KEY ?? ""
   );
 
   // Deduplicate assignments and overdue separately

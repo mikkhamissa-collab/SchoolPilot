@@ -31,6 +31,11 @@ RESEND_API_KEY: str = os.environ.get('RESEND_API_KEY', '')
 CLAUDE_MODEL: str = os.environ.get('CLAUDE_MODEL', 'claude-sonnet-4-20250514')
 FLASK_SECRET_KEY: str = os.environ.get('FLASK_SECRET_KEY', '')
 
+# In production, require the secret key. Check common indicators.
+_is_production = os.environ.get('RENDER', '') or os.environ.get('FLY_APP_NAME', '') or os.environ.get('RAILWAY_ENVIRONMENT', '')
+if _is_production and not FLASK_SECRET_KEY:
+    raise RuntimeError('FLASK_SECRET_KEY must be set in production. Refusing to start without auth.')
+
 app = Flask(__name__)
 CORS(app, origins=[
     r'chrome-extension://*',

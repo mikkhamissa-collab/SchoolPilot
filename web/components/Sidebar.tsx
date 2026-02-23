@@ -33,7 +33,7 @@ export default function Sidebar() {
         try {
           localStorage.setItem("schoolpilot_ext_token", session.access_token);
         } catch {
-          // Ignore localStorage errors
+          // localStorage unavailable in SSR/incognito
         }
       }
     });
@@ -43,13 +43,13 @@ export default function Sidebar() {
         try {
           localStorage.setItem("schoolpilot_ext_token", session.access_token);
         } catch {
-          // Ignore
+          // localStorage unavailable in SSR/incognito
         }
       } else {
         try {
           localStorage.removeItem("schoolpilot_ext_token");
         } catch {
-          // Ignore
+          // localStorage unavailable in SSR/incognito
         }
       }
     });

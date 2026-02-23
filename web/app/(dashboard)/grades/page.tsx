@@ -149,8 +149,10 @@ export default function GradesPage() {
 
   const handleDeleteCourse = async (courseId: string) => {
     if (!confirm("Delete this course and all its grades?")) return;
+    if (!userId) return;
     const supabase = createClient();
-    await supabase.from("courses").delete().eq("id", courseId);
+    const { error: delErr } = await supabase.from("courses").delete().eq("id", courseId).eq("user_id", userId);
+    if (delErr) { setError(delErr.message); return; }
     const remaining = courses.filter(c => c.id !== courseId);
     setCourses(remaining);
     if (activeCourse?.id === courseId) {

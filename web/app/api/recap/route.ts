@@ -40,17 +40,18 @@ export async function POST(request: NextRequest) {
   }
 
   const db = createAdminClient();
-  const { error, count } = await db
+  const { data: updated, error } = await db
     .from("weekly_recaps")
     .update({ dismissed: true })
     .eq("id", recap_id)
-    .eq("user_id", auth.userId);
+    .eq("user_id", auth.userId)
+    .select("id");
 
   if (error) {
     return NextResponse.json({ error: `Failed to dismiss: ${error.message}` }, { status: 500 });
   }
 
-  if (count === 0) {
+  if (!updated || updated.length === 0) {
     return NextResponse.json({ error: "Recap not found or already dismissed" }, { status: 404 });
   }
 

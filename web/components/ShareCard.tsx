@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 
 interface ShareCardProps {
   userName: string;
@@ -59,6 +59,15 @@ export default function ShareCard({
     }
   }, [shareText, referralLink, copyLink]);
 
+  useEffect(() => {
+    if (!showCard) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowCard(false);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [showCard]);
+
   if (!showCard) {
     return (
       <button
@@ -74,7 +83,13 @@ export default function ShareCard({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Share your progress"
+      onClick={(e) => { if (e.target === e.currentTarget) setShowCard(false); }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+    >
       <div className="w-full max-w-sm space-y-4">
         {/* The visual card */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-accent via-accent-hover to-[#4c1d95] p-6 text-white">

@@ -4,13 +4,16 @@ import { createClient } from "@/lib/supabase-client";
 import { apiFetch } from "@/lib/api";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import Confetti from "@/components/Confetti";
-import ShareCard from "@/components/ShareCard";
+import dynamic from "next/dynamic";
 import StreakBadge from "@/components/StreakBadge";
-import GradeLogModal from "@/components/GradeLogModal";
-import WeeklyRecapModal from "@/components/WeeklyRecapModal";
-import BuddyWidget from "@/components/BuddyWidget";
 import { getStreakMilestone } from "@/lib/streak";
+import type { StreakData, BuddyData, RecapData } from "@/lib/types";
+
+const Confetti = dynamic(() => import("@/components/Confetti"), { ssr: false });
+const ShareCard = dynamic(() => import("@/components/ShareCard"), { ssr: false });
+const GradeLogModal = dynamic(() => import("@/components/GradeLogModal"), { ssr: false });
+const WeeklyRecapModal = dynamic(() => import("@/components/WeeklyRecapModal"), { ssr: false });
+const BuddyWidget = dynamic(() => import("@/components/BuddyWidget"), { ssr: false });
 
 // =============================================================================
 // TYPES
@@ -72,35 +75,6 @@ interface CourseGrade {
   current: number;
 }
 
-interface StreakData {
-  current_streak: number;
-  longest_streak: number;
-  freeze_available: boolean;
-  last_completed_date: string | null;
-}
-
-interface BuddyData {
-  has_partner: boolean;
-  partner_name?: string;
-  partner_streak?: number;
-  partner_completed_today?: boolean;
-  my_streak?: number;
-  my_completed_today?: boolean;
-  pending_invite?: string | null;
-}
-
-interface RecapData {
-  id: string;
-  week_start: string;
-  week_end: string;
-  tasks_completed: number;
-  grades_logged: number;
-  streak_days: number;
-  insight_text: string;
-  win_text: string;
-  preview_text: string;
-}
-
 // =============================================================================
 // GRADE KEYWORDS — triggers the "log your grade" modal
 // =============================================================================
@@ -138,7 +112,6 @@ export default function TodayPage() {
   const [targetGrades, setTargetGrades] = useState<Record<string, number>>({});
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set());
   const [userName, setUserName] = useState("");
-  const [userId, setUserId] = useState("");
   const [showConfetti, setShowConfetti] = useState(false);
   const [showOtherTasks, setShowOtherTasks] = useState(false);
 
@@ -162,7 +135,6 @@ export default function TodayPage() {
       if (!user) return;
 
       const uid = user.id;
-      setUserId(uid);
       setUserName(user.user_metadata?.full_name?.split(" ")[0] || "");
 
       const savedTargets = user.user_metadata?.target_grades;
@@ -215,31 +187,24 @@ export default function TodayPage() {
         }
       }
 
-      // Load streak (cookie auth — no headers needed)
-      try {
-        const streakRes = await fetch("/api/streak");
-        if (streakRes.ok) setStreak(await streakRes.json());
-      } catch (err) {
-        console.error("Failed to load streak:", err);
-      }
+      // Load streak, buddy, and recap in parallel
+      const [streakRes, buddyRes, recapRes] = await Promise.allSettled([
+        fetch("/api/streak"),
+        fetch("/api/buddy/status"),
+        fetch("/api/recap"),
+      ]);
 
-      // Load buddy
-      try {
-        const buddyRes = await fetch("/api/buddy/status");
-        if (buddyRes.ok) setBuddy(await buddyRes.json());
-      } catch (err) {
-        console.error("Failed to load buddy:", err);
+      if (streakRes.status === "fulfilled" && streakRes.value.ok) {
+        try { setStreak(await streakRes.value.json()); } catch { /* ignore parse errors */ }
       }
-
-      // Load weekly recap
-      try {
-        const recapRes = await fetch("/api/recap");
-        if (recapRes.ok) {
-          const recapData = await recapRes.json();
+      if (buddyRes.status === "fulfilled" && buddyRes.value.ok) {
+        try { setBuddy(await buddyRes.value.json()); } catch { /* ignore parse errors */ }
+      }
+      if (recapRes.status === "fulfilled" && recapRes.value.ok) {
+        try {
+          const recapData = await recapRes.value.json();
           if (recapData.recap) setRecap(recapData.recap);
-        }
-      } catch (err) {
-        console.error("Failed to load recap:", err);
+        } catch { /* ignore parse errors */ }
       }
 
       // Load cached guardian from localStorage
@@ -657,7 +622,10 @@ export default function TodayPage() {
                 return (
                   <div
                     key={i}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => toggleTask(taskId)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleTask(taskId); } }}
                     className={`p-4 flex items-center gap-3 cursor-pointer hover:bg-bg-hover transition-colors ${done ? "opacity-50" : ""}`}
                   >
                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${done ? "bg-success border-success text-white" : "border-text-muted"}`}>

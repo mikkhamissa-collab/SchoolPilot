@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase-client";
 import { useEffect, useState } from "react";
+import type { StreakData, BuddyData } from "@/lib/types";
 
 interface Course {
   id: string;
@@ -12,23 +13,6 @@ interface Course {
 interface EditingUnits {
   courseId: string;
   units: string[];
-}
-
-interface StreakData {
-  current_streak: number;
-  longest_streak: number;
-  freeze_available: boolean;
-  last_completed_date: string | null;
-}
-
-interface BuddyData {
-  has_partner: boolean;
-  partner_name?: string;
-  partner_streak?: number;
-  partner_completed_today?: boolean;
-  my_streak?: number;
-  my_completed_today?: boolean;
-  pending_invite?: string | null;
 }
 
 export default function SettingsPage() {
@@ -380,6 +364,8 @@ export default function SettingsPage() {
               <div className="text-text-muted text-xs">Weekends don&apos;t break your streak</div>
             </div>
             <button
+              role="switch"
+              aria-checked={weekendMode}
               onClick={() => {
                 const next = !weekendMode;
                 setWeekendMode(next);
@@ -505,6 +491,8 @@ export default function SettingsPage() {
               <div className="text-text-muted text-xs">Reminds you to finish your priority task</div>
             </div>
             <button
+              role="switch"
+              aria-checked={dailyReminder}
               onClick={() => {
                 const next = !dailyReminder;
                 setDailyReminder(next);
@@ -782,6 +770,8 @@ export default function SettingsPage() {
               <div className="text-text-muted text-sm">Send yourself a plan from the Today page (auto-scheduling coming soon)</div>
             </div>
             <button
+              role="switch"
+              aria-checked={autoEmailEnabled}
               onClick={() => {
                 const newValue = !autoEmailEnabled;
                 setAutoEmailEnabled(newValue);

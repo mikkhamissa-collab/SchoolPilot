@@ -33,8 +33,8 @@ export async function POST(
   // Auth check via Supabase cookies
   const cookieStore = await cookies();
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
     {
       cookies: {
         getAll() { return cookieStore.getAll(); },
@@ -72,7 +72,16 @@ export async function POST(
       signal: AbortSignal.timeout(60000), // 60s timeout
     });
 
-    const data = await res.json();
+    let data;
+    const text = await res.text();
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return NextResponse.json(
+        { error: "Backend returned an invalid response" },
+        { status: 502 }
+      );
+    }
     return NextResponse.json(data, { status: res.status });
   } catch (err) {
     const message = err instanceof Error && err.name === "TimeoutError"

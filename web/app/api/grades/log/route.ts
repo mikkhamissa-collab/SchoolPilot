@@ -37,6 +37,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Score must be >= 0 and max_score must be > 0" }, { status: 400 });
   }
 
+  // Reject absurd scores (e.g. 99999/1) — allow up to 2x max for extra credit
+  if (parsedScore > parsedMax * 2) {
+    return NextResponse.json({ error: "Score cannot exceed 2x the max score" }, { status: 400 });
+  }
+
   const db = createAdminClient();
 
   // Resolve course ID — verify it belongs to THIS user

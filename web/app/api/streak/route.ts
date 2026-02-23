@@ -57,8 +57,10 @@ export async function POST() {
   if (isAuthError(auth)) return auth.response;
 
   const db = createAdminClient();
-  const today = new Date().toISOString().split("T")[0];
-  const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+  // Use US Eastern time (school timezone) for date comparison
+  const eastern = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" });
+  const today = eastern.format(new Date());
+  const yesterday = eastern.format(new Date(Date.now() - 86400000));
 
   const { data: streak, error: fetchErr } = await db
     .from("user_streaks")

@@ -1,16 +1,7 @@
 "use client";
 
 import { useState } from "react";
-
-interface BuddyData {
-  has_partner: boolean;
-  partner_name?: string;
-  partner_streak?: number;
-  partner_completed_today?: boolean;
-  my_streak?: number;
-  my_completed_today?: boolean;
-  pending_invite?: string | null;
-}
+import type { BuddyData } from "@/lib/types";
 
 interface BuddyWidgetProps {
   data: BuddyData;
