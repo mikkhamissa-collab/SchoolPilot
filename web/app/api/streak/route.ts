@@ -60,7 +60,10 @@ export async function POST() {
   // Use US Eastern time (school timezone) for date comparison
   const eastern = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" });
   const today = eastern.format(new Date());
-  const yesterday = eastern.format(new Date(Date.now() - 86400000));
+  // Compute yesterday from the calendar date (avoids DST ±1h drift)
+  const todayDate = new Date(today + "T12:00:00");
+  todayDate.setDate(todayDate.getDate() - 1);
+  const yesterday = eastern.format(todayDate);
 
   const { data: streak, error: fetchErr } = await db
     .from("user_streaks")
@@ -117,7 +120,8 @@ export async function POST() {
 
   const longestStreak = Math.max(streak.longest_streak, newStreak);
 
-  const { data: updated, error: updateErr } = await db
+  // Optimistic lock: only update if no concurrent request changed last_completed_date
+  const query = db
     .from("user_streaks")
     .update({
       current_streak: newStreak,
@@ -127,12 +131,23 @@ export async function POST() {
       freeze_used_date: freezeUsedDate,
       updated_at: new Date().toISOString(),
     })
-    .eq("user_id", auth.userId)
-    .select()
-    .single();
+    .eq("user_id", auth.userId);
 
-  if (updateErr) {
-    return NextResponse.json({ error: `Failed to update streak: ${updateErr.message}` }, { status: 500 });
+  const { data: updated, error: updateErr } = streak.last_completed_date
+    ? await query.eq("last_completed_date", streak.last_completed_date).select().single()
+    : await query.is("last_completed_date", null).select().single();
+
+  if (updateErr || !updated) {
+    // If no rows matched, another request already updated — re-fetch current state
+    if (!updated) {
+      const { data: current } = await db
+        .from("user_streaks")
+        .select("current_streak, longest_streak, last_completed_date, freeze_available, freeze_used_date")
+        .eq("user_id", auth.userId)
+        .single();
+      if (current) return NextResponse.json(current);
+    }
+    return NextResponse.json({ error: `Failed to update streak: ${updateErr?.message || "concurrent update"}` }, { status: 500 });
   }
 
   return NextResponse.json(updated);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 
 interface ShareCardProps {
   userName: string;
@@ -19,6 +19,7 @@ export default function ShareCard({
 }: ShareCardProps) {
   const [copied, setCopied] = useState(false);
   const [showCard, setShowCard] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const referralLink = typeof window !== "undefined"
     ? `${window.location.origin}?ref=${encodeURIComponent(userName)}`
@@ -68,6 +69,33 @@ export default function ShareCard({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [showCard]);
 
+  // Focus on mount
+  useEffect(() => {
+    if (showCard) contentRef.current?.focus();
+  }, [showCard]);
+
+  // Focus trap — cycle Tab within the modal
+  useEffect(() => {
+    if (!showCard) return;
+    const dialog = contentRef.current;
+    if (!dialog) return;
+    const focusableEls = dialog.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    const first = focusableEls[0];
+    const last = focusableEls[focusableEls.length - 1];
+    const trap = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first?.focus(); }
+      }
+    };
+    dialog.addEventListener("keydown", trap);
+    return () => dialog.removeEventListener("keydown", trap);
+  }, [showCard]);
+
   if (!showCard) {
     return (
       <button
@@ -90,7 +118,7 @@ export default function ShareCard({
       onClick={(e) => { if (e.target === e.currentTarget) setShowCard(false); }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
     >
-      <div className="w-full max-w-sm space-y-4">
+      <div ref={contentRef} tabIndex={-1} className="w-full max-w-sm space-y-4 outline-none">
         {/* The visual card */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-accent via-accent-hover to-[#4c1d95] p-6 text-white">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />

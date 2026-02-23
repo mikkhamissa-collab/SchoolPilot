@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "You can't partner with yourself" }, { status: 400 });
   }
 
+  // Atomic: only succeeds if status is still "pending" (prevents race condition)
   const { data, error } = await db
     .from("accountability_partners")
     .update({
@@ -56,11 +57,15 @@ export async function POST(request: NextRequest) {
       status: "active",
     })
     .eq("id", invite.id)
+    .eq("status", "pending")
     .select()
     .single();
 
-  if (error) {
-    return NextResponse.json({ error: `Failed to accept invite: ${error.message}` }, { status: 500 });
+  if (error || !data) {
+    return NextResponse.json(
+      { error: error ? `Failed to accept invite: ${error.message}` : "Invite was already accepted by someone else" },
+      { status: error ? 500 : 409 }
+    );
   }
 
   return NextResponse.json({ partnership: data });

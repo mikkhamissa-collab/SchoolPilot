@@ -39,6 +39,27 @@ export default function WeeklyRecapModal({
     dialogRef.current?.focus();
   }, []);
 
+  // Focus trap — cycle Tab within the modal
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const focusableEls = dialog.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    const first = focusableEls[0];
+    const last = focusableEls[focusableEls.length - 1];
+    const trap = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first?.focus(); }
+      }
+    };
+    dialog.addEventListener("keydown", trap);
+    return () => dialog.removeEventListener("keydown", trap);
+  }, []);
+
   // Click outside to dismiss
   const handleBackdrop = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) onDismiss();

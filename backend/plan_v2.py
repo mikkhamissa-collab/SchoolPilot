@@ -68,6 +68,18 @@ except ImportError:
 plan_v2_bp = Blueprint('plan_v2', __name__, url_prefix='/plan')
 
 
+@plan_v2_bp.before_request
+def _check_proxy_auth():
+    """Verify requests come from the Next.js proxy via shared secret."""
+    import os
+    secret = os.environ.get('FLASK_SECRET_KEY', '')
+    if secret:
+        from flask import abort
+        auth_header = request.headers.get('X-Proxy-Secret', '')
+        if auth_header != secret:
+            abort(401)
+
+
 # =============================================================================
 # HELPERS
 # =============================================================================

@@ -253,6 +253,7 @@ export default function GradesPage() {
             </button>
             <button
               onClick={() => handleDeleteCourse(c.id)}
+              aria-label={`Delete ${c.name}`}
               className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-error text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
             >
               ×
@@ -310,6 +311,7 @@ export default function GradesPage() {
                 {newCategories.length > 1 && (
                   <button
                     onClick={() => setNewCategories(newCategories.filter((_, j) => j !== i))}
+                    aria-label="Remove category"
                     className="text-text-muted hover:text-error text-lg cursor-pointer"
                   >
                     ×
@@ -409,6 +411,7 @@ export default function GradesPage() {
               <select
                 value={gradeCategory}
                 onChange={(e) => setGradeCategory(e.target.value)}
+                aria-label="Grade category"
                 className={inputClass}
               >
                 {activeCourse.categories.map((c) => (
@@ -420,6 +423,7 @@ export default function GradesPage() {
                 placeholder="Assignment name"
                 value={gradeName}
                 onChange={(e) => setGradeName(e.target.value)}
+                aria-label="Assignment name"
                 className={inputClass}
               />
             </div>
@@ -429,6 +433,7 @@ export default function GradesPage() {
                 placeholder="Score"
                 value={gradeScore}
                 onChange={(e) => setGradeScore(e.target.value)}
+                aria-label="Score"
                 className={`w-24 ${inputClass}`}
               />
               <span className="text-text-muted">/</span>
@@ -437,6 +442,7 @@ export default function GradesPage() {
                 placeholder="Max"
                 value={gradeMax}
                 onChange={(e) => setGradeMax(e.target.value)}
+                aria-label="Maximum score"
                 className={`w-24 ${inputClass}`}
               />
               <button onClick={handleAddGrade} className={btnClass}>Add</button>
@@ -453,10 +459,11 @@ export default function GradesPage() {
                 type="number"
                 value={reqTarget}
                 onChange={(e) => setReqTarget(e.target.value)}
+                aria-label="Target grade percentage"
                 className={`w-20 ${inputClass}`}
               />
               <span className="text-text-muted text-sm">% in</span>
-              <select value={reqCat} onChange={(e) => setReqCat(e.target.value)} className={inputClass}>
+              <select value={reqCat} onChange={(e) => setReqCat(e.target.value)} aria-label="Target category" className={inputClass}>
                 {activeCourse.categories.map(c => (
                   <option key={c.name} value={c.name}>{c.name}</option>
                 ))}
@@ -480,6 +487,7 @@ export default function GradesPage() {
                 placeholder="Score"
                 value={whatifScore}
                 onChange={(e) => setWhatifScore(e.target.value)}
+                aria-label="Hypothetical score"
                 className={`w-20 ${inputClass}`}
               />
               <span className="text-text-muted">/</span>
@@ -488,10 +496,11 @@ export default function GradesPage() {
                 placeholder="Max"
                 value={whatifMax}
                 onChange={(e) => setWhatifMax(e.target.value)}
+                aria-label="Hypothetical maximum score"
                 className={`w-20 ${inputClass}`}
               />
               <span className="text-text-muted text-sm">in</span>
-              <select value={whatifCat} onChange={(e) => setWhatifCat(e.target.value)} className={inputClass}>
+              <select value={whatifCat} onChange={(e) => setWhatifCat(e.target.value)} aria-label="Hypothetical category" className={inputClass}>
                 {activeCourse.categories.map(c => (
                   <option key={c.name} value={c.name}>{c.name}</option>
                 ))}

@@ -2,6 +2,16 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+// Fail fast if env vars are missing — prevents silent auth failures
+function requireEnvVar(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing required env var: ${name}`);
+  return value;
+}
+
+const SUPABASE_URL = requireEnvVar("NEXT_PUBLIC_SUPABASE_URL");
+const SUPABASE_ANON_KEY = requireEnvVar("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+
 // Routes that require authentication
 const PROTECTED_PREFIXES = [
   "/today",
@@ -15,8 +25,8 @@ export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY,
     {
       cookies: {
         getAll() {

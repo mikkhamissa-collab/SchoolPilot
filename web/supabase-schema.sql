@@ -247,3 +247,84 @@ CREATE POLICY "own_reviews" ON concept_reviews FOR ALL USING (
 );
 CREATE POLICY "own_tests" ON practice_tests FOR ALL USING (auth.uid() = user_id);
 CREATE POLICY "own_weak_spots" ON weak_spots FOR ALL USING (auth.uid() = user_id);
+
+-- =============================================================================
+-- STREAKS, ACCOUNTABILITY & WEEKLY RECAPS
+-- =============================================================================
+
+-- User streaks — tracks daily completion streaks and freeze logic
+CREATE TABLE user_streaks (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  current_streak INTEGER DEFAULT 0,
+  longest_streak INTEGER DEFAULT 0,
+  last_completed_date DATE,
+  freeze_available BOOLEAN DEFAULT TRUE,
+  freeze_used_date DATE,
+  weekend_mode BOOLEAN DEFAULT FALSE,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Accountability partners — buddy system for motivation
+CREATE TABLE accountability_partners (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  partner_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  invite_code TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(invite_code)
+);
+
+-- Nudges — messages sent between accountability partners
+CREATE TABLE nudges (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  partnership_id UUID REFERENCES accountability_partners(id) ON DELETE CASCADE NOT NULL,
+  sender_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  message TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Weekly recaps — AI-generated summaries of weekly progress
+CREATE TABLE weekly_recaps (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  week_start DATE NOT NULL,
+  week_end DATE NOT NULL,
+  tasks_completed INTEGER DEFAULT 0,
+  grades_logged INTEGER DEFAULT 0,
+  streak_days INTEGER DEFAULT 0,
+  insight_text TEXT,
+  win_text TEXT,
+  preview_text TEXT,
+  dismissed BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for streaks, accountability & recaps
+CREATE INDEX idx_streaks_last_date ON user_streaks(last_completed_date);
+CREATE INDEX idx_partners_user ON accountability_partners(user_id);
+CREATE INDEX idx_partners_partner ON accountability_partners(partner_id);
+CREATE INDEX idx_partners_invite ON accountability_partners(invite_code);
+CREATE INDEX idx_partners_status ON accountability_partners(status);
+CREATE INDEX idx_nudges_partnership ON nudges(partnership_id, created_at DESC);
+CREATE INDEX idx_nudges_sender ON nudges(sender_id);
+CREATE INDEX idx_recaps_user ON weekly_recaps(user_id, week_start DESC);
+CREATE INDEX idx_recaps_dismissed ON weekly_recaps(user_id, dismissed);
+
+-- RLS for streaks, accountability & recaps
+ALTER TABLE user_streaks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE accountability_partners ENABLE ROW LEVEL SECURITY;
+ALTER TABLE nudges ENABLE ROW LEVEL SECURITY;
+ALTER TABLE weekly_recaps ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "own_streak" ON user_streaks FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "own_partnerships" ON accountability_partners FOR ALL USING (
+  auth.uid() = user_id OR auth.uid() = partner_id
+);
+CREATE POLICY "own_nudges" ON nudges FOR ALL USING (
+  partnership_id IN (
+    SELECT id FROM accountability_partners
+    WHERE user_id = auth.uid() OR partner_id = auth.uid()
+  )
+);
+CREATE POLICY "own_recaps" ON weekly_recaps FOR ALL USING (auth.uid() = user_id);

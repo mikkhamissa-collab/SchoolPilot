@@ -98,20 +98,16 @@ export default function SettingsPage() {
         localStorage.removeItem("stickiness_prefs");
       }
 
-      // Load streak (cookie auth)
-      try {
-        const streakRes = await fetch("/api/streak");
-        if (streakRes.ok) setStreak(await streakRes.json());
-      } catch (err) {
-        console.error("Failed to load streak:", err);
+      // Load streak and buddy in parallel (cookie auth)
+      const [streakRes, buddyRes] = await Promise.allSettled([
+        fetch("/api/streak"),
+        fetch("/api/buddy/status"),
+      ]);
+      if (streakRes.status === "fulfilled" && streakRes.value.ok) {
+        try { setStreak(await streakRes.value.json()); } catch { /* ignore parse errors */ }
       }
-
-      // Load buddy (cookie auth)
-      try {
-        const buddyRes = await fetch("/api/buddy/status");
-        if (buddyRes.ok) setBuddy(await buddyRes.json());
-      } catch (err) {
-        console.error("Failed to load buddy:", err);
+      if (buddyRes.status === "fulfilled" && buddyRes.value.ok) {
+        try { setBuddy(await buddyRes.value.json()); } catch { /* ignore parse errors */ }
       }
 
       setLoading(false);
