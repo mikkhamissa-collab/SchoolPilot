@@ -1,10 +1,12 @@
 # server.py — Flask backend for SchoolPilot: AI study plans, work chunking, study guides, sprints, and grades.
+import html as html_lib
 import json
 import logging
 import os
 import re
 import time
 from datetime import datetime
+from functools import wraps
 from typing import Any, Dict, List, Optional, Union
 
 from dotenv import load_dotenv
@@ -27,6 +29,7 @@ load_dotenv(_env_path, override=True)
 ANTHROPIC_API_KEY: str = os.environ.get('ANTHROPIC_API_KEY', '')
 RESEND_API_KEY: str = os.environ.get('RESEND_API_KEY', '')
 CLAUDE_MODEL: str = os.environ.get('CLAUDE_MODEL', 'claude-sonnet-4-20250514')
+FLASK_SECRET_KEY: str = os.environ.get('FLASK_SECRET_KEY', '')
 
 app = Flask(__name__)
 CORS(app, origins=[
@@ -46,6 +49,20 @@ if not ANTHROPIC_API_KEY:
     logger.warning('ANTHROPIC_API_KEY is not set — Claude endpoints will fail.')
 if not RESEND_API_KEY:
     logger.warning('RESEND_API_KEY is not set — email sending will fail.')
+if not FLASK_SECRET_KEY:
+    logger.warning('FLASK_SECRET_KEY is not set — all requests will be accepted (insecure).')
+
+
+def require_proxy_auth(f):
+    """Verify requests come from the Next.js proxy via shared secret."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if FLASK_SECRET_KEY:
+            auth_header = request.headers.get('X-Proxy-Secret', '')
+            if auth_header != FLASK_SECRET_KEY:
+                return jsonify({'error': 'Unauthorized'}), 401
+        return f(*args, **kwargs)
+    return decorated
 
 # ---------------------------------------------------------------------------
 # Singleton Anthropic client
@@ -822,14 +839,19 @@ OUTPUT SECTIONS:
 - done_when: Clear finish line so they can relax guilt-free"""
 
 
+def _esc(text: str) -> str:
+    """HTML-escape user content to prevent XSS."""
+    return html_lib.escape(str(text)) if text else ""
+
+
 def generate_autopilot_html(plan_data: dict) -> str:
     """Generate beautiful HTML email for the morning autopilot."""
     schedule = plan_data.get('schedule', [])
     urgent = plan_data.get('urgent', [])
-    mission = plan_data.get('mission', 'Crush today!')
-    greeting = plan_data.get('greeting', 'Rise and shine!')
-    tip = plan_data.get('tip', 'Start with the hardest task when your energy is highest.')
-    done_when = plan_data.get('done_when', 'All checkboxes marked!')
+    mission = _esc(plan_data.get('mission', 'Crush today!'))
+    greeting = _esc(plan_data.get('greeting', 'Rise and shine!'))
+    tip = _esc(plan_data.get('tip', 'Start with the hardest task when your energy is highest.'))
+    done_when = _esc(plan_data.get('done_when', 'All checkboxes marked!'))
 
     html = f"""
     <!DOCTYPE html>
@@ -877,8 +899,8 @@ def generate_autopilot_html(plan_data: dict) -> str:
                 <div class="task">
                     <span class="checkbox">☐</span>
                     <div class="task-content">
-                        <div class="task-title">{item.get('title', 'Task')}</div>
-                        <div class="task-details">{item.get('details', '')}</div>
+                        <div class="task-title">{_esc(item.get('title', 'Task'))}</div>
+                        <div class="task-details">{_esc(item.get('details', ''))}</div>
                     </div>
                 </div>
             """
@@ -892,10 +914,10 @@ def generate_autopilot_html(plan_data: dict) -> str:
         html += f"""
             <div class="task">
                 <span class="checkbox">☐</span>
-                <span class="task-time">{task.get('time', '')}</span>
+                <span class="task-time">{_esc(task.get('time', ''))}</span>
                 <div class="task-content">
-                    <div class="task-title">{task.get('title', 'Task')}</div>
-                    <div class="task-details">{task.get('details', '')}</div>
+                    <div class="task-title">{_esc(task.get('title', 'Task'))}</div>
+                    <div class="task-details">{_esc(task.get('details', ''))}</div>
                 </div>
             </div>
         """

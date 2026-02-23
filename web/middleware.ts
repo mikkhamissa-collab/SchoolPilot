@@ -1,6 +1,15 @@
-// Auth middleware: redirects unauthenticated users away from dashboard
+// Auth middleware: protects dashboard routes, redirects unauthenticated users
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+
+// Routes that require authentication
+const PROTECTED_PREFIXES = [
+  "/today",
+  "/grades",
+  "/settings",
+  "/session",
+  "/onboarding",
+];
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -14,7 +23,7 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
+          cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
           supabaseResponse = NextResponse.next({ request });
@@ -30,24 +39,24 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isDashboard = request.nextUrl.pathname.startsWith("/dashboard") ||
-    request.nextUrl.pathname.startsWith("/plan") ||
-    request.nextUrl.pathname.startsWith("/focus") ||
-    request.nextUrl.pathname.startsWith("/grades") ||
-    request.nextUrl.pathname.startsWith("/study") ||
-    request.nextUrl.pathname.startsWith("/sprint");
+  const pathname = request.nextUrl.pathname;
+
+  // Check if current path is protected
+  const isProtected = PROTECTED_PREFIXES.some((prefix) =>
+    pathname.startsWith(prefix)
+  );
 
   // Redirect unauthenticated users to login
-  if (!user && isDashboard) {
+  if (!user && isProtected) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
     return NextResponse.redirect(url);
   }
 
-  // Redirect authenticated users away from login/landing to dashboard
-  if (user && (request.nextUrl.pathname === "/" || request.nextUrl.pathname === "/auth/login")) {
+  // Redirect authenticated users from login/landing to Today page
+  if (user && (pathname === "/" || pathname === "/auth/login")) {
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    url.pathname = "/today";
     return NextResponse.redirect(url);
   }
 

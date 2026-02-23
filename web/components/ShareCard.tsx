@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useCallback } from "react";
 
 interface ShareCardProps {
   userName: string;
@@ -19,7 +19,6 @@ export default function ShareCard({
 }: ShareCardProps) {
   const [copied, setCopied] = useState(false);
   const [showCard, setShowCard] = useState(false);
-  const cardRef = useRef<HTMLDivElement>(null);
 
   const referralLink = typeof window !== "undefined"
     ? `${window.location.origin}?ref=${encodeURIComponent(userName)}`
@@ -36,8 +35,8 @@ export default function ShareCard({
       );
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Fallback
+    } catch (err) {
+      console.error("Clipboard copy failed:", err);
     }
   }, [shareText, referralLink]);
 
@@ -49,8 +48,11 @@ export default function ShareCard({
           text: shareText,
           url: referralLink,
         });
-      } catch {
-        // User cancelled
+      } catch (err) {
+        // AbortError means user cancelled — that's fine
+        if (err instanceof Error && err.name !== "AbortError") {
+          console.error("Share failed:", err);
+        }
       }
     } else {
       copyLink();
@@ -75,10 +77,7 @@ export default function ShareCard({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="w-full max-w-sm space-y-4">
         {/* The visual card */}
-        <div
-          ref={cardRef}
-          className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-accent via-accent-hover to-[#4c1d95] p-6 text-white"
-        >
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-accent via-accent-hover to-[#4c1d95] p-6 text-white">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
           <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
 

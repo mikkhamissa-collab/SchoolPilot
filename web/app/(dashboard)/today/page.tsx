@@ -216,35 +216,45 @@ export default function TodayPage() {
         }
       }
 
-      // Load streak
+      // Load streak (cookie auth — no headers needed)
       try {
-        const streakRes = await fetch("/api/streak", { headers: { "x-user-id": uid } });
+        const streakRes = await fetch("/api/streak");
         if (streakRes.ok) setStreak(await streakRes.json());
-      } catch { /* ok */ }
+      } catch (err) {
+        console.error("Failed to load streak:", err);
+      }
 
       // Load buddy
       try {
-        const buddyRes = await fetch("/api/buddy/status", { headers: { "x-user-id": uid } });
+        const buddyRes = await fetch("/api/buddy/status");
         if (buddyRes.ok) setBuddy(await buddyRes.json());
-      } catch { /* ok */ }
+      } catch (err) {
+        console.error("Failed to load buddy:", err);
+      }
 
       // Load weekly recap
       try {
-        const recapRes = await fetch("/api/recap", { headers: { "x-user-id": uid } });
+        const recapRes = await fetch("/api/recap");
         if (recapRes.ok) {
           const recapData = await recapRes.json();
           if (recapData.recap) setRecap(recapData.recap);
         }
-      } catch { /* ok */ }
+      } catch (err) {
+        console.error("Failed to load recap:", err);
+      }
 
-      // Load cached guardian
-      const savedGuardian = localStorage.getItem("guardian_data");
-      const savedGuardianDate = localStorage.getItem("guardian_data_date");
-      const today = new Date().toDateString();
-      if (savedGuardian && savedGuardianDate === today) {
-        setGuardian(JSON.parse(savedGuardian));
-        const savedCompleted = localStorage.getItem("today_completed_v2");
-        if (savedCompleted) setCompletedTasks(new Set(JSON.parse(savedCompleted)));
+      // Load cached guardian from localStorage
+      try {
+        const savedGuardian = localStorage.getItem("guardian_data");
+        const savedGuardianDate = localStorage.getItem("guardian_data_date");
+        const today = new Date().toDateString();
+        if (savedGuardian && savedGuardianDate === today) {
+          setGuardian(JSON.parse(savedGuardian));
+          const savedCompleted = localStorage.getItem("today_completed_v2");
+          if (savedCompleted) setCompletedTasks(new Set(JSON.parse(savedCompleted)));
+        }
+      } catch (err) {
+        console.error("Failed to load cached data:", err);
       }
 
       setPageLoading(false);
@@ -284,23 +294,22 @@ export default function TodayPage() {
         setShowConfetti(true);
         setTimeout(() => setShowConfetti(false), 100);
 
-        // Update streak on server
-        if (userId) {
-          try {
-            const res = await fetch("/api/streak", {
-              method: "POST",
-              headers: { "x-user-id": userId },
-            });
-            if (res.ok) {
-              const updated = await res.json();
-              setStreak(updated);
-              const milestone = getStreakMilestone(updated.current_streak);
-              if (milestone) {
-                setStreakMilestone(milestone.message);
-                setTimeout(() => setStreakMilestone(null), 4000);
-              }
+        // Update streak on server (cookie auth)
+        try {
+          const res = await fetch("/api/streak", { method: "POST" });
+          if (res.ok) {
+            const updated = await res.json();
+            setStreak(updated);
+            const milestone = getStreakMilestone(updated.current_streak);
+            if (milestone) {
+              setStreakMilestone(milestone.message);
+              setTimeout(() => setStreakMilestone(null), 4000);
             }
-          } catch { /* ok */ }
+          } else {
+            console.error("Streak update failed:", res.status);
+          }
+        } catch (err) {
+          console.error("Streak update error:", err);
         }
 
         // Check if task is grade-worthy → show grade log modal
@@ -309,7 +318,7 @@ export default function TodayPage() {
             setGradeLogTask({
               title: taskInfo.title,
               course: taskInfo.course,
-              courseId: "",
+              courseId: "", // course_name is used for lookup on the server
               type: taskInfo.type,
             });
           }, 1500);
@@ -321,14 +330,11 @@ export default function TodayPage() {
   };
 
   const handleGradeLog = async (score: number, maxScore: number) => {
-    if (!gradeLogTask || !userId) return;
+    if (!gradeLogTask) return;
     try {
-      await fetch("/api/grades/log", {
+      const res = await fetch("/api/grades/log", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-user-id": userId,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           course_name: gradeLogTask.course,
           assignment_title: gradeLogTask.title,
@@ -337,19 +343,29 @@ export default function TodayPage() {
           assignment_type: gradeLogTask.type,
         }),
       });
-    } catch { /* ok */ }
+      if (!res.ok) {
+        console.error("Grade log failed:", res.status, await res.text());
+      }
+    } catch (err) {
+      console.error("Grade log error:", err);
+    }
     setGradeLogTask(null);
   };
 
   const dismissRecap = async () => {
-    if (!recap || !userId) return;
+    if (!recap) return;
     try {
-      await fetch("/api/recap", {
+      const res = await fetch("/api/recap", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-user-id": userId },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ recap_id: recap.id }),
       });
-    } catch { /* ok */ }
+      if (!res.ok) {
+        console.error("Recap dismiss failed:", res.status);
+      }
+    } catch (err) {
+      console.error("Recap dismiss error:", err);
+    }
     setRecap(null);
   };
 
@@ -617,7 +633,7 @@ export default function TodayPage() {
 
       {/* Buddy widget */}
       {buddy && buddy.has_partner && (
-        <BuddyWidget data={buddy} userId={userId} />
+        <BuddyWidget data={buddy} />
       )}
 
       {/* Other tasks — collapsed by default */}

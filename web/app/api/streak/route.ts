@@ -1,28 +1,22 @@
-import { createClient } from "@supabase/supabase-js";
-import { NextRequest, NextResponse } from "next/server";
+// Streak management — GET to fetch, POST to update on task completion
+import { NextResponse } from "next/server";
+import { authenticateRequest, isAuthError, createAdminClient } from "@/lib/auth";
 
-const supabase = () =>
-  createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_KEY!
-  );
+export async function GET() {
+  const auth = await authenticateRequest();
+  if (isAuthError(auth)) return auth.response;
 
-// GET — fetch user streak
-export async function GET(request: NextRequest) {
-  const userId = request.headers.get("x-user-id");
-  if (!userId) return NextResponse.json({ error: "Missing user" }, { status: 401 });
-
-  const db = supabase();
-  const { data } = await db
+  const db = createAdminClient();
+  const { data, error } = await db
     .from("user_streaks")
-    .select("*")
-    .eq("user_id", userId)
+    .select("current_streak, longest_streak, last_completed_date, freeze_available, freeze_used_date, weekend_mode")
+    .eq("user_id", auth.userId)
     .single();
 
-  if (!data) {
+  if (error || !data) {
     // Create default streak row
     const defaults = {
-      user_id: userId,
+      user_id: auth.userId,
       current_streak: 0,
       longest_streak: 0,
       last_completed_date: null,
@@ -30,7 +24,10 @@ export async function GET(request: NextRequest) {
       freeze_used_date: null,
       weekend_mode: false,
     };
-    await db.from("user_streaks").insert(defaults);
+    const { error: insertErr } = await db.from("user_streaks").insert(defaults);
+    if (insertErr) {
+      return NextResponse.json({ error: `Failed to create streak: ${insertErr.message}` }, { status: 500 });
+    }
     return NextResponse.json(defaults);
   }
 
@@ -41,10 +38,13 @@ export async function GET(request: NextRequest) {
     monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
     monday.setHours(0, 0, 0, 0);
     if (new Date(data.freeze_used_date) < monday && !data.freeze_available) {
-      await db
+      const { error: updateErr } = await db
         .from("user_streaks")
         .update({ freeze_available: true })
-        .eq("user_id", userId);
+        .eq("user_id", auth.userId);
+      if (updateErr) {
+        console.error("Failed to refresh freeze:", updateErr.message);
+      }
       data.freeze_available = true;
     }
   }
@@ -52,26 +52,25 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(data);
 }
 
-// POST — update streak after task completion
-export async function POST(request: NextRequest) {
-  const userId = request.headers.get("x-user-id");
-  if (!userId) return NextResponse.json({ error: "Missing user" }, { status: 401 });
+export async function POST() {
+  const auth = await authenticateRequest();
+  if (isAuthError(auth)) return auth.response;
 
-  const db = supabase();
+  const db = createAdminClient();
   const today = new Date().toISOString().split("T")[0];
   const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
 
-  let { data: streak } = await db
+  const { data: streak, error: fetchErr } = await db
     .from("user_streaks")
-    .select("*")
-    .eq("user_id", userId)
+    .select("current_streak, longest_streak, last_completed_date, freeze_available, freeze_used_date")
+    .eq("user_id", auth.userId)
     .single();
 
-  if (!streak) {
-    const { data: created } = await db
+  if (fetchErr || !streak) {
+    const { data: created, error: createErr } = await db
       .from("user_streaks")
       .insert({
-        user_id: userId,
+        user_id: auth.userId,
         current_streak: 1,
         longest_streak: 1,
         last_completed_date: today,
@@ -79,10 +78,13 @@ export async function POST(request: NextRequest) {
       })
       .select()
       .single();
+    if (createErr) {
+      return NextResponse.json({ error: `Failed to create streak: ${createErr.message}` }, { status: 500 });
+    }
     return NextResponse.json(created);
   }
 
-  // Already completed today
+  // Already completed today — return current state, no double-increment
   if (streak.last_completed_date === today) {
     return NextResponse.json(streak);
   }
@@ -102,16 +104,18 @@ export async function POST(request: NextRequest) {
   if (gap === 1) {
     newStreak += 1;
   } else if (gap === 2 && freezeAvailable) {
+    // Streak freeze — covers a 1-day gap
     newStreak += 1;
     freezeAvailable = false;
     freezeUsedDate = yesterday;
   } else {
+    // Gap too large, reset
     newStreak = 1;
   }
 
   const longestStreak = Math.max(streak.longest_streak, newStreak);
 
-  const { data: updated } = await db
+  const { data: updated, error: updateErr } = await db
     .from("user_streaks")
     .update({
       current_streak: newStreak,
@@ -121,9 +125,13 @@ export async function POST(request: NextRequest) {
       freeze_used_date: freezeUsedDate,
       updated_at: new Date().toISOString(),
     })
-    .eq("user_id", userId)
+    .eq("user_id", auth.userId)
     .select()
     .single();
+
+  if (updateErr) {
+    return NextResponse.json({ error: `Failed to update streak: ${updateErr.message}` }, { status: 500 });
+  }
 
   return NextResponse.json(updated);
 }

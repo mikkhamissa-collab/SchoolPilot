@@ -4,13 +4,26 @@ import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 const FLASK_URL = process.env.FLASK_BACKEND_URL || "https://schoolpilot-obvu.onrender.com";
+const FLASK_SECRET = process.env.FLASK_SECRET_KEY || "";
+
+// Only allow these Flask endpoint prefixes — prevents open proxy abuse
+const ALLOWED_PATHS = [
+  "/process",
+  "/plan/",
+  "/autopilot/",
+  "/health",
+  "/grades/",
+  "/study/",
+  "/chunk/",
+];
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
   const { path } = await params;
-  // Auth check
+
+  // Auth check via Supabase cookies
   const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,7 +31,7 @@ export async function POST(
     {
       cookies: {
         getAll() { return cookieStore.getAll(); },
-        setAll() {},
+        setAll() { /* read-only in API routes */ },
       },
     }
   );
@@ -28,23 +41,36 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Forward to Flask
+  // Validate the path against allowlist
   const flaskPath = "/" + path.join("/");
+  const isAllowed = ALLOWED_PATHS.some((p) => flaskPath.startsWith(p));
+  if (!isAllowed) {
+    return NextResponse.json({ error: "Invalid endpoint" }, { status: 403 });
+  }
+
   const body = await request.json();
 
   try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (FLASK_SECRET) {
+      headers["X-Proxy-Secret"] = FLASK_SECRET;
+    }
+
     const res = await fetch(`${FLASK_URL}${flaskPath}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(60000), // 60s timeout
     });
 
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });
-  } catch {
-    return NextResponse.json(
-      { error: "Cannot reach backend. Please try again." },
-      { status: 502 }
-    );
+  } catch (err) {
+    const message = err instanceof Error && err.name === "TimeoutError"
+      ? "Backend timed out. Please try again."
+      : "Cannot reach backend. Please try again.";
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 }

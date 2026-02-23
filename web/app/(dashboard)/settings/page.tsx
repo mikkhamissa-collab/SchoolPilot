@@ -104,17 +104,21 @@ export default function SettingsPage() {
         setReminderTime(sPrefs.reminderTime || "8:00 PM");
       }
 
-      // Load streak
+      // Load streak (cookie auth)
       try {
-        const streakRes = await fetch("/api/streak", { headers: { "x-user-id": uid } });
+        const streakRes = await fetch("/api/streak");
         if (streakRes.ok) setStreak(await streakRes.json());
-      } catch { /* ok */ }
+      } catch (err) {
+        console.error("Failed to load streak:", err);
+      }
 
-      // Load buddy
+      // Load buddy (cookie auth)
       try {
-        const buddyRes = await fetch("/api/buddy/status", { headers: { "x-user-id": uid } });
+        const buddyRes = await fetch("/api/buddy/status");
         if (buddyRes.ok) setBuddy(await buddyRes.json());
-      } catch { /* ok */ }
+      } catch (err) {
+        console.error("Failed to load buddy:", err);
+      }
 
       setLoading(false);
     };
@@ -243,15 +247,18 @@ export default function SettingsPage() {
   const generateInvite = async () => {
     setInviteLoading(true);
     try {
-      const res = await fetch("/api/buddy/invite", {
-        method: "POST",
-        headers: { "x-user-id": userId },
-      });
+      const res = await fetch("/api/buddy/invite", { method: "POST" });
       if (res.ok) {
         const data = await res.json();
         setInviteLink(data.invite_link || "");
+      } else {
+        const err = await res.json();
+        setMessage({ type: "error", text: err.error || "Failed to generate invite" });
       }
-    } catch { /* ok */ }
+    } catch (err) {
+      console.error("Generate invite error:", err);
+      setMessage({ type: "error", text: "Network error generating invite" });
+    }
     setInviteLoading(false);
   };
 
@@ -260,7 +267,9 @@ export default function SettingsPage() {
       await navigator.clipboard.writeText(inviteLink);
       setInviteCopied(true);
       setTimeout(() => setInviteCopied(false), 2000);
-    } catch { /* ok */ }
+    } catch (err) {
+      console.error("Clipboard copy failed:", err);
+    }
   };
 
   const acceptInvite = async () => {
@@ -269,20 +278,21 @@ export default function SettingsPage() {
     try {
       const res = await fetch("/api/buddy/accept", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-user-id": userId },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: acceptCode.trim() }),
       });
       if (res.ok) {
         setMessage({ type: "success", text: "Partner connected!" });
         setAcceptCode("");
         // Refresh buddy status
-        const buddyRes = await fetch("/api/buddy/status", { headers: { "x-user-id": userId } });
+        const buddyRes = await fetch("/api/buddy/status");
         if (buddyRes.ok) setBuddy(await buddyRes.json());
       } else {
-        const err = await res.json();
-        setMessage({ type: "error", text: err.error || "Invalid code" });
+        const errData = await res.json();
+        setMessage({ type: "error", text: errData.error || "Invalid code" });
       }
-    } catch {
+    } catch (err) {
+      console.error("Accept invite error:", err);
       setMessage({ type: "error", text: "Failed to connect" });
     }
     setAcceptLoading(false);

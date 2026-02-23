@@ -14,26 +14,32 @@ interface BuddyData {
 
 interface BuddyWidgetProps {
   data: BuddyData;
-  userId: string;
 }
 
-export default function BuddyWidget({ data, userId }: BuddyWidgetProps) {
+export default function BuddyWidget({ data }: BuddyWidgetProps) {
   const [nudgeSent, setNudgeSent] = useState(false);
   const [nudgeLoading, setNudgeLoading] = useState(false);
+  const [nudgeError, setNudgeError] = useState("");
 
   if (!data.has_partner) return null;
 
   const sendNudge = async () => {
     setNudgeLoading(true);
+    setNudgeError("");
     try {
-      await fetch("/api/buddy/nudge", {
-        method: "POST",
-        headers: { "x-user-id": userId },
-      });
-      setNudgeSent(true);
-      setTimeout(() => setNudgeSent(false), 60000);
-    } catch {
-      // silently fail
+      const res = await fetch("/api/buddy/nudge", { method: "POST" });
+      if (res.ok) {
+        setNudgeSent(true);
+        setTimeout(() => setNudgeSent(false), 60000);
+      } else {
+        const err = await res.json();
+        setNudgeError(err.error || "Failed");
+        setTimeout(() => setNudgeError(""), 3000);
+      }
+    } catch (err) {
+      console.error("Nudge error:", err);
+      setNudgeError("Network error");
+      setTimeout(() => setNudgeError(""), 3000);
     }
     setNudgeLoading(false);
   };
@@ -58,6 +64,9 @@ export default function BuddyWidget({ data, userId }: BuddyWidgetProps) {
         )}
         {nudgeSent && (
           <span className="text-xs text-success">Nudge sent!</span>
+        )}
+        {nudgeError && (
+          <span className="text-xs text-error">{nudgeError}</span>
         )}
       </div>
 

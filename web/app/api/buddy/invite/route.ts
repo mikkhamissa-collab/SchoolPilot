@@ -1,24 +1,19 @@
-import { createClient } from "@supabase/supabase-js";
-import { NextRequest, NextResponse } from "next/server";
+// Buddy invite — generate an invite code + link
+import { NextResponse } from "next/server";
+import { randomBytes } from "crypto";
+import { authenticateRequest, isAuthError, createAdminClient, requireEnv } from "@/lib/auth";
 
-const supabase = () =>
-  createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_KEY!
-  );
+export async function POST() {
+  const auth = await authenticateRequest();
+  if (isAuthError(auth)) return auth.response;
 
-// POST — create a buddy invite link
-export async function POST(request: NextRequest) {
-  const userId = request.headers.get("x-user-id");
-  if (!userId) return NextResponse.json({ error: "Missing user" }, { status: 401 });
-
-  const db = supabase();
+  const db = createAdminClient();
 
   // Check for existing active partnership
   const { data: existing } = await db
     .from("accountability_partners")
-    .select("*")
-    .or(`user_id.eq.${userId},partner_id.eq.${userId}`)
+    .select("id")
+    .or(`user_id.eq.${auth.userId},partner_id.eq.${auth.userId}`)
     .eq("status", "active")
     .limit(1)
     .single();
@@ -30,13 +25,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Generate invite code
-  const code = Math.random().toString(36).substring(2, 8);
+  // Generate cryptographically secure invite code
+  const code = randomBytes(6).toString("hex");
 
   const { data, error } = await db
     .from("accountability_partners")
     .insert({
-      user_id: userId,
+      user_id: auth.userId,
       invite_code: code,
       status: "pending",
     })
@@ -44,11 +39,15 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: `Failed to create invite: ${error.message}` }, { status: 500 });
   }
 
-  const baseUrl =
-    process.env.NEXT_PUBLIC_APP_URL || "https://schoolpilot.co";
+  let baseUrl: string;
+  try {
+    baseUrl = requireEnv("NEXT_PUBLIC_APP_URL");
+  } catch {
+    baseUrl = "https://schoolpilot.co";
+  }
   const inviteLink = `${baseUrl}/auth/login?buddy=${code}`;
 
   return NextResponse.json({ invite_code: code, invite_link: inviteLink, id: data.id });
