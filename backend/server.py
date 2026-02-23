@@ -15,6 +15,7 @@ import anthropic
 import resend
 
 from grades import GradeCalculator
+from plan_v2 import register_plan_v2_routes
 
 # ---------------------------------------------------------------------------
 # Config
@@ -1662,6 +1663,11 @@ def analyze_mastery():
         'ready_for_test': overall >= 80 and len(weak_spots) == 0
     })
 
+
+# ---------------------------------------------------------------------------
+# Register v2 plan routes (grade-aware planning)
+# ---------------------------------------------------------------------------
+register_plan_v2_routes(app)
 
 # ---------------------------------------------------------------------------
 # Entry point

@@ -14,12 +14,33 @@ interface EditingUnits {
   units: string[];
 }
 
+interface StreakData {
+  current_streak: number;
+  longest_streak: number;
+  freeze_available: boolean;
+  last_completed_date: string | null;
+}
+
+interface BuddyData {
+  has_partner: boolean;
+  partner_name?: string;
+  partner_streak?: number;
+  partner_completed_today?: boolean;
+  my_streak?: number;
+  my_completed_today?: boolean;
+  pending_invite?: string | null;
+}
+
 export default function SettingsPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [editingUnits, setEditingUnits] = useState<EditingUnits | null>(null);
+
+  // Target grades per course
+  const [targetGrades, setTargetGrades] = useState<Record<string, number>>({});
+  const [savingTargets, setSavingTargets] = useState(false);
 
   // Autopilot settings
   const [autoEmailEnabled, setAutoEmailEnabled] = useState(false);
@@ -28,13 +49,34 @@ export default function SettingsPage() {
   const [studyHours, setStudyHours] = useState(2);
   const [userEmail, setUserEmail] = useState("");
 
+  // Stickiness settings
+  const [userId, setUserId] = useState("");
+  const [streak, setStreak] = useState<StreakData | null>(null);
+  const [buddy, setBuddy] = useState<BuddyData | null>(null);
+  const [weekendMode, setWeekendMode] = useState(false);
+  const [dailyReminder, setDailyReminder] = useState(true);
+  const [reminderTime, setReminderTime] = useState("8:00 PM");
+  const [inviteLink, setInviteLink] = useState("");
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteCopied, setInviteCopied] = useState(false);
+  const [acceptCode, setAcceptCode] = useState("");
+  const [acceptLoading, setAcceptLoading] = useState(false);
+
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      const uid = user.id;
+      setUserId(uid);
       setUserEmail(user.email || "");
+
+      // Load target grades from user metadata
+      const savedTargets = user.user_metadata?.target_grades;
+      if (savedTargets && typeof savedTargets === "object") {
+        setTargetGrades(savedTargets);
+      }
 
       const { data } = await supabase
         .from("courses")
@@ -53,10 +95,41 @@ export default function SettingsPage() {
         setAutoEmailTime(prefs.autoEmailTime || "6:30 AM");
       }
 
+      // Load stickiness preferences from localStorage
+      const savedSticky = localStorage.getItem("stickiness_prefs");
+      if (savedSticky) {
+        const sPrefs = JSON.parse(savedSticky);
+        setWeekendMode(sPrefs.weekendMode || false);
+        setDailyReminder(sPrefs.dailyReminder !== false);
+        setReminderTime(sPrefs.reminderTime || "8:00 PM");
+      }
+
+      // Load streak
+      try {
+        const streakRes = await fetch("/api/streak", { headers: { "x-user-id": uid } });
+        if (streakRes.ok) setStreak(await streakRes.json());
+      } catch { /* ok */ }
+
+      // Load buddy
+      try {
+        const buddyRes = await fetch("/api/buddy/status", { headers: { "x-user-id": uid } });
+        if (buddyRes.ok) setBuddy(await buddyRes.json());
+      } catch { /* ok */ }
+
       setLoading(false);
     };
     load();
   }, []);
+
+  const saveStickyPrefs = (updates: Record<string, unknown>) => {
+    const current = {
+      weekendMode,
+      dailyReminder,
+      reminderTime,
+      ...updates,
+    };
+    localStorage.setItem("stickiness_prefs", JSON.stringify(current));
+  };
 
   const updateImportance = async (courseId: string, importance: number) => {
     setSaving(courseId);
@@ -167,6 +240,55 @@ export default function SettingsPage() {
     setSaving(null);
   };
 
+  const generateInvite = async () => {
+    setInviteLoading(true);
+    try {
+      const res = await fetch("/api/buddy/invite", {
+        method: "POST",
+        headers: { "x-user-id": userId },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setInviteLink(data.invite_link || "");
+      }
+    } catch { /* ok */ }
+    setInviteLoading(false);
+  };
+
+  const copyInvite = async () => {
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setInviteCopied(true);
+      setTimeout(() => setInviteCopied(false), 2000);
+    } catch { /* ok */ }
+  };
+
+  const acceptInvite = async () => {
+    if (!acceptCode.trim()) return;
+    setAcceptLoading(true);
+    try {
+      const res = await fetch("/api/buddy/accept", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-user-id": userId },
+        body: JSON.stringify({ code: acceptCode.trim() }),
+      });
+      if (res.ok) {
+        setMessage({ type: "success", text: "Partner connected!" });
+        setAcceptCode("");
+        // Refresh buddy status
+        const buddyRes = await fetch("/api/buddy/status", { headers: { "x-user-id": userId } });
+        if (buddyRes.ok) setBuddy(await buddyRes.json());
+      } else {
+        const err = await res.json();
+        setMessage({ type: "error", text: err.error || "Invalid code" });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Failed to connect" });
+    }
+    setAcceptLoading(false);
+    setTimeout(() => setMessage(null), 3000);
+  };
+
   if (loading) {
     return (
       <div className="max-w-2xl space-y-4">
@@ -201,12 +323,213 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Class Importance Ranking */}
+      {/* ================================================================= */}
+      {/* STREAK & MOTIVATION */}
+      {/* ================================================================= */}
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-lg font-semibold text-white mb-1">🔥 Streaks</h3>
+          <p className="text-text-muted text-sm">
+            Complete your #1 priority task each day to keep your streak alive.
+          </p>
+        </div>
+
+        <div className="p-5 rounded-xl bg-bg-card border border-border space-y-5">
+          {/* Streak stats */}
+          <div className="flex gap-4">
+            <div className="flex-1 text-center p-3 rounded-lg bg-bg-dark">
+              <div className="text-2xl font-bold text-warning">{streak?.current_streak || 0}</div>
+              <div className="text-text-muted text-xs mt-0.5">Current Streak</div>
+            </div>
+            <div className="flex-1 text-center p-3 rounded-lg bg-bg-dark">
+              <div className="text-2xl font-bold text-accent">{streak?.longest_streak || 0}</div>
+              <div className="text-text-muted text-xs mt-0.5">Longest Streak</div>
+            </div>
+            <div className="flex-1 text-center p-3 rounded-lg bg-bg-dark">
+              <div className="text-2xl font-bold text-white">
+                {streak?.freeze_available ? "✓" : "✗"}
+              </div>
+              <div className="text-text-muted text-xs mt-0.5">Freeze Ready</div>
+            </div>
+          </div>
+
+          {/* Weekend mode */}
+          <div className="flex items-center justify-between pt-3 border-t border-border/50">
+            <div>
+              <div className="text-white font-medium text-sm">Weekend Mode</div>
+              <div className="text-text-muted text-xs">Weekends don&apos;t break your streak</div>
+            </div>
+            <button
+              onClick={() => {
+                const next = !weekendMode;
+                setWeekendMode(next);
+                saveStickyPrefs({ weekendMode: next });
+              }}
+              className={`w-12 h-6 rounded-full transition-colors cursor-pointer relative ${
+                weekendMode ? "bg-accent" : "bg-bg-dark border border-border"
+              }`}
+            >
+              <span
+                className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
+                  weekendMode ? "left-7" : "left-1"
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ================================================================= */}
+      {/* ACCOUNTABILITY PARTNER */}
+      {/* ================================================================= */}
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-lg font-semibold text-white mb-1">👥 Accountability Partner</h3>
+          <p className="text-text-muted text-sm">
+            Pair up with a friend. See each other&apos;s streaks and nudge them when they slack.
+          </p>
+        </div>
+
+        <div className="p-5 rounded-xl bg-bg-card border border-border space-y-4">
+          {buddy?.has_partner ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🤝</span>
+                <div>
+                  <div className="text-white font-medium">{buddy.partner_name}</div>
+                  <div className="text-text-muted text-xs">Your accountability partner</div>
+                </div>
+              </div>
+              <div className="flex gap-3 text-sm">
+                <div className="flex-1 p-2 rounded-lg bg-bg-dark text-center">
+                  <div className="text-warning font-bold">🔥 {buddy.partner_streak || 0}</div>
+                  <div className="text-text-muted text-xs">Their streak</div>
+                </div>
+                <div className="flex-1 p-2 rounded-lg bg-bg-dark text-center">
+                  <div className="text-accent font-bold">🔥 {buddy.my_streak || 0}</div>
+                  <div className="text-text-muted text-xs">Your streak</div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Generate invite */}
+              <div>
+                <div className="text-white text-sm font-medium mb-2">Invite a friend</div>
+                {inviteLink ? (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={inviteLink}
+                      className="flex-1 px-3 py-2 rounded-lg bg-bg-dark border border-border text-white text-sm truncate"
+                    />
+                    <button
+                      onClick={copyInvite}
+                      className="px-3 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors cursor-pointer"
+                    >
+                      {inviteCopied ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={generateInvite}
+                    disabled={inviteLoading}
+                    className="w-full py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {inviteLoading ? "Generating..." : "Generate Invite Link"}
+                  </button>
+                )}
+              </div>
+
+              {/* Accept invite */}
+              <div className="pt-3 border-t border-border/50">
+                <div className="text-white text-sm font-medium mb-2">Have a code?</div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Paste invite code"
+                    value={acceptCode}
+                    onChange={(e) => setAcceptCode(e.target.value)}
+                    className="flex-1 px-3 py-2 rounded-lg bg-bg-dark border border-border text-white placeholder:text-text-muted text-sm focus:outline-none focus:border-accent"
+                  />
+                  <button
+                    onClick={acceptInvite}
+                    disabled={acceptLoading || !acceptCode.trim()}
+                    className="px-4 py-2 rounded-lg bg-success/20 text-success text-sm font-medium hover:bg-success/30 transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {acceptLoading ? "..." : "Join"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ================================================================= */}
+      {/* DAILY REMINDERS */}
+      {/* ================================================================= */}
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-lg font-semibold text-white mb-1">🔔 Daily Reminders</h3>
+          <p className="text-text-muted text-sm">
+            Get a nudge if you haven&apos;t completed your tasks for the day.
+          </p>
+        </div>
+
+        <div className="p-5 rounded-xl bg-bg-card border border-border space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-white font-medium text-sm">Evening Reminder</div>
+              <div className="text-text-muted text-xs">Reminds you to finish your priority task</div>
+            </div>
+            <button
+              onClick={() => {
+                const next = !dailyReminder;
+                setDailyReminder(next);
+                saveStickyPrefs({ dailyReminder: next });
+              }}
+              className={`w-12 h-6 rounded-full transition-colors cursor-pointer relative ${
+                dailyReminder ? "bg-accent" : "bg-bg-dark border border-border"
+              }`}
+            >
+              <span
+                className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
+                  dailyReminder ? "left-7" : "left-1"
+                }`}
+              />
+            </button>
+          </div>
+
+          {dailyReminder && (
+            <div className="pt-3 border-t border-border/50">
+              <label className="text-text-secondary text-sm block mb-2">Reminder Time</label>
+              <select
+                value={reminderTime}
+                onChange={(e) => {
+                  setReminderTime(e.target.value);
+                  saveStickyPrefs({ reminderTime: e.target.value });
+                }}
+                className="w-full px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-white text-sm focus:outline-none focus:border-accent"
+              >
+                {["5:00 PM", "6:00 PM", "7:00 PM", "8:00 PM", "9:00 PM", "10:00 PM"].map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ================================================================= */}
+      {/* CLASS IMPORTANCE */}
+      {/* ================================================================= */}
       <div className="space-y-4">
         <div>
           <h3 className="text-lg font-semibold text-white mb-1">Class Importance</h3>
           <p className="text-text-muted text-sm">
-            Rank your classes by personal importance. Higher importance classes will be prioritized in "Most Pressing" and study recommendations.
+            Rank your classes by personal importance. Higher importance classes will be prioritized in &ldquo;Most Pressing&rdquo; and study recommendations.
           </p>
         </div>
 
@@ -361,6 +684,67 @@ export default function SettingsPage() {
         )}
       </div>
 
+      {/* Target Grades */}
+      {courses.length > 0 && (
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-lg font-semibold text-white mb-1">🎯 Target Grades</h3>
+            <p className="text-text-muted text-sm">
+              Set your target grade per class. Grade Guardian will alert you when you&apos;re at risk of dropping below these targets.
+            </p>
+          </div>
+
+          <div className="p-5 rounded-xl bg-bg-card border border-border space-y-4">
+            {courses.map((course) => {
+              const currentTarget = targetGrades[course.name] || 90;
+              return (
+                <div key={course.id} className="flex items-center justify-between gap-4">
+                  <span className="text-white text-sm font-medium truncate flex-1">{course.name}</span>
+                  <div className="flex items-center gap-2">
+                    {[90, 85, 80, 75, 70].map((pct) => (
+                      <button
+                        key={pct}
+                        onClick={() => {
+                          setTargetGrades({ ...targetGrades, [course.name]: pct });
+                        }}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                          currentTarget === pct
+                            ? "bg-accent text-white"
+                            : "bg-bg-dark border border-border text-text-muted hover:border-accent/30"
+                        }`}
+                      >
+                        {pct}%
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+
+            <button
+              onClick={async () => {
+                setSavingTargets(true);
+                const supabase = createClient();
+                const { error: updateError } = await supabase.auth.updateUser({
+                  data: { target_grades: targetGrades },
+                });
+                if (updateError) {
+                  setMessage({ type: "error", text: updateError.message });
+                } else {
+                  setMessage({ type: "success", text: "Target grades saved!" });
+                  setTimeout(() => setMessage(null), 2000);
+                }
+                setSavingTargets(false);
+              }}
+              disabled={savingTargets}
+              className="w-full py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {savingTargets ? "Saving..." : "Save Target Grades"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Daily Autopilot Settings */}
       <div className="space-y-4">
         <div>
@@ -487,7 +871,7 @@ export default function SettingsPage() {
         <div className="mt-4 flex items-center gap-4 text-xs text-text-muted">
           <a href="https://schoolpilot.co" className="hover:text-accent transition-colors">Website</a>
           <span>•</span>
-          <span>v2.1.0</span>
+          <span>v2.2.0</span>
         </div>
       </div>
     </div>

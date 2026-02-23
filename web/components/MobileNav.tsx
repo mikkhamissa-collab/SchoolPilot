@@ -4,11 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navItems = [
-  { href: "/today", label: "Today", icon: "⚡" },
-  { href: "/dashboard", label: "Home", icon: "🏠" },
-  { href: "/focus", label: "Focus", icon: "🎯" },
+  { href: "/today", label: "Today", icon: "🛡️" },
   { href: "/grades", label: "Grades", icon: "📊" },
-  { href: "/study", label: "Study", icon: "📖" },
+  { href: "/settings", label: "Settings", icon: "⚙️" },
 ];
 
 export default function MobileNav() {

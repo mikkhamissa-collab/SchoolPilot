@@ -3,28 +3,58 @@
 import { createClient } from "@/lib/supabase-client";
 import { apiFetch } from "@/lib/api";
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import Confetti from "@/components/Confetti";
+import ShareCard from "@/components/ShareCard";
+import StreakBadge from "@/components/StreakBadge";
+import GradeLogModal from "@/components/GradeLogModal";
+import WeeklyRecapModal from "@/components/WeeklyRecapModal";
+import BuddyWidget from "@/components/BuddyWidget";
+import { getStreakMilestone } from "@/lib/streak";
 
-interface ScheduleTask {
-  time: string;
+// =============================================================================
+// TYPES
+// =============================================================================
+
+interface ActionRequired {
   title: string;
-  details: string;
-  completed?: boolean;
+  course: string;
+  type: string;
+  due_in: string;
+  current_grade: number;
+  target_grade: number;
+  buffer: number;
+  risk_level: string;
+  danger_score: string;
+  safe_score: string;
+  time_needed: string;
+  why_urgent: string;
 }
 
-interface UrgentTask {
+interface OtherPriority {
   title: string;
-  details: string;
-  completed?: boolean;
+  course: string;
+  due_in: string;
+  time_needed: string;
+  urgency: "high" | "medium" | "low";
 }
 
-interface AutopilotPlan {
-  greeting: string;
-  mission: string;
-  urgent: UrgentTask[];
-  schedule: ScheduleTask[];
-  tip: string;
-  done_when: string;
+interface GradeAlert {
+  course: string;
+  current: number;
+  threshold: number;
+  thresholdName: string;
+  buffer: number;
+  risk: "safe" | "watch" | "danger";
+}
+
+interface GuardianData {
+  action_required: ActionRequired | null;
+  other_priorities: OtherPriority[];
+  on_track: Array<{ course: string; grade: number; target: number; status: string }>;
+  headline: string;
+  motivation: string;
+  gradeAlerts?: GradeAlert[];
 }
 
 interface Assignment {
@@ -37,75 +67,184 @@ interface Assignment {
   isOverdue?: boolean;
 }
 
-interface ScrapedData {
-  upcoming: Assignment[];
-  overdue: Assignment[];
+interface CourseGrade {
+  course: string;
+  current: number;
 }
 
+interface StreakData {
+  current_streak: number;
+  longest_streak: number;
+  freeze_available: boolean;
+  last_completed_date: string | null;
+}
+
+interface BuddyData {
+  has_partner: boolean;
+  partner_name?: string;
+  partner_streak?: number;
+  partner_completed_today?: boolean;
+  my_streak?: number;
+  my_completed_today?: boolean;
+  pending_invite?: string | null;
+}
+
+interface RecapData {
+  id: string;
+  week_start: string;
+  week_end: string;
+  tasks_completed: number;
+  grades_logged: number;
+  streak_days: number;
+  insight_text: string;
+  win_text: string;
+  preview_text: string;
+}
+
+// =============================================================================
+// GRADE KEYWORDS — triggers the "log your grade" modal
+// =============================================================================
+
+const GRADE_KEYWORDS = [
+  "assessment",
+  "test",
+  "quiz",
+  "exam",
+  "assignment",
+  "project",
+  "paper",
+  "essay",
+  "lab report",
+];
+
+function isGradeWorthy(type?: string, title?: string): boolean {
+  const text = `${type || ""} ${title || ""}`.toLowerCase();
+  return GRADE_KEYWORDS.some((kw) => text.includes(kw));
+}
+
+// =============================================================================
+// COMPONENT
+// =============================================================================
+
 export default function TodayPage() {
-  const [plan, setPlan] = useState<AutopilotPlan | null>(null);
+  const router = useRouter();
+  const [guardian, setGuardian] = useState<GuardianData | null>(null);
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [error, setError] = useState("");
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [overdue, setOverdue] = useState<Assignment[]>([]);
+  const [grades, setGrades] = useState<CourseGrade[]>([]);
+  const [targetGrades, setTargetGrades] = useState<Record<string, number>>({});
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set());
-  const [userEmail, setUserEmail] = useState("");
   const [userName, setUserName] = useState("");
-  const [sendingEmail, setSendingEmail] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
+  const [userId, setUserId] = useState("");
   const [showConfetti, setShowConfetti] = useState(false);
+  const [showOtherTasks, setShowOtherTasks] = useState(false);
 
-  // Settings
-  const [wakeTime, setWakeTime] = useState("7:00 AM");
-  const [studyHours, setStudyHours] = useState(2);
-  const [autoEmailEnabled, setAutoEmailEnabled] = useState(false);
-  const [autoEmailTime, setAutoEmailTime] = useState("6:30 AM");
+  // Stickiness features
+  const [streak, setStreak] = useState<StreakData | null>(null);
+  const [streakMilestone, setStreakMilestone] = useState<string | null>(null);
+  const [gradeLogTask, setGradeLogTask] = useState<{
+    title: string;
+    course: string;
+    courseId: string;
+    type: string;
+  } | null>(null);
+  const [buddy, setBuddy] = useState<BuddyData | null>(null);
+  const [recap, setRecap] = useState<RecapData | null>(null);
 
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
 
-      setUserEmail(user.email || "");
+      const uid = user.id;
+      setUserId(uid);
       setUserName(user.user_metadata?.full_name?.split(" ")[0] || "");
 
-      // Get latest scraped assignments
+      const savedTargets = user.user_metadata?.target_grades;
+      if (savedTargets && typeof savedTargets === "object") {
+        setTargetGrades(savedTargets);
+      }
+
+      // Load assignments
       const { data: scraped } = await supabase
         .from("scraped_assignments")
         .select("assignments")
-        .eq("user_id", user.id)
+        .eq("user_id", uid)
         .order("scraped_at", { ascending: false })
         .limit(1)
         .single();
 
       if (scraped?.assignments) {
-        const data = scraped.assignments as ScrapedData;
+        const data = scraped.assignments as {
+          upcoming: Assignment[];
+          overdue: Assignment[];
+        };
         setAssignments(data.upcoming || []);
         setOverdue(data.overdue || []);
       }
 
-      // Load saved preferences from localStorage
-      const savedPrefs = localStorage.getItem("autopilot_prefs");
-      if (savedPrefs) {
-        const prefs = JSON.parse(savedPrefs);
-        setWakeTime(prefs.wakeTime || "7:00 AM");
-        setStudyHours(prefs.studyHours || 2);
-        setAutoEmailEnabled(prefs.autoEmailEnabled || false);
-        setAutoEmailTime(prefs.autoEmailTime || "6:30 AM");
+      // Load grades
+      const { data: courses } = await supabase
+        .from("courses")
+        .select("id, name")
+        .eq("user_id", uid);
+
+      if (courses && courses.length > 0) {
+        const { data: gradeEntries } = await supabase
+          .from("grades")
+          .select("course_id, score, max_score")
+          .in("course_id", courses.map((c) => c.id));
+
+        if (gradeEntries && gradeEntries.length > 0) {
+          const courseGrades: CourseGrade[] = [];
+          for (const course of courses) {
+            const entries = gradeEntries.filter((g) => g.course_id === course.id);
+            if (entries.length > 0) {
+              const totalScore = entries.reduce((s, g) => s + (g.score || 0), 0);
+              const totalMax = entries.reduce((s, g) => s + (g.max_score || 100), 0);
+              const pct = totalMax > 0 ? (totalScore / totalMax) * 100 : 0;
+              courseGrades.push({ course: course.name, current: Math.round(pct * 10) / 10 });
+            }
+          }
+          setGrades(courseGrades);
+        }
       }
 
-      // Load today's plan from localStorage if exists
-      const savedPlan = localStorage.getItem("today_plan");
-      const savedDate = localStorage.getItem("today_plan_date");
-      const today = new Date().toDateString();
-      if (savedPlan && savedDate === today) {
-        setPlan(JSON.parse(savedPlan));
-        const savedCompleted = localStorage.getItem("today_completed");
-        if (savedCompleted) {
-          setCompletedTasks(new Set(JSON.parse(savedCompleted)));
+      // Load streak
+      try {
+        const streakRes = await fetch("/api/streak", { headers: { "x-user-id": uid } });
+        if (streakRes.ok) setStreak(await streakRes.json());
+      } catch { /* ok */ }
+
+      // Load buddy
+      try {
+        const buddyRes = await fetch("/api/buddy/status", { headers: { "x-user-id": uid } });
+        if (buddyRes.ok) setBuddy(await buddyRes.json());
+      } catch { /* ok */ }
+
+      // Load weekly recap
+      try {
+        const recapRes = await fetch("/api/recap", { headers: { "x-user-id": uid } });
+        if (recapRes.ok) {
+          const recapData = await recapRes.json();
+          if (recapData.recap) setRecap(recapData.recap);
         }
+      } catch { /* ok */ }
+
+      // Load cached guardian
+      const savedGuardian = localStorage.getItem("guardian_data");
+      const savedGuardianDate = localStorage.getItem("guardian_data_date");
+      const today = new Date().toDateString();
+      if (savedGuardian && savedGuardianDate === today) {
+        setGuardian(JSON.parse(savedGuardian));
+        const savedCompleted = localStorage.getItem("today_completed_v2");
+        if (savedCompleted) setCompletedTasks(new Set(JSON.parse(savedCompleted)));
       }
 
       setPageLoading(false);
@@ -116,373 +255,425 @@ export default function TodayPage() {
   const generatePlan = useCallback(async () => {
     setLoading(true);
     setError("");
-
     try {
-      const result = await apiFetch<AutopilotPlan>("autopilot/generate", {
-        assignments,
-        overdue,
-        available_study_hours: studyHours,
-        wake_time: wakeTime,
-        name: userName,
+      const result = await apiFetch<GuardianData>("plan/analyze", {
+        assignments, overdue, grades, targetGrades, name: userName,
       });
-
-      setPlan(result);
+      setGuardian(result);
       setCompletedTasks(new Set());
-
-      // Save to localStorage
-      localStorage.setItem("today_plan", JSON.stringify(result));
-      localStorage.setItem("today_plan_date", new Date().toDateString());
-      localStorage.setItem("today_completed", JSON.stringify([]));
+      const today = new Date().toDateString();
+      localStorage.setItem("guardian_data", JSON.stringify(result));
+      localStorage.setItem("guardian_data_date", today);
+      localStorage.setItem("today_completed_v2", JSON.stringify([]));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to generate plan");
     } finally {
       setLoading(false);
     }
-  }, [assignments, overdue, studyHours, wakeTime, userName]);
+  }, [assignments, overdue, grades, targetGrades, userName]);
 
-  const toggleTask = (taskId: string) => {
-    const newCompleted = new Set(completedTasks);
-    if (newCompleted.has(taskId)) {
-      newCompleted.delete(taskId);
+  const toggleTask = async (taskId: string, taskInfo?: { title: string; course: string; type: string }) => {
+    const next = new Set(completedTasks);
+    if (next.has(taskId)) {
+      next.delete(taskId);
     } else {
-      newCompleted.add(taskId);
-    }
-    setCompletedTasks(newCompleted);
-    localStorage.setItem("today_completed", JSON.stringify([...newCompleted]));
+      next.add(taskId);
 
-    // Trigger confetti when all tasks completed
-    if (plan) {
-      const totalTasks = (plan.urgent?.length || 0) + (plan.schedule?.length || 0);
-      if (newCompleted.size === totalTasks && totalTasks > 0) {
+      // Priority task completed — update streak
+      if (taskId === "priority") {
         setShowConfetti(true);
         setTimeout(() => setShowConfetti(false), 100);
+
+        // Update streak on server
+        if (userId) {
+          try {
+            const res = await fetch("/api/streak", {
+              method: "POST",
+              headers: { "x-user-id": userId },
+            });
+            if (res.ok) {
+              const updated = await res.json();
+              setStreak(updated);
+              const milestone = getStreakMilestone(updated.current_streak);
+              if (milestone) {
+                setStreakMilestone(milestone.message);
+                setTimeout(() => setStreakMilestone(null), 4000);
+              }
+            }
+          } catch { /* ok */ }
+        }
+
+        // Check if task is grade-worthy → show grade log modal
+        if (taskInfo && isGradeWorthy(taskInfo.type, taskInfo.title)) {
+          setTimeout(() => {
+            setGradeLogTask({
+              title: taskInfo.title,
+              course: taskInfo.course,
+              courseId: "",
+              type: taskInfo.type,
+            });
+          }, 1500);
+        }
       }
     }
+    setCompletedTasks(next);
+    localStorage.setItem("today_completed_v2", JSON.stringify([...next]));
   };
 
-  const sendEmailNow = async () => {
-    if (!userEmail) {
-      setError("No email found");
-      return;
-    }
-
-    setSendingEmail(true);
-    setError("");
-
+  const handleGradeLog = async (score: number, maxScore: number) => {
+    if (!gradeLogTask || !userId) return;
     try {
-      await apiFetch("autopilot/send", {
-        email: userEmail,
-        assignments,
-        overdue,
-        available_study_hours: studyHours,
-        wake_time: wakeTime,
-        name: userName,
+      await fetch("/api/grades/log", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-id": userId,
+        },
+        body: JSON.stringify({
+          course_name: gradeLogTask.course,
+          assignment_title: gradeLogTask.title,
+          score,
+          max_score: maxScore,
+          assignment_type: gradeLogTask.type,
+        }),
       });
-      setEmailSent(true);
-      setTimeout(() => setEmailSent(false), 5000);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to send email");
-    } finally {
-      setSendingEmail(false);
-    }
+    } catch { /* ok */ }
+    setGradeLogTask(null);
   };
 
-  const savePreferences = () => {
-    localStorage.setItem("autopilot_prefs", JSON.stringify({
-      wakeTime,
-      studyHours,
-      autoEmailEnabled,
-      autoEmailTime,
-    }));
+  const dismissRecap = async () => {
+    if (!recap || !userId) return;
+    try {
+      await fetch("/api/recap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-user-id": userId },
+        body: JSON.stringify({ recap_id: recap.id }),
+      });
+    } catch { /* ok */ }
+    setRecap(null);
   };
 
-  const totalTasks = (plan?.schedule?.length || 0) + (plan?.urgent?.length || 0);
-  const completedCount = completedTasks.size;
-  const progressPercent = totalTasks > 0 ? (completedCount / totalTasks) * 100 : 0;
+  const startStudySession = (action: ActionRequired) => {
+    const params = new URLSearchParams({
+      assignment: action.title,
+      course: action.course,
+      type: action.type,
+      grade: String(action.current_grade),
+      target: String(action.target_grade),
+    });
+    router.push(`/session?${params.toString()}`);
+  };
 
-  const now = new Date();
-  const greeting = now.getHours() < 12 ? "Good morning" : now.getHours() < 17 ? "Good afternoon" : "Good evening";
-  const todayStr = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  const gradeAlerts = guardian?.gradeAlerts || [];
+  const dangerGrades = gradeAlerts.filter((g) => g.risk === "danger");
+  const topGrade = grades.length > 0
+    ? [...grades].sort((a, b) => b.current - a.current)[0]
+    : null;
+
+  // =========================================================================
+  // LOADING
+  // =========================================================================
 
   if (pageLoading) {
     return (
-      <div className="max-w-3xl space-y-4">
-        <div className="h-8 w-48 bg-bg-card rounded animate-pulse" />
-        <div className="h-64 bg-bg-card rounded-xl animate-pulse" />
+      <div className="max-w-lg mx-auto p-6 space-y-6">
+        <div className="h-8 w-48 bg-bg-card rounded-lg animate-pulse" />
+        <div className="h-64 bg-bg-card rounded-2xl animate-pulse" />
+        <div className="h-12 bg-bg-card rounded-xl animate-pulse" />
       </div>
     );
   }
 
+  // =========================================================================
+  // EMPTY STATE
+  // =========================================================================
+
+  if (!guardian && assignments.length === 0 && overdue.length === 0) {
+    return (
+      <div className="max-w-lg mx-auto p-6 pt-12 text-center space-y-6">
+        <div className="text-5xl">🛡️</div>
+        <h1 className="text-2xl font-bold text-white">No Assignments Yet</h1>
+        <p className="text-text-muted text-sm leading-relaxed">
+          Sync your assignments from Teamie using the SchoolPilot extension,
+          then come back here.
+        </p>
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // MAIN VIEW
+  // =========================================================================
+
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="max-w-lg mx-auto p-6 space-y-5">
       <Confetti trigger={showConfetti} />
 
+      {/* Grade Log Modal */}
+      {gradeLogTask && (
+        <GradeLogModal
+          taskTitle={gradeLogTask.title}
+          courseName={gradeLogTask.course}
+          courseId={gradeLogTask.courseId}
+          onSave={handleGradeLog}
+          onSkip={() => setGradeLogTask(null)}
+        />
+      )}
+
+      {/* Weekly Recap Modal */}
+      {recap && (
+        <WeeklyRecapModal
+          data={{
+            weekLabel: `${new Date(recap.week_start).toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${new Date(recap.week_end).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`,
+            tasksCompleted: recap.tasks_completed,
+            streakDays: recap.streak_days,
+            gradesLogged: recap.grades_logged,
+            insight: recap.insight_text,
+            win: recap.win_text,
+            preview: recap.preview_text,
+          }}
+          onDismiss={dismissRecap}
+          onShare={() => {
+            dismissRecap();
+          }}
+        />
+      )}
+
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <header className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-white">
-            {greeting}{userName ? `, ${userName}` : ""}! 👋
-          </h2>
-          <p className="text-text-muted text-sm mt-1">{todayStr}</p>
+          <h1 className="text-2xl font-bold text-white">
+            {userName ? `Hey ${userName}.` : "Today"}
+          </h1>
+          <p className="text-text-muted text-sm mt-0.5">
+            {guardian?.headline || "Here\u2019s what matters today."}
+          </p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={sendEmailNow}
-            disabled={sendingEmail || !plan}
-            className="px-4 py-2 rounded-lg bg-bg-card border border-border text-text-secondary text-sm hover:text-white transition-colors cursor-pointer disabled:opacity-50"
-          >
-            {sendingEmail ? "Sending..." : emailSent ? "✓ Sent!" : "📧 Email Plan"}
-          </button>
+        <div className="flex items-center gap-2">
+          {streak && streak.current_streak > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-warning/10 text-warning text-xs font-medium">
+              🔥 {streak.current_streak}
+            </span>
+          )}
+          {completedTasks.size > 0 && (
+            <ShareCard
+              userName={userName}
+              tasksCompleted={completedTasks.size}
+              streak={streak?.current_streak}
+              topCourse={topGrade?.course}
+              grade={topGrade ? Math.round(topGrade.current) : undefined}
+            />
+          )}
           <button
             onClick={generatePlan}
             disabled={loading}
-            className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors cursor-pointer disabled:opacity-50"
+            className="p-2 rounded-lg text-text-muted hover:text-white hover:bg-bg-card transition-colors"
+            title="Refresh"
           >
-            {loading ? "Generating..." : plan ? "🔄 Refresh" : "⚡ Generate Plan"}
+            <svg className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
           </button>
         </div>
-      </div>
+      </header>
+
+      {/* Streak milestone toast */}
+      {streakMilestone && (
+        <div className="p-3 rounded-xl bg-warning/10 border border-warning/20 text-center text-sm text-white font-medium animate-pulse">
+          🔥 {streakMilestone}
+        </div>
+      )}
 
       {error && (
         <div className="p-3 rounded-lg bg-error/10 text-error text-sm">{error}</div>
       )}
 
-      {/* No assignments state */}
-      {assignments.length === 0 && overdue.length === 0 && !plan && (
-        <div className="p-8 rounded-xl bg-bg-card border border-border text-center">
-          <div className="text-4xl mb-4">🚀</div>
-          <h3 className="text-white font-semibold mb-2">Let&apos;s Get You Set Up</h3>
-          <p className="text-text-muted text-sm mb-4">
-            Sync your assignments and I&apos;ll build your daily game plan. Takes 30 seconds.
-          </p>
-          <p className="text-text-muted text-xs">
-            Teamie → SchoolPilot extension → Sync
-          </p>
-        </div>
+      {/* Streak badge (full, shown when no guardian yet) */}
+      {streak && !guardian && streak.current_streak > 0 && (
+        <StreakBadge
+          streak={streak.current_streak}
+          freezeAvailable={streak.freeze_available}
+        />
       )}
 
-      {/* Quick Stats */}
-      {(assignments.length > 0 || overdue.length > 0) && !plan && (
-        <div className="grid grid-cols-3 gap-4">
-          <div className="p-4 rounded-xl bg-bg-card border border-border text-center">
-            <div className="text-3xl font-bold text-error">{overdue.length}</div>
-            <div className="text-text-muted text-xs mt-1">Overdue</div>
-          </div>
-          <div className="p-4 rounded-xl bg-bg-card border border-border text-center">
-            <div className="text-3xl font-bold text-warning">{assignments.filter(a => a.date && parseInt(a.date) <= new Date().getDate() + 1).length}</div>
-            <div className="text-text-muted text-xs mt-1">Due Soon</div>
-          </div>
-          <div className="p-4 rounded-xl bg-bg-card border border-border text-center">
-            <div className="text-3xl font-bold text-accent">{assignments.length}</div>
-            <div className="text-text-muted text-xs mt-1">Total Tasks</div>
-          </div>
-        </div>
-      )}
-
-      {/* Settings (collapsed) */}
-      {!plan && (
-        <details className="rounded-xl bg-bg-card border border-border overflow-hidden">
-          <summary className="p-4 cursor-pointer text-text-secondary hover:text-white transition-colors">
-            ⚙️ Plan Settings
-          </summary>
-          <div className="p-4 pt-0 border-t border-border space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-text-secondary text-sm block mb-2">Wake Time</label>
-                <select
-                  value={wakeTime}
-                  onChange={(e) => { setWakeTime(e.target.value); savePreferences(); }}
-                  className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-border text-white text-sm"
-                >
-                  {["5:00 AM", "5:30 AM", "6:00 AM", "6:30 AM", "7:00 AM", "7:30 AM", "8:00 AM", "8:30 AM", "9:00 AM"].map(t => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-text-secondary text-sm block mb-2">Study Hours Today</label>
-                <select
-                  value={studyHours}
-                  onChange={(e) => { setStudyHours(parseInt(e.target.value)); savePreferences(); }}
-                  className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-border text-white text-sm"
-                >
-                  {[1, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6].map(h => (
-                    <option key={h} value={h}>{h} hour{h !== 1 ? "s" : ""}</option>
-                  ))}
-                </select>
-              </div>
+      {/* Pre-analysis stats */}
+      {!guardian && (
+        <div className="space-y-4">
+          <div className="flex gap-3 text-center">
+            <div className="flex-1 p-3 rounded-xl bg-bg-card border border-border">
+              <div className="text-xl font-bold text-error">{overdue.length}</div>
+              <div className="text-text-muted text-xs">Overdue</div>
             </div>
-            <div className="flex items-center justify-between p-3 rounded-lg bg-bg-dark">
-              <div>
-                <div className="text-white text-sm font-medium">Daily Morning Email</div>
-                <div className="text-text-muted text-xs">Get your plan emailed automatically</div>
+            <div className="flex-1 p-3 rounded-xl bg-bg-card border border-border">
+              <div className="text-xl font-bold text-accent">{assignments.length}</div>
+              <div className="text-text-muted text-xs">Upcoming</div>
+            </div>
+          </div>
+          <button
+            onClick={generatePlan}
+            disabled={loading}
+            className="w-full py-4 rounded-xl bg-accent hover:bg-accent-hover text-white font-semibold transition-colors disabled:opacity-50"
+          >
+            {loading ? "Analyzing..." : "Analyze My Grades"}
+          </button>
+        </div>
+      )}
+
+      {/* FOCUS CARD */}
+      {guardian?.action_required && (
+        <div className="relative group">
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-accent to-accent-hover rounded-2xl opacity-60 group-hover:opacity-100 transition duration-500 blur" />
+          <div className="relative p-6 bg-bg-card rounded-2xl border border-border space-y-4">
+            <div className="flex justify-between items-start">
+              <span className="px-2 py-0.5 rounded bg-error/20 text-error text-xs font-bold uppercase tracking-wider">
+                {guardian.action_required.risk_level === "critical" ? "Critical" : "Focus"}
+              </span>
+              <span className="text-text-muted text-sm">{guardian.action_required.due_in}</span>
+            </div>
+
+            <div>
+              <h2 className={`text-xl font-bold text-white ${completedTasks.has("priority") ? "line-through opacity-50" : ""}`}>
+                {guardian.action_required.title}
+              </h2>
+              <p className="text-text-secondary text-sm mt-1">{guardian.action_required.course}</p>
+            </div>
+
+            {/* Grade context */}
+            <div className="space-y-2 p-3 rounded-xl bg-bg-dark/50">
+              <div className="flex justify-between text-sm">
+                <span className="text-text-secondary">Your grade</span>
+                <span className="text-white font-medium">
+                  {guardian.action_required.current_grade}%
+                  {guardian.action_required.buffer < 0 && (
+                    <span className="text-error ml-1">({guardian.action_required.buffer}%)</span>
+                  )}
+                </span>
               </div>
+              {guardian.action_required.danger_score && (
+                <div className="flex items-start gap-2 text-sm">
+                  <span className="text-error shrink-0">!</span>
+                  <span className="text-error/80">{guardian.action_required.danger_score}</span>
+                </div>
+              )}
+              {guardian.action_required.safe_score && (
+                <div className="flex items-start gap-2 text-sm">
+                  <span className="text-success shrink-0">✓</span>
+                  <span className="text-success/80">{guardian.action_required.safe_score}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="space-y-2">
+              {!completedTasks.has("priority") && (
+                <button
+                  onClick={() => startStudySession(guardian.action_required!)}
+                  className="w-full py-3 rounded-xl font-semibold bg-white text-black hover:bg-gray-100 transition-colors"
+                >
+                  Start Studying
+                </button>
+              )}
               <button
-                onClick={() => { setAutoEmailEnabled(!autoEmailEnabled); savePreferences(); }}
-                className={`w-12 h-6 rounded-full transition-colors ${autoEmailEnabled ? "bg-accent" : "bg-border"} relative`}
+                onClick={() =>
+                  toggleTask("priority", {
+                    title: guardian.action_required!.title,
+                    course: guardian.action_required!.course,
+                    type: guardian.action_required!.type,
+                  })
+                }
+                className={`w-full py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                  completedTasks.has("priority")
+                    ? "bg-success/20 text-success"
+                    : "bg-bg-hover text-text-secondary hover:text-white"
+                }`}
               >
-                <div className={`w-5 h-5 rounded-full bg-white absolute top-0.5 transition-transform ${autoEmailEnabled ? "translate-x-6" : "translate-x-0.5"}`} />
+                {completedTasks.has("priority") ? "✓ Done" : "Mark as Done"}
               </button>
             </div>
           </div>
-        </details>
+        </div>
       )}
 
-      {/* Generate Button (if no plan yet) */}
-      {!plan && (assignments.length > 0 || overdue.length > 0) && (
-        <button
-          onClick={generatePlan}
-          disabled={loading}
-          className="w-full py-4 rounded-xl bg-gradient-to-r from-accent to-accent-hover hover:from-accent-hover hover:to-accent text-white font-semibold text-lg transition-all disabled:opacity-50 cursor-pointer shadow-lg shadow-accent/20"
-        >
-          {loading ? (
-            <span className="flex items-center justify-center gap-2">
-              <span className="animate-spin">⚡</span> Building your plan...
+      {/* Streak (compact, after focus card) */}
+      {streak && guardian && streak.current_streak > 0 && (
+        <StreakBadge
+          streak={streak.current_streak}
+          freezeAvailable={streak.freeze_available}
+        />
+      )}
+
+      {/* Grade alerts */}
+      {dangerGrades.length > 0 && (
+        <div className="p-4 bg-error/10 border border-error/20 rounded-xl space-y-2">
+          <h3 className="text-error font-medium text-xs uppercase tracking-wide">Grade Alert</h3>
+          {dangerGrades.map((g, i) => (
+            <div key={i} className="flex justify-between text-sm">
+              <span className="text-white">{g.course}</span>
+              <span className="text-error font-medium">{g.current}%</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Buddy widget */}
+      {buddy && buddy.has_partner && (
+        <BuddyWidget data={buddy} userId={userId} />
+      )}
+
+      {/* Other tasks — collapsed by default */}
+      {guardian?.other_priorities && guardian.other_priorities.length > 0 && (
+        <div>
+          <button
+            onClick={() => setShowOtherTasks(!showOtherTasks)}
+            className="w-full flex items-center justify-between py-3 text-sm text-text-muted hover:text-text-secondary transition-colors"
+          >
+            <span>
+              {guardian.other_priorities.length} more task
+              {guardian.other_priorities.length !== 1 ? "s" : ""} today
             </span>
-          ) : (
-            "⚡ Generate Today's Plan"
-          )}
-        </button>
-      )}
+            <svg className={`w-4 h-4 transition-transform ${showOtherTasks ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
 
-      {/* The Plan */}
-      {plan && (
-        <div className="space-y-4">
-          {/* Progress Bar */}
-          <div className="p-4 rounded-xl bg-gradient-to-r from-accent/10 to-success/10 border border-accent/20">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-white font-medium">Today&apos;s Progress</span>
-              <span className="text-accent font-bold">{completedCount}/{totalTasks}</span>
-            </div>
-            <div className="h-3 bg-bg-dark rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-accent to-success transition-all duration-500"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-            {/* Celebration messages based on progress */}
-            {progressPercent === 100 ? (
-              <div className="text-center mt-3 text-success font-medium animate-pulse">
-                🎉 You crushed it! Take a victory lap.
-              </div>
-            ) : progressPercent >= 75 ? (
-              <div className="text-center mt-3 text-accent/80 text-sm">
-                🔥 Almost there! Just {totalTasks - completedCount} more to go.
-              </div>
-            ) : progressPercent >= 50 ? (
-              <div className="text-center mt-3 text-accent/60 text-sm">
-                ⚡ Halfway done! Keep the momentum going.
-              </div>
-            ) : progressPercent >= 25 ? (
-              <div className="text-center mt-3 text-text-muted text-sm">
-                💪 Nice start! You&apos;re building momentum.
-              </div>
-            ) : completedCount > 0 ? (
-              <div className="text-center mt-3 text-text-muted text-sm">
-                ✓ First one down! Keep going.
-              </div>
-            ) : null}
-          </div>
-
-          {/* Mission */}
-          <div className="p-4 rounded-xl bg-bg-card border border-border">
-            <div className="text-accent font-medium text-sm mb-1">⚡ YOUR MISSION TODAY</div>
-            <div className="text-white text-lg">{plan.mission}</div>
-          </div>
-
-          {/* Urgent Tasks */}
-          {plan.urgent && plan.urgent.length > 0 && (
-            <div className="p-4 rounded-xl bg-error/10 border border-error/30">
-              <div className="text-error font-semibold mb-3">🚨 HANDLE THESE NOW</div>
-              <div className="space-y-2">
-                {plan.urgent.map((task, i) => {
-                  const taskId = `urgent-${i}`;
-                  const isCompleted = completedTasks.has(taskId);
-                  return (
-                    <button
-                      key={i}
-                      onClick={() => toggleTask(taskId)}
-                      className={`w-full text-left p-3 rounded-lg transition-all cursor-pointer flex items-start gap-3 ${
-                        isCompleted ? "bg-success/10 border border-success/30" : "bg-bg-dark border border-border hover:border-error/30"
-                      }`}
-                    >
-                      <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                        isCompleted ? "bg-success border-success text-white" : "border-error/50"
-                      }`}>
-                        {isCompleted && "✓"}
-                      </span>
-                      <div className="flex-1">
-                        <div className={`font-medium ${isCompleted ? "text-text-muted line-through" : "text-white"}`}>
-                          {task.title}
-                        </div>
-                        {task.details && (
-                          <div className={`text-sm mt-1 ${isCompleted ? "text-text-muted" : "text-text-secondary"}`}>
-                            {task.details}
-                          </div>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Schedule */}
-          <div className="space-y-2">
-            <div className="text-text-secondary text-sm font-medium px-1">📋 YOUR SCHEDULE</div>
-            {plan.schedule?.map((task, i) => {
-              const taskId = `schedule-${i}`;
-              const isCompleted = completedTasks.has(taskId);
-              return (
-                <button
-                  key={i}
-                  onClick={() => toggleTask(taskId)}
-                  className={`w-full text-left p-4 rounded-xl transition-all cursor-pointer flex items-start gap-4 ${
-                    isCompleted
-                      ? "bg-success/5 border border-success/20"
-                      : "bg-bg-card border border-border hover:border-accent/30"
-                  }`}
-                >
-                  <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                    isCompleted ? "bg-success border-success text-white" : "border-border"
-                  }`}>
-                    {isCompleted && "✓"}
-                  </span>
-                  <div className="min-w-[80px]">
-                    <span className={`text-sm font-medium ${isCompleted ? "text-text-muted" : "text-accent"}`}>
-                      {task.time}
+          {showOtherTasks && (
+            <div className="bg-bg-card rounded-xl border border-border overflow-hidden divide-y divide-border">
+              {guardian.other_priorities.map((task, i) => {
+                const taskId = `task-${i}`;
+                const done = completedTasks.has(taskId);
+                return (
+                  <div
+                    key={i}
+                    onClick={() => toggleTask(taskId)}
+                    className={`p-4 flex items-center gap-3 cursor-pointer hover:bg-bg-hover transition-colors ${done ? "opacity-50" : ""}`}
+                  >
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${done ? "bg-success border-success text-white" : "border-text-muted"}`}>
+                      {done && <span className="text-xs">✓</span>}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className={`font-medium text-white text-sm ${done ? "line-through" : ""}`}>{task.title}</div>
+                      <div className="text-text-muted text-xs">{task.course} &middot; {task.due_in}</div>
+                    </div>
+                    <span className={`text-xs px-2 py-0.5 rounded font-medium shrink-0 ${
+                      task.urgency === "high" ? "bg-error/10 text-error"
+                        : task.urgency === "medium" ? "bg-warning/10 text-warning"
+                          : "bg-bg-hover text-text-muted"
+                    }`}>
+                      {task.time_needed}
                     </span>
                   </div>
-                  <div className="flex-1">
-                    <div className={`font-medium ${isCompleted ? "text-text-muted line-through" : "text-white"}`}>
-                      {task.title}
-                    </div>
-                    {task.details && (
-                      <div className={`text-sm mt-1 ${isCompleted ? "text-text-muted" : "text-text-secondary"}`}>
-                        {task.details}
-                      </div>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Pro Tip */}
-          {plan.tip && (
-            <div className="p-4 rounded-xl bg-success/10 border border-success/30">
-              <div className="text-success font-medium text-sm mb-1">💡 PRO TIP</div>
-              <div className="text-white text-sm">{plan.tip}</div>
+                );
+              })}
             </div>
           )}
-
-          {/* Done When */}
-          <div className="p-4 rounded-xl bg-accent text-center">
-            <div className="text-white/80 text-sm mb-1">🎯 YOU&apos;RE DONE WHEN</div>
-            <div className="text-white font-medium">{plan.done_when}</div>
-          </div>
         </div>
+      )}
+
+      {/* Motivation */}
+      {guardian?.motivation && (
+        <p className="text-sm text-text-muted italic text-center pt-2">
+          &ldquo;{guardian.motivation}&rdquo;
+        </p>
       )}
     </div>
   );

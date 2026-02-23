@@ -4,7 +4,12 @@ import { createClient } from "@/lib/supabase-client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-type Step = "welcome" | "extension" | "sync" | "ready";
+type Step = "welcome" | "extension" | "sync" | "targets" | "ready";
+
+interface OnboardingCourse {
+  id: string;
+  name: string;
+}
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -12,6 +17,8 @@ export default function OnboardingPage() {
   const [userName, setUserName] = useState("");
   const [checking, setChecking] = useState(false);
   const [hasAssignments, setHasAssignments] = useState(false);
+  const [courses, setCourses] = useState<OnboardingCourse[]>([]);
+  const [targetGrades, setTargetGrades] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const load = async () => {
@@ -53,11 +60,35 @@ export default function OnboardingPage() {
 
     if (scraped && scraped.length > 0) {
       setHasAssignments(true);
-      setStep("ready");
+
+      // Load courses for target grades step
+      const { data: courseData } = await supabase
+        .from("courses")
+        .select("id, name")
+        .eq("user_id", user.id)
+        .order("name");
+
+      if (courseData && courseData.length > 0) {
+        setCourses(courseData);
+        // Default all targets to 90%
+        const defaults: Record<string, number> = {};
+        for (const c of courseData) defaults[c.name] = 90;
+        setTargetGrades(defaults);
+        setStep("targets");
+      } else {
+        setStep("ready");
+      }
     } else {
-      // Still no data, show hint
       setChecking(false);
     }
+  };
+
+  const saveTargetGrades = async () => {
+    const supabase = createClient();
+    await supabase.auth.updateUser({
+      data: { target_grades: targetGrades }
+    });
+    setStep("ready");
   };
 
   const completeOnboarding = async () => {
@@ -77,12 +108,12 @@ export default function OnboardingPage() {
       <div className="max-w-lg w-full">
         {/* Progress dots */}
         <div className="flex justify-center gap-2 mb-8">
-          {(["welcome", "extension", "sync", "ready"] as Step[]).map((s, i) => (
+          {(["welcome", "extension", "sync", "targets", "ready"] as Step[]).map((s, i) => (
             <div
               key={s}
               className={`w-2 h-2 rounded-full transition-colors ${
                 step === s ? "bg-accent" :
-                (["welcome", "extension", "sync", "ready"].indexOf(step) > i ? "bg-accent/50" : "bg-border")
+                (["welcome", "extension", "sync", "targets", "ready"].indexOf(step) > i ? "bg-accent/50" : "bg-border")
               }`}
             />
           ))}
@@ -194,6 +225,55 @@ export default function OnboardingPage() {
           </div>
         )}
 
+        {/* Step: Target Grades */}
+        {step === "targets" && (
+          <div className="text-center space-y-6">
+            <div className="text-6xl">🎯</div>
+            <h1 className="text-2xl font-bold text-white">
+              Set Your Grade Targets
+            </h1>
+            <p className="text-text-secondary">
+              What grade are you aiming for in each class? Grade Guardian will watch these for you.
+            </p>
+
+            <div className="text-left space-y-3">
+              {courses.map((course) => (
+                <div key={course.id} className="p-4 rounded-xl bg-bg-card border border-border">
+                  <div className="text-white text-sm font-medium mb-3">{course.name}</div>
+                  <div className="flex gap-2">
+                    {[90, 85, 80, 75, 70].map((pct) => (
+                      <button
+                        key={pct}
+                        onClick={() => setTargetGrades({ ...targetGrades, [course.name]: pct })}
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                          (targetGrades[course.name] || 90) === pct
+                            ? "bg-accent text-white"
+                            : "bg-bg-dark border border-border text-text-muted hover:border-accent/30"
+                        }`}
+                      >
+                        {pct}%
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={saveTargetGrades}
+              className="w-full py-4 rounded-xl bg-accent hover:bg-accent-hover text-white font-semibold text-lg transition-colors cursor-pointer"
+            >
+              Save & Continue →
+            </button>
+            <button
+              onClick={() => setStep("ready")}
+              className="text-text-muted text-sm hover:text-white transition-colors cursor-pointer"
+            >
+              Skip for now
+            </button>
+          </div>
+        )}
+
         {/* Step: Ready */}
         {step === "ready" && (
           <div className="text-center space-y-6">
@@ -208,19 +288,19 @@ export default function OnboardingPage() {
             <div className="text-left space-y-3">
               <div className="p-4 rounded-xl bg-bg-card border border-border">
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">📋</span>
+                  <span className="text-2xl">🛡️</span>
                   <div>
-                    <h3 className="text-white font-medium">Today</h3>
-                    <p className="text-text-muted text-sm">See your AI-prioritized daily plan</p>
+                    <h3 className="text-white font-medium">Grade Guardian</h3>
+                    <p className="text-text-muted text-sm">See exactly what to do next — one clear action</p>
                   </div>
                 </div>
               </div>
               <div className="p-4 rounded-xl bg-bg-card border border-border">
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">🎯</span>
+                  <span className="text-2xl">📚</span>
                   <div>
-                    <h3 className="text-white font-medium">Focus Mode</h3>
-                    <p className="text-text-muted text-sm">Break big assignments into chunks</p>
+                    <h3 className="text-white font-medium">Study Sessions</h3>
+                    <p className="text-text-muted text-sm">AI tutor that reads your course materials</p>
                   </div>
                 </div>
               </div>
@@ -228,8 +308,8 @@ export default function OnboardingPage() {
                 <div className="flex items-center gap-3">
                   <span className="text-2xl">📊</span>
                   <div>
-                    <h3 className="text-white font-medium">Grades</h3>
-                    <p className="text-text-muted text-sm">Track grades and see what you need</p>
+                    <h3 className="text-white font-medium">Grade Tracking</h3>
+                    <p className="text-text-muted text-sm">Know your scores and what you need</p>
                   </div>
                 </div>
               </div>
