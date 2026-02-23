@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface GradeLogModalProps {
   taskTitle: string;
   courseName: string;
-  courseId: string;
   onSave: (score: number, maxScore: number) => void;
   onSkip: () => void;
 }
@@ -18,17 +17,51 @@ export default function GradeLogModal({
 }: GradeLogModalProps) {
   const [score, setScore] = useState("");
   const [maxScore, setMaxScore] = useState("100");
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // Escape key to dismiss
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onSkip();
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [onSkip]);
+
+  // Focus trap — focus the dialog on mount
+  useEffect(() => {
+    dialogRef.current?.focus();
+  }, []);
 
   const handleSave = () => {
     const s = parseFloat(score);
     const m = parseFloat(maxScore) || 100;
-    if (isNaN(s) || s < 0) return;
+    if (isNaN(s) || s < 0 || m <= 0) return;
+    // Cap score at 2x max (sanity bound for extra credit)
+    if (s > m * 2) return;
     onSave(s, m);
   };
 
+  // Click outside to dismiss
+  const handleBackdrop = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) onSkip();
+  };
+
+  const pct = score ? ((parseFloat(score) / (parseFloat(maxScore) || 100)) * 100) : null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="w-full max-w-sm bg-bg-card border border-border rounded-2xl p-6 space-y-5">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Log grade"
+      onClick={handleBackdrop}
+    >
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        className="w-full max-w-sm bg-bg-card border border-border rounded-2xl p-6 space-y-5 outline-none"
+      >
         <div className="text-center">
           <div className="text-3xl mb-2">📝</div>
           <h3 className="text-lg font-bold text-white">
@@ -49,6 +82,7 @@ export default function GradeLogModal({
               onChange={(e) => setScore(e.target.value)}
               placeholder="85"
               autoFocus
+              min={0}
               className="w-24 px-3 py-3 rounded-xl bg-bg-dark border border-border text-white text-center text-xl font-bold placeholder:text-text-muted focus:outline-none focus:border-accent"
             />
           </div>
@@ -61,15 +95,16 @@ export default function GradeLogModal({
               type="number"
               value={maxScore}
               onChange={(e) => setMaxScore(e.target.value)}
+              min={1}
               className="w-24 px-3 py-3 rounded-xl bg-bg-dark border border-border text-white text-center text-xl font-bold placeholder:text-text-muted focus:outline-none focus:border-accent"
             />
           </div>
         </div>
 
-        {score && (
+        {pct !== null && !isNaN(pct) && isFinite(pct) && (
           <div className="text-center">
             <span className="text-2xl font-bold text-accent">
-              {((parseFloat(score) / (parseFloat(maxScore) || 100)) * 100).toFixed(0)}%
+              {pct.toFixed(0)}%
             </span>
           </div>
         )}
@@ -78,13 +113,13 @@ export default function GradeLogModal({
           <button
             onClick={handleSave}
             disabled={!score || isNaN(parseFloat(score))}
-            className="w-full py-3 rounded-xl bg-accent hover:bg-accent-hover text-white font-semibold transition-colors disabled:opacity-40"
+            className="w-full py-3 rounded-xl bg-accent hover:bg-accent-hover text-white font-semibold transition-colors disabled:opacity-40 cursor-pointer"
           >
             Save Grade
           </button>
           <button
             onClick={onSkip}
-            className="w-full py-2 text-text-muted text-sm hover:text-white transition-colors"
+            className="w-full py-2 text-text-muted text-sm hover:text-white transition-colors cursor-pointer"
           >
             Skip — I&apos;ll add later
           </button>

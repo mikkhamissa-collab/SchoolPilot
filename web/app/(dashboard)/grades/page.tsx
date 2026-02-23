@@ -117,7 +117,10 @@ export default function GradesPage() {
         policies: course.policies || {},
       });
       setGradeResult(result);
-    } catch { /* ignore */ }
+    } catch (err) {
+      console.error("Grade calculation failed:", err);
+      setError("Failed to calculate grades. Try again.");
+    }
   }, []);
 
   const handleAddCourse = async () => {
@@ -191,7 +194,10 @@ export default function GradesPage() {
         hypotheticals: [{ category: whatifCat, name: "What-if", score: parseFloat(whatifScore), max: parseFloat(whatifMax) || 100 }],
       });
       setWhatifResult(result);
-    } catch { /* ignore */ }
+    } catch (err) {
+      console.error("What-if calculation failed:", err);
+      setError("What-if calculation failed. Try again.");
+    }
   };
 
   const handleRequired = async () => {
@@ -206,7 +212,10 @@ export default function GradesPage() {
         max_score: 100,
       });
       setReqResult(result);
-    } catch { /* ignore */ }
+    } catch (err) {
+      console.error("Required score calculation failed:", err);
+      setError("Required score calculation failed. Try again.");
+    }
   };
 
   if (loading) {

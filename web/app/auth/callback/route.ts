@@ -1,4 +1,4 @@
-// OAuth callback handler — exchanges code for session
+// OAuth callback handler — exchanges code for session, sets cookies
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
@@ -7,9 +7,10 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code");
 
   if (code) {
-    // Create response first (we'll update the redirect later)
     let redirectPath = "/today";
 
+    // Create a single response — ALL cookies get written to THIS object.
+    // We reuse it regardless of redirect path so cookies are never lost.
     const response = NextResponse.redirect(`${origin}/today`);
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
 
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      // Check if user is new (no scraped assignments = needs onboarding)
+      // Check if user needs onboarding
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data: scraped } = await supabase
@@ -39,17 +40,20 @@ export async function GET(request: NextRequest) {
           .eq("user_id", user.id)
           .limit(1);
 
-        // If no scraped data AND onboarding not completed, redirect to onboarding
         const onboardingCompleted = user.user_metadata?.onboarding_completed;
         if ((!scraped || scraped.length === 0) && !onboardingCompleted) {
           redirectPath = "/onboarding";
         }
       }
 
-      return NextResponse.redirect(`${origin}${redirectPath}`);
+      // Update redirect on the SAME response object (preserves cookies)
+      if (redirectPath !== "/today") {
+        response.headers.set("Location", new URL(`${origin}${redirectPath}`).toString());
+      }
+
+      return response;
     }
   }
 
-  // Auth error — redirect to login with error
   return NextResponse.redirect(`${origin}/auth/login?error=auth_failed`);
 }

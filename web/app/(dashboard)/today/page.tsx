@@ -148,7 +148,6 @@ export default function TodayPage() {
   const [gradeLogTask, setGradeLogTask] = useState<{
     title: string;
     course: string;
-    courseId: string;
     type: string;
   } | null>(null);
   const [buddy, setBuddy] = useState<BuddyData | null>(null);
@@ -318,7 +317,6 @@ export default function TodayPage() {
             setGradeLogTask({
               title: taskInfo.title,
               course: taskInfo.course,
-              courseId: "", // course_name is used for lookup on the server
               type: taskInfo.type,
             });
           }, 1500);
@@ -430,7 +428,6 @@ export default function TodayPage() {
         <GradeLogModal
           taskTitle={gradeLogTask.title}
           courseName={gradeLogTask.course}
-          courseId={gradeLogTask.courseId}
           onSave={handleGradeLog}
           onSkip={() => setGradeLogTask(null)}
         />

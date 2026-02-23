@@ -359,6 +359,7 @@ def health():
 
 
 @app.route('/process', methods=['POST'])
+@require_proxy_auth
 def process():
     data = request.get_json(silent=True)
     if not data or not isinstance(data.get('assignments'), list) or len(data['assignments']) == 0:
@@ -411,6 +412,7 @@ def process():
 
 
 @app.route('/chunk', methods=['POST'])
+@require_proxy_auth
 def chunk():
     data = request.get_json(silent=True)
     if not data or 'assignment' not in data:
@@ -442,6 +444,7 @@ def chunk():
 
 
 @app.route('/study-guide', methods=['POST'])
+@require_proxy_auth
 def study_guide():
     data = request.get_json(silent=True)
     if not data or 'course' not in data:
@@ -476,6 +479,7 @@ def study_guide():
 
 
 @app.route('/sprint/create', methods=['POST'])
+@require_proxy_auth
 def sprint_create():
     data = request.get_json(silent=True)
     if not data or 'test_name' not in data or 'test_date' not in data:
@@ -526,6 +530,7 @@ def _build_calculator(data: dict) -> GradeCalculator:
 
 
 @app.route('/grades/calculate', methods=['POST'])
+@require_proxy_auth
 def grades_calculate():
     data = request.get_json(silent=True)
     if not data or 'categories' not in data:
@@ -538,6 +543,7 @@ def grades_calculate():
 
 
 @app.route('/grades/required', methods=['POST'])
+@require_proxy_auth
 def grades_required():
     data = request.get_json(silent=True)
     if not data or 'categories' not in data or 'target' not in data or 'category' not in data:
@@ -555,6 +561,7 @@ def grades_required():
 
 
 @app.route('/grades/whatif', methods=['POST'])
+@require_proxy_auth
 def grades_whatif():
     data = request.get_json(silent=True)
     if not data or 'categories' not in data or 'hypotheticals' not in data:
@@ -572,6 +579,7 @@ def grades_whatif():
 # ---------------------------------------------------------------------------
 
 @app.route('/study-guide/extract-topics', methods=['POST'])
+@require_proxy_auth
 def extract_topics():
     """Extract topics and concepts from course materials."""
     data = request.get_json(silent=True)
@@ -613,6 +621,7 @@ def extract_topics():
 
 
 @app.route('/study-guide/comprehensive', methods=['POST'])
+@require_proxy_auth
 def comprehensive_study_guide():
     """Generate a comprehensive study guide with learning path, videos, examples, and practice test.
 
@@ -724,6 +733,7 @@ def comprehensive_study_guide():
 
 
 @app.route('/study-guide/practice-test', methods=['POST'])
+@require_proxy_auth
 def generate_practice_test():
     """Generate a standalone practice test that MIRRORS actual course homework style."""
     data = request.get_json(silent=True)
@@ -944,6 +954,7 @@ def generate_autopilot_html(plan_data: dict) -> str:
 
 
 @app.route('/autopilot/generate', methods=['POST'])
+@require_proxy_auth
 def generate_autopilot():
     """Generate a daily autopilot plan based on assignments and schedule."""
     data = request.get_json(silent=True)
@@ -1008,6 +1019,7 @@ def generate_autopilot():
 
 
 @app.route('/autopilot/send', methods=['POST'])
+@require_proxy_auth
 def send_autopilot_email():
     """Generate and send the morning autopilot email."""
     data = request.get_json(silent=True)
@@ -1129,6 +1141,7 @@ Respond ONLY with valid JSON. Format:
 
 
 @app.route('/practice-test/generate', methods=['POST'])
+@require_proxy_auth
 def generate_adaptive_practice_test():
     """Generate an adaptive practice test based on student's mastery levels."""
     data = request.get_json(silent=True)
@@ -1214,6 +1227,7 @@ Respond ONLY with valid JSON. Format:
 
 
 @app.route('/weak-spot/recommend', methods=['POST'])
+@require_proxy_auth
 def weak_spot_recommend():
     """Generate personalized recommendations for improving a weak spot."""
     data = request.get_json(silent=True)
@@ -1280,6 +1294,7 @@ Respond ONLY with valid JSON. Format:
 
 
 @app.route('/prioritize/grade-aware', methods=['POST'])
+@require_proxy_auth
 def grade_aware_prioritize():
     """Prioritize assignments based on current grades and grade boundaries."""
     data = request.get_json(silent=True)
@@ -1464,6 +1479,7 @@ Respond ONLY with valid JSON. Format:
 
 
 @app.route('/study/flashcards', methods=['POST'])
+@require_proxy_auth
 def generate_flashcards():
     """Generate flashcards for a topic."""
     data = request.get_json(silent=True)
@@ -1492,6 +1508,7 @@ def generate_flashcards():
 
 
 @app.route('/study/quick-quiz', methods=['POST'])
+@require_proxy_auth
 def generate_quick_quiz():
     """Generate a quick quiz for a topic."""
     data = request.get_json(silent=True)
@@ -1520,6 +1537,7 @@ def generate_quick_quiz():
 
 
 @app.route('/study/explain', methods=['POST'])
+@require_proxy_auth
 def explain_concept():
     """Explain a concept in an easy-to-understand way."""
     data = request.get_json(silent=True)
@@ -1549,6 +1567,7 @@ def explain_concept():
 
 
 @app.route('/study/videos', methods=['POST'])
+@require_proxy_auth
 def recommend_videos():
     """Recommend YouTube searches for learning a topic."""
     data = request.get_json(silent=True)
@@ -1578,6 +1597,7 @@ def recommend_videos():
 
 
 @app.route('/study/summary', methods=['POST'])
+@require_proxy_auth
 def generate_study_summary():
     """Generate a one-page study summary for quick review."""
     data = request.get_json(silent=True)
@@ -1628,6 +1648,7 @@ Respond ONLY with valid JSON. Format:
 # ---------------------------------------------------------------------------
 
 @app.route('/mastery/analyze', methods=['POST'])
+@require_proxy_auth
 def analyze_mastery():
     """Analyze student's mastery based on practice test results."""
     data = request.get_json(silent=True)

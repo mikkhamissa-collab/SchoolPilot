@@ -86,22 +86,32 @@ export default function SettingsPage() {
       if (data) setCourses(data);
 
       // Load autopilot preferences from localStorage
-      const savedPrefs = localStorage.getItem("autopilot_prefs");
-      if (savedPrefs) {
-        const prefs = JSON.parse(savedPrefs);
-        setWakeTime(prefs.wakeTime || "7:00 AM");
-        setStudyHours(prefs.studyHours || 2);
-        setAutoEmailEnabled(prefs.autoEmailEnabled || false);
-        setAutoEmailTime(prefs.autoEmailTime || "6:30 AM");
+      try {
+        const savedPrefs = localStorage.getItem("autopilot_prefs");
+        if (savedPrefs) {
+          const prefs = JSON.parse(savedPrefs);
+          setWakeTime(prefs.wakeTime || "7:00 AM");
+          setStudyHours(prefs.studyHours || 2);
+          setAutoEmailEnabled(prefs.autoEmailEnabled || false);
+          setAutoEmailTime(prefs.autoEmailTime || "6:30 AM");
+        }
+      } catch (err) {
+        console.error("Failed to parse autopilot_prefs:", err);
+        localStorage.removeItem("autopilot_prefs");
       }
 
       // Load stickiness preferences from localStorage
-      const savedSticky = localStorage.getItem("stickiness_prefs");
-      if (savedSticky) {
-        const sPrefs = JSON.parse(savedSticky);
-        setWeekendMode(sPrefs.weekendMode || false);
-        setDailyReminder(sPrefs.dailyReminder !== false);
-        setReminderTime(sPrefs.reminderTime || "8:00 PM");
+      try {
+        const savedSticky = localStorage.getItem("stickiness_prefs");
+        if (savedSticky) {
+          const sPrefs = JSON.parse(savedSticky);
+          setWeekendMode(sPrefs.weekendMode || false);
+          setDailyReminder(sPrefs.dailyReminder !== false);
+          setReminderTime(sPrefs.reminderTime || "8:00 PM");
+        }
+      } catch (err) {
+        console.error("Failed to parse stickiness_prefs:", err);
+        localStorage.removeItem("stickiness_prefs");
       }
 
       // Load streak (cookie auth)

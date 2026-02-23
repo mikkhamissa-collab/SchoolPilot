@@ -84,21 +84,35 @@ export default function OnboardingPage() {
   };
 
   const saveTargetGrades = async () => {
-    const supabase = createClient();
-    await supabase.auth.updateUser({
-      data: { target_grades: targetGrades }
-    });
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.updateUser({
+        data: { target_grades: targetGrades }
+      });
+      if (error) {
+        console.error("Failed to save target grades:", error.message);
+        // Still advance — targets can be set later in Settings
+      }
+    } catch (err) {
+      console.error("Save target grades error:", err);
+    }
     setStep("ready");
   };
 
   const completeOnboarding = async () => {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      // Mark onboarding as complete
-      await supabase.auth.updateUser({
-        data: { onboarding_completed: true }
-      });
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { error } = await supabase.auth.updateUser({
+          data: { onboarding_completed: true }
+        });
+        if (error) {
+          console.error("Failed to mark onboarding complete:", error.message);
+        }
+      }
+    } catch (err) {
+      console.error("Complete onboarding error:", err);
     }
     router.push("/today");
   };

@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+
 interface WeeklyRecapData {
   weekLabel: string;
   tasksCompleted: number;
@@ -21,9 +23,40 @@ export default function WeeklyRecapModal({
   onDismiss,
   onShare,
 }: WeeklyRecapModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // Escape key to dismiss
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onDismiss();
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [onDismiss]);
+
+  // Focus on mount
+  useEffect(() => {
+    dialogRef.current?.focus();
+  }, []);
+
+  // Click outside to dismiss
+  const handleBackdrop = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) onDismiss();
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="w-full max-w-sm bg-bg-card border border-border rounded-2xl p-6 space-y-5">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Weekly recap"
+      onClick={handleBackdrop}
+    >
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        className="w-full max-w-sm bg-bg-card border border-border rounded-2xl p-6 space-y-5 outline-none"
+      >
         <div className="text-center">
           <div className="text-3xl mb-2">📊</div>
           <h3 className="text-lg font-bold text-white">
@@ -87,13 +120,13 @@ export default function WeeklyRecapModal({
         <div className="flex gap-2">
           <button
             onClick={onShare}
-            className="flex-1 py-3 rounded-xl bg-white text-black font-semibold text-sm hover:bg-gray-100 transition-colors"
+            className="flex-1 py-3 rounded-xl bg-white text-black font-semibold text-sm hover:bg-gray-100 transition-colors cursor-pointer"
           >
             Share My Week
           </button>
           <button
             onClick={onDismiss}
-            className="flex-1 py-3 rounded-xl bg-bg-hover text-text-secondary font-medium text-sm hover:text-white transition-colors"
+            className="flex-1 py-3 rounded-xl bg-bg-hover text-text-secondary font-medium text-sm hover:text-white transition-colors cursor-pointer"
           >
             Dismiss
           </button>

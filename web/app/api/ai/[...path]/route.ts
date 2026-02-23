@@ -7,6 +7,7 @@ const FLASK_URL = process.env.FLASK_BACKEND_URL || "https://schoolpilot-obvu.onr
 const FLASK_SECRET = process.env.FLASK_SECRET_KEY || "";
 
 // Only allow these Flask endpoint prefixes — prevents open proxy abuse
+// All valid Flask endpoint prefixes — anything not here gets 403
 const ALLOWED_PATHS = [
   "/process",
   "/plan/",
@@ -14,7 +15,13 @@ const ALLOWED_PATHS = [
   "/health",
   "/grades/",
   "/study/",
+  "/study-guide/",
   "/chunk/",
+  "/sprint/",
+  "/practice-test/",
+  "/weak-spot/",
+  "/prioritize/",
+  "/mastery/",
 ];
 
 export async function POST(
