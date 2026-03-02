@@ -1,0 +1,102 @@
+# auth.py — JWT verification for Supabase auth tokens.
+# Supports both legacy HS256 (shared secret) and modern JWKS (ECC/RSA) verification.
+import logging
+import httpx
+from fastapi import HTTPException, Request
+from jose import jwt, JWTError, jwk
+from jose.utils import base64url_decode
+from functools import lru_cache
+from app.config import get_settings
+
+logger = logging.getLogger(__name__)
+
+
+@lru_cache(maxsize=1)
+def _fetch_jwks(supabase_url: str) -> dict:
+    """Fetch the JWKS from Supabase's well-known endpoint.
+
+    Cached so we only hit the network once per process lifetime.
+    """
+    url = f"{supabase_url}/auth/v1/.well-known/jwks.json"
+    try:
+        resp = httpx.get(url, timeout=10)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception:
+        logger.warning("Failed to fetch JWKS from %s", url, exc_info=True)
+        return {"keys": []}
+
+
+def _get_signing_key(token: str, jwks: dict):
+    """Find the matching public key from JWKS for the given token's kid."""
+    try:
+        header = jwt.get_unverified_header(token)
+    except JWTError:
+        return None
+
+    kid = header.get("kid")
+    if not kid:
+        return None
+
+    for key_data in jwks.get("keys", []):
+        if key_data.get("kid") == kid:
+            return key_data
+
+    return None
+
+
+async def get_current_user(request: Request) -> str:
+    """Extract and verify user_id from the Authorization header.
+
+    Accepts: Bearer <supabase_access_token>
+    Returns: user_id (UUID string)
+    Raises: 401 if token is missing/invalid
+
+    Verification strategy:
+    1. Try JWKS-based verification (ECC/RSA) — modern Supabase projects
+    2. Fall back to HS256 with the legacy JWT secret
+    """
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing authorization token")
+
+    token = auth_header[7:]
+    settings = get_settings()
+
+    # Attempt 1: JWKS-based verification (asymmetric — ECC P-256 or RSA)
+    jwks = _fetch_jwks(settings.supabase_url)
+    signing_key = _get_signing_key(token, jwks)
+
+    if signing_key:
+        try:
+            alg = signing_key.get("alg", "ES256")
+            payload = jwt.decode(
+                token,
+                signing_key,
+                algorithms=[alg],
+                audience="authenticated",
+            )
+            user_id = payload.get("sub")
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Invalid token: no subject")
+            return user_id
+        except JWTError:
+            logger.debug("JWKS verification failed, trying HS256 fallback", exc_info=True)
+
+    # Attempt 2: Legacy HS256 with shared secret
+    if settings.supabase_jwt_secret:
+        try:
+            payload = jwt.decode(
+                token,
+                settings.supabase_jwt_secret,
+                algorithms=["HS256"],
+                audience="authenticated",
+            )
+            user_id = payload.get("sub")
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Invalid token: no subject")
+            return user_id
+        except JWTError as e:
+            raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
+
+    raise HTTPException(status_code=401, detail="Could not verify token — no valid signing key found")

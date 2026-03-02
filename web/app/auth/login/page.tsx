@@ -1,63 +1,296 @@
 "use client";
 
+// Login / Sign-up page for SchoolPilot.
+// Supports email + password auth via Supabase. Redirects to /onboarding
+// for new users or /today for returning users.
+
 import { createClient } from "@/lib/supabase-client";
-import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState, useEffect } from "react";
+
+// ---------------------------------------------------------------------------
+// Login form component
+// ---------------------------------------------------------------------------
 
 function LoginContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const error = searchParams.get("error");
+  const urlError = searchParams.get("error");
 
-  const handleGoogleLogin = async () => {
-    const supabase = createClient();
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [error, setError] = useState(urlError ? "Authentication failed. Please try again." : "");
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState("");
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    const check = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const onboarded = user.user_metadata?.onboarding_completed;
+        router.push(onboarded ? "/today" : "/onboarding");
+      }
+    };
+    check();
+  }, [router]);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+
+    if (!email.trim() || !password) {
+      setError("Please enter your email and password.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const supabase = createClient();
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+
+      if (authError) {
+        setError(authError.message);
+        return;
+      }
+
+      if (data.user) {
+        const onboarded = data.user.user_metadata?.onboarding_completed;
+        router.push(onboarded ? "/today" : "/onboarding");
+      }
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+
+    if (!displayName.trim()) {
+      setError("Please enter your name.");
+      return;
+    }
+    if (!email.trim()) {
+      setError("Please enter your email address.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const supabase = createClient();
+      const { data, error: authError } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          data: {
+            full_name: displayName.trim(),
+            display_name: displayName.trim(),
+          },
+        },
+      });
+
+      if (authError) {
+        setError(authError.message);
+        return;
+      }
+
+      // Check if email confirmation is required
+      if (data.user && !data.session) {
+        setSuccess("Check your email for a confirmation link, then sign in.");
+        setMode("login");
+        return;
+      }
+
+      if (data.user && data.session) {
+        router.push("/onboarding");
+      }
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg-dark">
-      <div className="w-full max-w-sm p-8">
+    <div className="min-h-screen flex items-center justify-center bg-bg-dark p-6">
+      <div className="w-full max-w-sm">
+        {/* Logo and title */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">SchoolPilot</h1>
-          <p className="text-text-secondary">Sign in to your account</p>
+          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-accent/20 flex items-center justify-center">
+            <svg className="w-7 h-7 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-7.007 11.55A5.981 5.981 0 0 0 6.75 15.75v-1.5" />
+            </svg>
+          </div>
+          <h1 className="text-3xl font-bold text-white mb-1">SchoolPilot</h1>
+          <p className="text-text-secondary text-sm">
+            {mode === "login" ? "Sign in to your account" : "Create your account"}
+          </p>
         </div>
 
-        {error && (
-          <div className="mb-4 p-3 rounded-lg bg-error/10 border border-error/20 text-error text-sm text-center">
-            Authentication failed. Please try again.
+        {/* Success message */}
+        {success && (
+          <div className="mb-4 p-3 rounded-lg bg-success/10 border border-success/20 text-success text-sm text-center">
+            {success}
           </div>
         )}
 
-        <button
-          onClick={handleGoogleLogin}
-          className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg bg-white text-gray-800 font-medium hover:bg-gray-100 transition-colors cursor-pointer"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24">
-            <path
-              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
-              fill="#4285F4"
-            />
-            <path
-              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-              fill="#34A853"
-            />
-            <path
-              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-              fill="#FBBC05"
-            />
-            <path
-              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-              fill="#EA4335"
-            />
-          </svg>
-          Sign in with Google
-        </button>
+        {/* Error message */}
+        {error && (
+          <div className="mb-4 p-3 rounded-lg bg-error/10 border border-error/20 text-error text-sm text-center">
+            {error}
+          </div>
+        )}
 
-        <p className="mt-6 text-center text-text-muted text-xs">
+        {/* Form */}
+        <form onSubmit={mode === "login" ? handleLogin : handleSignup} className="space-y-4">
+          {/* Name field (signup only) */}
+          {mode === "signup" && (
+            <div>
+              <label htmlFor="auth-name" className="block text-text-secondary text-sm mb-1.5">
+                Name
+              </label>
+              <input
+                id="auth-name"
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Your first name"
+                autoComplete="name"
+                className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors"
+                autoFocus
+              />
+            </div>
+          )}
+
+          {/* Email */}
+          <div>
+            <label htmlFor="auth-email" className="block text-text-secondary text-sm mb-1.5">
+              Email
+            </label>
+            <input
+              id="auth-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@school.edu"
+              autoComplete="email"
+              className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors"
+              autoFocus={mode === "login"}
+            />
+          </div>
+
+          {/* Password */}
+          <div>
+            <label htmlFor="auth-password" className="block text-text-secondary text-sm mb-1.5">
+              Password
+            </label>
+            <input
+              id="auth-password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={mode === "signup" ? "At least 6 characters" : "Your password"}
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors"
+            />
+          </div>
+
+          {/* Confirm Password (signup only) */}
+          {mode === "signup" && (
+            <div>
+              <label htmlFor="auth-confirm" className="block text-text-secondary text-sm mb-1.5">
+                Confirm password
+              </label>
+              <input
+                id="auth-confirm"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Type your password again"
+                autoComplete="new-password"
+                className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors"
+              />
+            </div>
+          )}
+
+          {/* Submit button */}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-3 rounded-xl bg-accent hover:bg-accent-hover text-white font-semibold text-base transition-colors cursor-pointer disabled:opacity-50"
+          >
+            {loading
+              ? mode === "login"
+                ? "Signing in..."
+                : "Creating account..."
+              : mode === "login"
+                ? "Sign In"
+                : "Create Account"}
+          </button>
+        </form>
+
+        {/* Divider */}
+        <div className="my-6 flex items-center gap-3">
+          <div className="flex-1 h-px bg-border" />
+          <span className="text-text-muted text-xs">or</span>
+          <div className="flex-1 h-px bg-border" />
+        </div>
+
+        {/* Toggle mode */}
+        <p className="text-center text-text-secondary text-sm">
+          {mode === "login" ? (
+            <>
+              Don&apos;t have an account?{" "}
+              <button
+                onClick={() => {
+                  setMode("signup");
+                  setError("");
+                  setSuccess("");
+                }}
+                className="text-accent hover:underline cursor-pointer font-medium"
+              >
+                Sign up
+              </button>
+            </>
+          ) : (
+            <>
+              Already have an account?{" "}
+              <button
+                onClick={() => {
+                  setMode("login");
+                  setError("");
+                  setSuccess("");
+                }}
+                className="text-accent hover:underline cursor-pointer font-medium"
+              >
+                Sign in
+              </button>
+            </>
+          )}
+        </p>
+
+        {/* Footer */}
+        <p className="mt-8 text-center text-text-muted text-xs">
           By signing in, you agree to use SchoolPilot responsibly.
         </p>
       </div>
@@ -65,13 +298,19 @@ function LoginContent() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Page wrapper with Suspense for useSearchParams
+// ---------------------------------------------------------------------------
+
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-bg-dark">
-        <div className="text-text-secondary">Loading...</div>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-bg-dark">
+          <div className="text-text-secondary">Loading...</div>
+        </div>
+      }
+    >
       <LoginContent />
     </Suspense>
   );

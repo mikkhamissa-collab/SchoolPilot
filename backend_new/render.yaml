@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: schoolpilot-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    region: oregon
+    plan: starter
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: CREDENTIAL_ENCRYPTION_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        value: '["https://schoolpilot.co","https://*.schoolpilot.co","https://*.vercel.app"]'
+      - key: PLAYWRIGHT_HEADLESS
+        value: "true"
+    healthCheckPath: /health

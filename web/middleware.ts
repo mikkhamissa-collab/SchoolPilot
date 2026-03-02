@@ -19,6 +19,7 @@ const PROTECTED_PREFIXES = [
   "/settings",
   "/session",
   "/onboarding",
+  "/chat",
 ];
 
 export async function middleware(request: NextRequest) {

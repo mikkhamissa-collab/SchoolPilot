@@ -1,884 +1,596 @@
 "use client";
 
+// Settings page — profile, personality, LMS credentials, briefings, data export
 import { createClient } from "@/lib/supabase-client";
-import { useEffect, useState } from "react";
-import type { StreakData, BuddyData } from "@/lib/types";
+import { backendFetch } from "@/lib/api";
+import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 
-interface Course {
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+interface StudentProfile {
+  display_name: string | null;
+  school_name: string | null;
+  grade_level: string | null;
+  timezone: string | null;
+  personality_preset: string;
+  goals: string[];
+  daily_briefing_enabled: boolean;
+  briefing_time: string | null;
+  email_briefings: boolean;
+}
+
+interface LMSCredential {
   id: string;
-  name: string;
-  policies: { importance?: number; marzano?: boolean; units?: string[] } | null;
+  lms_type: string;
+  lms_url: string;
+  last_login_success: boolean | null;
+  last_sync_at: string | null;
+  sync_enabled: boolean;
+  last_error: string | null;
 }
 
-interface EditingUnits {
-  courseId: string;
-  units: string[];
-}
+const PERSONALITIES = [
+  { id: "coach", name: "Coach", emoji: "🏋️", desc: "Firm but encouraging. Keeps you on track." },
+  { id: "friend", name: "Friend", emoji: "😊", desc: "Casual and supportive. Like texting a smart friend." },
+  { id: "mentor", name: "Mentor", emoji: "🎓", desc: "Thoughtful and wise. Helps you grow." },
+  { id: "drill_sergeant", name: "Drill Sergeant", emoji: "🫡", desc: "No excuses. Maximum accountability." },
+];
+
+const TIMEZONES = [
+  "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
+  "America/Phoenix", "America/Anchorage", "Pacific/Honolulu", "Europe/London",
+  "Europe/Paris", "Asia/Dubai", "Asia/Singapore", "Asia/Tokyo", "Australia/Sydney",
+];
 
 export default function SettingsPage() {
-  const [courses, setCourses] = useState<Course[]>([]);
+  const router = useRouter();
+  const [profile, setProfile] = useState<StudentProfile | null>(null);
+  const [credentials, setCredentials] = useState<LMSCredential[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [editingUnits, setEditingUnits] = useState<EditingUnits | null>(null);
-
-  // Target grades per course
-  const [targetGrades, setTargetGrades] = useState<Record<string, number>>({});
-  const [savingTargets, setSavingTargets] = useState(false);
-
-  // Autopilot settings
-  const [autoEmailEnabled, setAutoEmailEnabled] = useState(false);
-  const [autoEmailTime, setAutoEmailTime] = useState("6:30 AM");
-  const [wakeTime, setWakeTime] = useState("7:00 AM");
-  const [studyHours, setStudyHours] = useState(2);
+  const [token, setToken] = useState("");
   const [userEmail, setUserEmail] = useState("");
 
-  // Stickiness settings
-  const [userId, setUserId] = useState("");
-  const [streak, setStreak] = useState<StreakData | null>(null);
-  const [buddy, setBuddy] = useState<BuddyData | null>(null);
-  const [weekendMode, setWeekendMode] = useState(false);
-  const [dailyReminder, setDailyReminder] = useState(true);
-  const [reminderTime, setReminderTime] = useState("8:00 PM");
-  const [inviteLink, setInviteLink] = useState("");
-  const [inviteLoading, setInviteLoading] = useState(false);
-  const [inviteCopied, setInviteCopied] = useState(false);
-  const [acceptCode, setAcceptCode] = useState("");
-  const [acceptLoading, setAcceptLoading] = useState(false);
+  // LMS credential form
+  const [showAddLMS, setShowAddLMS] = useState(false);
+  const [lmsType, setLmsType] = useState("teamie");
+  const [lmsUrl, setLmsUrl] = useState("");
+  const [lmsUser, setLmsUser] = useState("");
+  const [lmsPass, setLmsPass] = useState("");
+  const [lmsSaving, setLmsSaving] = useState(false);
+
+  // Profile editing
+  const [editName, setEditName] = useState("");
+  const [editSchool, setEditSchool] = useState("");
+  const [editGrade, setEditGrade] = useState("");
+  const [editTimezone, setEditTimezone] = useState("");
+  const [editPersonality, setEditPersonality] = useState("coach");
+  const [editBriefing, setEditBriefing] = useState(false);
+  const [editGoals, setEditGoals] = useState<string[]>([]);
+  const [newGoal, setNewGoal] = useState("");
+
+  // Export
+  const [exporting, setExporting] = useState(false);
+
+  const showMsg = useCallback((type: "success" | "error", text: string) => {
+    setMessage({ type, text });
+    setTimeout(() => setMessage(null), 3000);
+  }, []);
 
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      setToken(session.access_token);
+      setUserEmail(session.user?.email || "");
 
-      const uid = user.id;
-      setUserId(uid);
-      setUserEmail(user.email || "");
+      const headers = { Authorization: `Bearer ${session.access_token}` };
 
-      // Load target grades from user metadata
-      const savedTargets = user.user_metadata?.target_grades;
-      if (savedTargets && typeof savedTargets === "object") {
-        setTargetGrades(savedTargets);
-      }
-
-      const { data } = await supabase
-        .from("courses")
-        .select("id, name, policies")
-        .eq("user_id", user.id)
-        .order("name");
-      if (data) setCourses(data);
-
-      // Load autopilot preferences from localStorage
       try {
-        const savedPrefs = localStorage.getItem("autopilot_prefs");
-        if (savedPrefs) {
-          const prefs = JSON.parse(savedPrefs);
-          setWakeTime(prefs.wakeTime || "7:00 AM");
-          setStudyHours(prefs.studyHours || 2);
-          setAutoEmailEnabled(prefs.autoEmailEnabled || false);
-          setAutoEmailTime(prefs.autoEmailTime || "6:30 AM");
+        const [profileRes, credsRes] = await Promise.allSettled([
+          fetch(`${API_URL}/api/profile/me`, { headers }),
+          fetch(`${API_URL}/api/auth/lms-credentials`, { headers }),
+        ]);
+
+        if (profileRes.status === "fulfilled" && profileRes.value.ok) {
+          const data = await profileRes.value.json();
+          setProfile(data);
+          setEditName(data.display_name || "");
+          setEditSchool(data.school_name || "");
+          setEditGrade(data.grade_level || "");
+          setEditTimezone(data.timezone || "America/New_York");
+          setEditPersonality(data.personality_preset || "coach");
+          setEditBriefing(data.daily_briefing_enabled || false);
+          setEditGoals(data.goals || []);
         }
-      } catch (err) {
-        console.error("Failed to parse autopilot_prefs:", err);
-        localStorage.removeItem("autopilot_prefs");
-      }
 
-      // Load stickiness preferences from localStorage
-      try {
-        const savedSticky = localStorage.getItem("stickiness_prefs");
-        if (savedSticky) {
-          const sPrefs = JSON.parse(savedSticky);
-          setWeekendMode(sPrefs.weekendMode || false);
-          setDailyReminder(sPrefs.dailyReminder !== false);
-          setReminderTime(sPrefs.reminderTime || "8:00 PM");
+        if (credsRes.status === "fulfilled" && credsRes.value.ok) {
+          setCredentials(await credsRes.value.json());
         }
-      } catch (err) {
-        console.error("Failed to parse stickiness_prefs:", err);
-        localStorage.removeItem("stickiness_prefs");
+      } catch {
+        showMsg("error", "Failed to load settings.");
+      } finally {
+        setLoading(false);
       }
-
-      // Load streak and buddy in parallel (cookie auth)
-      const [streakRes, buddyRes] = await Promise.allSettled([
-        fetch("/api/streak"),
-        fetch("/api/buddy/status"),
-      ]);
-      if (streakRes.status === "fulfilled" && streakRes.value.ok) {
-        try { setStreak(await streakRes.value.json()); } catch { /* ignore parse errors */ }
-      }
-      if (buddyRes.status === "fulfilled" && buddyRes.value.ok) {
-        try { setBuddy(await buddyRes.value.json()); } catch { /* ignore parse errors */ }
-      }
-
-      setLoading(false);
     };
     load();
-  }, []);
+  }, [showMsg]);
 
-  const saveStickyPrefs = (updates: Record<string, unknown>) => {
-    const current = {
-      weekendMode,
-      dailyReminder,
-      reminderTime,
-      ...updates,
-    };
-    localStorage.setItem("stickiness_prefs", JSON.stringify(current));
-  };
-
-  const updateImportance = async (courseId: string, importance: number) => {
-    setSaving(courseId);
-    setMessage(null);
-
-    const supabase = createClient();
-    const course = courses.find((c) => c.id === courseId);
-    const newPolicies = { ...(course?.policies || {}), importance };
-
-    const { error } = await supabase
-      .from("courses")
-      .update({ policies: newPolicies })
-      .eq("id", courseId);
-
-    if (error) {
-      setMessage({ type: "error", text: error.message });
-    } else {
-      setCourses(courses.map((c) =>
-        c.id === courseId ? { ...c, policies: newPolicies } : c
-      ));
-      setMessage({ type: "success", text: "Saved!" });
-      setTimeout(() => setMessage(null), 2000);
-    }
-    setSaving(null);
-  };
-
-  const toggleMarzano = async (courseId: string) => {
-    setSaving(courseId);
-    setMessage(null);
-
-    const supabase = createClient();
-    const course = courses.find((c) => c.id === courseId);
-    const currentMarzano = course?.policies?.marzano || false;
-    const newPolicies = { ...(course?.policies || {}), marzano: !currentMarzano };
-
-    const { error } = await supabase
-      .from("courses")
-      .update({ policies: newPolicies })
-      .eq("id", courseId);
-
-    if (error) {
-      setMessage({ type: "error", text: error.message });
-    } else {
-      setCourses(courses.map((c) =>
-        c.id === courseId ? { ...c, policies: newPolicies } : c
-      ));
-    }
-    setSaving(null);
-  };
-
-  const startEditingUnits = (course: Course) => {
-    setEditingUnits({
-      courseId: course.id,
-      units: course.policies?.units || [""],
-    });
-  };
-
-  const cancelEditingUnits = () => {
-    setEditingUnits(null);
-  };
-
-  const updateUnit = (index: number, value: string) => {
-    if (!editingUnits) return;
-    const newUnits = [...editingUnits.units];
-    newUnits[index] = value;
-    setEditingUnits({ ...editingUnits, units: newUnits });
-  };
-
-  const addUnit = () => {
-    if (!editingUnits) return;
-    setEditingUnits({ ...editingUnits, units: [...editingUnits.units, ""] });
-  };
-
-  const removeUnit = (index: number) => {
-    if (!editingUnits || editingUnits.units.length <= 1) return;
-    const newUnits = editingUnits.units.filter((_, i) => i !== index);
-    setEditingUnits({ ...editingUnits, units: newUnits });
-  };
-
-  const saveUnits = async () => {
-    if (!editingUnits) return;
-    setSaving(editingUnits.courseId);
-    setMessage(null);
-
-    const filteredUnits = editingUnits.units
-      .map((u) => u.trim())
-      .filter((u) => u.length > 0);
-
-    const supabase = createClient();
-    const course = courses.find((c) => c.id === editingUnits.courseId);
-    const newPolicies = { ...(course?.policies || {}), units: filteredUnits };
-
-    const { error } = await supabase
-      .from("courses")
-      .update({ policies: newPolicies })
-      .eq("id", editingUnits.courseId);
-
-    if (error) {
-      setMessage({ type: "error", text: error.message });
-    } else {
-      setCourses(courses.map((c) =>
-        c.id === editingUnits.courseId ? { ...c, policies: newPolicies } : c
-      ));
-      setMessage({ type: "success", text: "Units saved!" });
-      setEditingUnits(null);
-      setTimeout(() => setMessage(null), 2000);
-    }
-    setSaving(null);
-  };
-
-  const generateInvite = async () => {
-    setInviteLoading(true);
+  const saveProfile = async () => {
+    if (!token) return;
+    setSaving(true);
     try {
-      const res = await fetch("/api/buddy/invite", { method: "POST" });
-      if (res.ok) {
-        const data = await res.json();
-        setInviteLink(data.invite_link || "");
-      } else {
-        const err = await res.json();
-        setMessage({ type: "error", text: err.error || "Failed to generate invite" });
-      }
-    } catch (err) {
-      console.error("Generate invite error:", err);
-      setMessage({ type: "error", text: "Network error generating invite" });
-    }
-    setInviteLoading(false);
-  };
-
-  const copyInvite = async () => {
-    try {
-      await navigator.clipboard.writeText(inviteLink);
-      setInviteCopied(true);
-      setTimeout(() => setInviteCopied(false), 2000);
-    } catch (err) {
-      console.error("Clipboard copy failed:", err);
-    }
-  };
-
-  const acceptInvite = async () => {
-    if (!acceptCode.trim()) return;
-    setAcceptLoading(true);
-    try {
-      const res = await fetch("/api/buddy/accept", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: acceptCode.trim() }),
+      const res = await fetch(`${API_URL}/api/profile/me`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          display_name: editName || null,
+          school_name: editSchool || null,
+          grade_level: editGrade || null,
+          timezone: editTimezone || null,
+          personality_preset: editPersonality,
+          daily_briefing_enabled: editBriefing,
+          goals: editGoals,
+        }),
       });
       if (res.ok) {
-        setMessage({ type: "success", text: "Partner connected!" });
-        setAcceptCode("");
-        // Refresh buddy status
-        const buddyRes = await fetch("/api/buddy/status");
-        if (buddyRes.ok) setBuddy(await buddyRes.json());
+        const data = await res.json();
+        setProfile(data);
+        showMsg("success", "Profile saved!");
       } else {
-        const errData = await res.json();
-        setMessage({ type: "error", text: errData.error || "Invalid code" });
+        showMsg("error", "Failed to save profile.");
       }
-    } catch (err) {
-      console.error("Accept invite error:", err);
-      setMessage({ type: "error", text: "Failed to connect" });
+    } catch {
+      showMsg("error", "Network error saving profile.");
+    } finally {
+      setSaving(false);
     }
-    setAcceptLoading(false);
-    setTimeout(() => setMessage(null), 3000);
+  };
+
+  const saveLMSCredential = async () => {
+    if (!token || !lmsUrl.trim() || !lmsUser.trim() || !lmsPass) return;
+    setLmsSaving(true);
+    try {
+      const res = await fetch(`${API_URL}/api/auth/lms-credentials`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          lms_type: lmsType,
+          lms_url: lmsUrl.trim(),
+          username: lmsUser.trim(),
+          password: lmsPass,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCredentials((prev) => {
+          const existing = prev.findIndex((c) => c.id === data.id);
+          if (existing >= 0) {
+            const updated = [...prev];
+            updated[existing] = data;
+            return updated;
+          }
+          return [...prev, data];
+        });
+        setShowAddLMS(false);
+        setLmsUrl("");
+        setLmsUser("");
+        setLmsPass("");
+        showMsg("success", "LMS credentials saved!");
+      } else {
+        const err = await res.json();
+        showMsg("error", err.detail || "Failed to save credentials.");
+      }
+    } catch {
+      showMsg("error", "Network error saving credentials.");
+    } finally {
+      setLmsSaving(false);
+    }
+  };
+
+  const deleteLMSCredential = async (id: string) => {
+    if (!token) return;
+    try {
+      await fetch(`${API_URL}/api/auth/lms-credentials/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setCredentials((prev) => prev.filter((c) => c.id !== id));
+      showMsg("success", "Credential deleted.");
+    } catch {
+      showMsg("error", "Failed to delete credential.");
+    }
+  };
+
+  const exportData = async () => {
+    setExporting(true);
+    try {
+      const data = await backendFetch<Record<string, unknown>>("/api/profile/export");
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `schoolpilot-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showMsg("success", "Data exported!");
+    } catch {
+      showMsg("error", "Failed to export data.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    try { localStorage.removeItem("schoolpilot_ext_token"); } catch { /* ignore */ }
+    router.push("/auth/login");
+  };
+
+  const addGoal = () => {
+    const trimmed = newGoal.trim();
+    if (trimmed && !editGoals.includes(trimmed)) {
+      setEditGoals([...editGoals, trimmed]);
+      setNewGoal("");
+    }
+  };
+
+  const removeGoal = (goal: string) => {
+    setEditGoals(editGoals.filter((g) => g !== goal));
   };
 
   if (loading) {
     return (
-      <div className="max-w-2xl space-y-4">
-        <div className="h-8 w-32 bg-bg-card rounded animate-pulse" />
-        <div className="h-48 bg-bg-card rounded-xl animate-pulse" />
+      <div className="max-w-2xl mx-auto space-y-4 animate-pulse">
+        <div className="h-8 w-32 bg-bg-card rounded" />
+        <div className="h-48 bg-bg-card rounded-xl" />
+        <div className="h-48 bg-bg-card rounded-xl" />
       </div>
     );
   }
 
-  const importanceLevels = [
-    { value: 1, label: "Low", color: "text-text-muted" },
-    { value: 2, label: "Below Avg", color: "text-text-secondary" },
-    { value: 3, label: "Normal", color: "text-white" },
-    { value: 4, label: "Important", color: "text-warning" },
-    { value: 5, label: "Critical", color: "text-error" },
-  ];
-
   return (
-    <div className="max-w-2xl space-y-8">
+    <div className="max-w-2xl mx-auto space-y-8">
       <div>
-        <h2 className="text-2xl font-bold text-white">Settings ⚙️</h2>
-        <p className="text-text-secondary mt-1">Make SchoolPilot work the way you do.</p>
+        <h2 className="text-2xl font-bold text-white">Settings</h2>
+        <p className="text-text-secondary mt-1">Manage your profile, LMS connections, and preferences.</p>
       </div>
 
       {message && (
-        <div className={`p-3 rounded-lg text-sm flex items-center gap-2 transition-all ${
+        <div className={`p-3 rounded-lg text-sm ${
           message.type === "success" ? "bg-success/10 text-success" : "bg-error/10 text-error"
         }`}>
-          {message.type === "success" && <span>✓</span>}
-          {message.type === "error" && <span>⚠️</span>}
           {message.text}
         </div>
       )}
 
-      {/* ================================================================= */}
-      {/* STREAK & MOTIVATION */}
-      {/* ================================================================= */}
-      <div className="space-y-4">
-        <div>
-          <h3 className="text-lg font-semibold text-white mb-1">🔥 Streaks</h3>
-          <p className="text-text-muted text-sm">
-            Complete your #1 priority task each day to keep your streak alive.
-          </p>
-        </div>
+      {/* ====== Profile ====== */}
+      <section className="bg-bg-card border border-border rounded-xl p-5 space-y-4">
+        <h3 className="text-lg font-semibold text-white">Profile</h3>
 
-        <div className="p-5 rounded-xl bg-bg-card border border-border space-y-5">
-          {/* Streak stats */}
-          <div className="flex gap-4">
-            <div className="flex-1 text-center p-3 rounded-lg bg-bg-dark">
-              <div className="text-2xl font-bold text-warning">{streak?.current_streak || 0}</div>
-              <div className="text-text-muted text-xs mt-0.5">Current Streak</div>
-            </div>
-            <div className="flex-1 text-center p-3 rounded-lg bg-bg-dark">
-              <div className="text-2xl font-bold text-accent">{streak?.longest_streak || 0}</div>
-              <div className="text-text-muted text-xs mt-0.5">Longest Streak</div>
-            </div>
-            <div className="flex-1 text-center p-3 rounded-lg bg-bg-dark">
-              <div className="text-2xl font-bold text-white">
-                {streak?.freeze_available ? "✓" : "✗"}
-              </div>
-              <div className="text-text-muted text-xs mt-0.5">Freeze Ready</div>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="settings-name" className="block text-text-secondary text-sm mb-1.5">Name</label>
+            <input
+              id="settings-name"
+              type="text"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent text-sm"
+              placeholder="Your name"
+            />
           </div>
+          <div>
+            <label htmlFor="settings-email" className="block text-text-secondary text-sm mb-1.5">Email</label>
+            <input
+              id="settings-email"
+              type="email"
+              value={userEmail}
+              disabled
+              className="w-full px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-text-muted text-sm cursor-not-allowed"
+            />
+          </div>
+          <div>
+            <label htmlFor="settings-school" className="block text-text-secondary text-sm mb-1.5">School</label>
+            <input
+              id="settings-school"
+              type="text"
+              value={editSchool}
+              onChange={(e) => setEditSchool(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent text-sm"
+              placeholder="Your school"
+            />
+          </div>
+          <div>
+            <label htmlFor="settings-grade" className="block text-text-secondary text-sm mb-1.5">Grade Level</label>
+            <select
+              id="settings-grade"
+              value={editGrade}
+              onChange={(e) => setEditGrade(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-white text-sm focus:outline-none focus:border-accent"
+            >
+              <option value="">Select...</option>
+              {["9th Grade", "10th Grade", "11th Grade", "12th Grade", "College Freshman", "College Sophomore", "College Junior", "College Senior", "Other"].map((g) => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="settings-tz" className="block text-text-secondary text-sm mb-1.5">Timezone</label>
+            <select
+              id="settings-tz"
+              value={editTimezone}
+              onChange={(e) => setEditTimezone(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-white text-sm focus:outline-none focus:border-accent"
+            >
+              {TIMEZONES.map((tz) => (
+                <option key={tz} value={tz}>{tz.replace(/_/g, " ")}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </section>
 
-          {/* Weekend mode */}
-          <div className="flex items-center justify-between pt-3 border-t border-border/50">
-            <div>
-              <div className="text-white font-medium text-sm">Weekend Mode</div>
-              <div className="text-text-muted text-xs">Weekends don&apos;t break your streak</div>
-            </div>
+      {/* ====== AI Personality ====== */}
+      <section className="bg-bg-card border border-border rounded-xl p-5 space-y-4">
+        <h3 className="text-lg font-semibold text-white">AI Personality</h3>
+        <div className="grid grid-cols-2 gap-3">
+          {PERSONALITIES.map((p) => (
             <button
-              role="switch"
-              aria-checked={weekendMode}
-              onClick={() => {
-                const next = !weekendMode;
-                setWeekendMode(next);
-                saveStickyPrefs({ weekendMode: next });
-              }}
-              className={`w-12 h-6 rounded-full transition-colors cursor-pointer relative ${
-                weekendMode ? "bg-accent" : "bg-bg-dark border border-border"
+              key={p.id}
+              onClick={() => setEditPersonality(p.id)}
+              className={`p-3 rounded-xl text-left transition-all cursor-pointer ${
+                editPersonality === p.id
+                  ? "bg-accent/10 border-2 border-accent"
+                  : "bg-bg-dark border border-border hover:border-accent/30"
               }`}
             >
-              <span
-                className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
-                  weekendMode ? "left-7" : "left-1"
-                }`}
-              />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ================================================================= */}
-      {/* ACCOUNTABILITY PARTNER */}
-      {/* ================================================================= */}
-      <div className="space-y-4">
-        <div>
-          <h3 className="text-lg font-semibold text-white mb-1">👥 Accountability Partner</h3>
-          <p className="text-text-muted text-sm">
-            Pair up with a friend. See each other&apos;s streaks and nudge them when they slack.
-          </p>
-        </div>
-
-        <div className="p-5 rounded-xl bg-bg-card border border-border space-y-4">
-          {buddy?.has_partner ? (
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">🤝</span>
-                <div>
-                  <div className="text-white font-medium">{buddy.partner_name}</div>
-                  <div className="text-text-muted text-xs">Your accountability partner</div>
-                </div>
-              </div>
-              <div className="flex gap-3 text-sm">
-                <div className="flex-1 p-2 rounded-lg bg-bg-dark text-center">
-                  <div className="text-warning font-bold">🔥 {buddy.partner_streak || 0}</div>
-                  <div className="text-text-muted text-xs">Their streak</div>
-                </div>
-                <div className="flex-1 p-2 rounded-lg bg-bg-dark text-center">
-                  <div className="text-accent font-bold">🔥 {buddy.my_streak || 0}</div>
-                  <div className="text-text-muted text-xs">Your streak</div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Generate invite */}
-              <div>
-                <div className="text-white text-sm font-medium mb-2">Invite a friend</div>
-                {inviteLink ? (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={inviteLink}
-                      className="flex-1 px-3 py-2 rounded-lg bg-bg-dark border border-border text-white text-sm truncate"
-                    />
-                    <button
-                      onClick={copyInvite}
-                      className="px-3 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors cursor-pointer"
-                    >
-                      {inviteCopied ? "Copied!" : "Copy"}
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={generateInvite}
-                    disabled={inviteLoading}
-                    className="w-full py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors cursor-pointer disabled:opacity-50"
-                  >
-                    {inviteLoading ? "Generating..." : "Generate Invite Link"}
-                  </button>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-lg">{p.emoji}</span>
+                <span className="text-white text-sm font-medium">{p.name}</span>
+                {editPersonality === p.id && (
+                  <span className="ml-auto text-accent text-xs">Active</span>
                 )}
               </div>
-
-              {/* Accept invite */}
-              <div className="pt-3 border-t border-border/50">
-                <div className="text-white text-sm font-medium mb-2">Have a code?</div>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Paste invite code"
-                    value={acceptCode}
-                    onChange={(e) => setAcceptCode(e.target.value)}
-                    className="flex-1 px-3 py-2 rounded-lg bg-bg-dark border border-border text-white placeholder:text-text-muted text-sm focus:outline-none focus:border-accent"
-                  />
-                  <button
-                    onClick={acceptInvite}
-                    disabled={acceptLoading || !acceptCode.trim()}
-                    className="px-4 py-2 rounded-lg bg-success/20 text-success text-sm font-medium hover:bg-success/30 transition-colors cursor-pointer disabled:opacity-50"
-                  >
-                    {acceptLoading ? "..." : "Join"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ================================================================= */}
-      {/* DAILY REMINDERS */}
-      {/* ================================================================= */}
-      <div className="space-y-4">
-        <div>
-          <h3 className="text-lg font-semibold text-white mb-1">🔔 Daily Reminders</h3>
-          <p className="text-text-muted text-sm">
-            Get a nudge if you haven&apos;t completed your tasks for the day.
-          </p>
-        </div>
-
-        <div className="p-5 rounded-xl bg-bg-card border border-border space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-white font-medium text-sm">Evening Reminder</div>
-              <div className="text-text-muted text-xs">Reminds you to finish your priority task</div>
-            </div>
-            <button
-              role="switch"
-              aria-checked={dailyReminder}
-              onClick={() => {
-                const next = !dailyReminder;
-                setDailyReminder(next);
-                saveStickyPrefs({ dailyReminder: next });
-              }}
-              className={`w-12 h-6 rounded-full transition-colors cursor-pointer relative ${
-                dailyReminder ? "bg-accent" : "bg-bg-dark border border-border"
-              }`}
-            >
-              <span
-                className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
-                  dailyReminder ? "left-7" : "left-1"
-                }`}
-              />
+              <p className="text-text-muted text-xs">{p.desc}</p>
             </button>
-          </div>
+          ))}
+        </div>
+      </section>
 
-          {dailyReminder && (
-            <div className="pt-3 border-t border-border/50">
-              <label className="text-text-secondary text-sm block mb-2">Reminder Time</label>
-              <select
-                value={reminderTime}
-                onChange={(e) => {
-                  setReminderTime(e.target.value);
-                  saveStickyPrefs({ reminderTime: e.target.value });
-                }}
-                className="w-full px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-white text-sm focus:outline-none focus:border-accent"
+      {/* ====== Goals ====== */}
+      <section className="bg-bg-card border border-border rounded-xl p-5 space-y-4">
+        <h3 className="text-lg font-semibold text-white">Goals</h3>
+        <div className="flex flex-wrap gap-2">
+          {editGoals.map((goal) => (
+            <span
+              key={goal}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent/10 text-accent text-sm"
+            >
+              {goal}
+              <button
+                onClick={() => removeGoal(goal)}
+                className="hover:text-error transition-colors cursor-pointer"
+                aria-label={`Remove goal: ${goal}`}
               >
-                {["5:00 PM", "6:00 PM", "7:00 PM", "8:00 PM", "9:00 PM", "10:00 PM"].map(t => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-          )}
+                &times;
+              </button>
+            </span>
+          ))}
         </div>
-      </div>
-
-      {/* ================================================================= */}
-      {/* CLASS IMPORTANCE */}
-      {/* ================================================================= */}
-      <div className="space-y-4">
-        <div>
-          <h3 className="text-lg font-semibold text-white mb-1">Class Importance</h3>
-          <p className="text-text-muted text-sm">
-            Rank your classes by personal importance. Higher importance classes will be prioritized in &ldquo;Most Pressing&rdquo; and study recommendations.
-          </p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newGoal}
+            onChange={(e) => setNewGoal(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addGoal(); } }}
+            placeholder="Add a goal..."
+            className="flex-1 px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent text-sm"
+          />
+          <button
+            onClick={addGoal}
+            disabled={!newGoal.trim()}
+            className="px-4 py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors cursor-pointer disabled:opacity-50"
+          >
+            Add
+          </button>
         </div>
+      </section>
 
-        {courses.length === 0 ? (
-          <div className="p-6 rounded-xl bg-bg-card border border-border text-center">
-            <div className="text-3xl mb-3">📚</div>
-            <p className="text-white font-medium mb-1">No courses yet</p>
-            <p className="text-text-muted text-sm">
-              Sync your assignments from Teamie and your courses will show up here.
-            </p>
+      {/* ====== Daily Briefing ====== */}
+      <section className="bg-bg-card border border-border rounded-xl p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-white">Daily Email Briefing</h3>
+            <p className="text-text-muted text-sm mt-0.5">Get a morning email with your plan for the day.</p>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {courses.map((course) => {
-              const currentImportance = course.policies?.importance || 3;
-              const isSaving = saving === course.id;
+          <button
+            role="switch"
+            aria-checked={editBriefing}
+            onClick={() => setEditBriefing(!editBriefing)}
+            className={`w-12 h-6 rounded-full transition-colors cursor-pointer relative ${
+              editBriefing ? "bg-accent" : "bg-bg-dark border border-border"
+            }`}
+          >
+            <span className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
+              editBriefing ? "left-7" : "left-1"
+            }`} />
+          </button>
+        </div>
+      </section>
 
-              return (
-                <div
-                  key={course.id}
-                  className="p-4 rounded-xl bg-bg-card border border-border"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-white font-medium truncate flex-1 mr-4">
-                      {course.name}
-                    </span>
-                    {isSaving && (
-                      <span className="text-accent text-xs flex items-center gap-1">
-                        <span className="animate-spin">⏳</span> Saving...
-                      </span>
-                    )}
-                  </div>
+      {/* Save profile button */}
+      <button
+        onClick={saveProfile}
+        disabled={saving}
+        className="w-full py-3 rounded-xl bg-accent hover:bg-accent-hover text-white font-semibold transition-colors cursor-pointer disabled:opacity-50"
+      >
+        {saving ? "Saving..." : "Save Profile"}
+      </button>
 
-                  {/* Importance slider */}
-                  <div className="flex items-center gap-2">
-                    {importanceLevels.map((level) => (
-                      <button
-                        key={level.value}
-                        onClick={() => updateImportance(course.id, level.value)}
-                        disabled={isSaving}
-                        className={`flex-1 py-2 px-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                          currentImportance === level.value
-                            ? `bg-accent/20 border-2 border-accent ${level.color}`
-                            : "bg-bg-dark border border-border text-text-muted hover:border-accent/30"
-                        }`}
-                      >
-                        {level.label}
-                      </button>
-                    ))}
-                  </div>
+      {/* ====== LMS Connections ====== */}
+      <section className="bg-bg-card border border-border rounded-xl p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">LMS Connections</h3>
+          <button
+            onClick={() => setShowAddLMS(!showAddLMS)}
+            className="text-accent text-sm font-medium hover:underline cursor-pointer"
+          >
+            {showAddLMS ? "Cancel" : "+ Add LMS"}
+          </button>
+        </div>
 
-                  {/* Marzano toggle */}
-                  <div className="mt-3 pt-3 border-t border-border/50 flex items-center justify-between">
-                    <div>
-                      <span className="text-text-secondary text-sm">Marzano Grading</span>
-                      <p className="text-text-muted text-xs">Uses 0-4 scale instead of percentages</p>
-                    </div>
-                    <button
-                      onClick={() => toggleMarzano(course.id)}
-                      disabled={isSaving}
-                      className={`w-12 h-6 rounded-full transition-colors cursor-pointer relative ${
-                        course.policies?.marzano
-                          ? "bg-accent"
-                          : "bg-bg-dark border border-border"
-                      }`}
-                    >
-                      <span
-                        className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
-                          course.policies?.marzano ? "left-7" : "left-1"
-                        }`}
-                      />
-                    </button>
-                  </div>
-
-                  {/* Units / Curriculum */}
-                  <div className="mt-3 pt-3 border-t border-border/50">
-                    <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <span className="text-text-secondary text-sm">Course Units</span>
-                        <p className="text-text-muted text-xs">Define units for structured studying</p>
-                      </div>
-                      {editingUnits?.courseId !== course.id && (
-                        <button
-                          onClick={() => startEditingUnits(course)}
-                          className="text-accent text-xs hover:underline cursor-pointer"
-                        >
-                          {course.policies?.units?.length ? "Edit" : "Add Units"}
-                        </button>
-                      )}
-                    </div>
-
-                    {editingUnits?.courseId === course.id ? (
-                      <div className="space-y-2">
-                        {editingUnits.units.map((unit, i) => (
-                          <div key={i} className="flex gap-2">
-                            <input
-                              type="text"
-                              placeholder={`Unit ${i + 1} (e.g., Chapter 5, Memory Systems)`}
-                              value={unit}
-                              onChange={(e) => updateUnit(i, e.target.value)}
-                              className="flex-1 px-3 py-2 rounded-lg bg-bg-dark border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent text-sm"
-                            />
-                            {editingUnits.units.length > 1 && (
-                              <button
-                                onClick={() => removeUnit(i)}
-                                className="text-text-muted hover:text-error text-lg cursor-pointer px-1"
-                              >
-                                ×
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                        <button
-                          onClick={addUnit}
-                          className="text-accent text-xs hover:underline cursor-pointer"
-                        >
-                          + Add unit
-                        </button>
-                        <div className="flex gap-2 mt-2">
-                          <button
-                            onClick={saveUnits}
-                            disabled={isSaving}
-                            className="px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-xs font-medium cursor-pointer disabled:opacity-50"
-                          >
-                            Save
-                          </button>
-                          <button
-                            onClick={cancelEditingUnits}
-                            className="px-3 py-1.5 rounded-lg bg-bg-dark border border-border text-text-secondary text-xs cursor-pointer"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : course.policies?.units?.length ? (
-                      <div className="flex flex-wrap gap-1.5 mt-2">
-                        {course.policies.units.map((unit, i) => (
-                          <span
-                            key={i}
-                            className="px-2 py-1 rounded-lg bg-bg-dark text-text-secondary text-xs"
-                          >
-                            {unit}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })}
+        {credentials.length === 0 && !showAddLMS && (
+          <div className="text-center py-6">
+            <p className="text-text-muted text-sm">No LMS connected yet.</p>
+            <button
+              onClick={() => setShowAddLMS(true)}
+              className="mt-2 text-accent text-sm hover:underline cursor-pointer"
+            >
+              Connect your LMS
+            </button>
           </div>
         )}
-      </div>
 
-      {/* Target Grades */}
-      {courses.length > 0 && (
-        <div className="space-y-4">
-          <div>
-            <h3 className="text-lg font-semibold text-white mb-1">🎯 Target Grades</h3>
-            <p className="text-text-muted text-sm">
-              Set your target grade per class. Grade Guardian will alert you when you&apos;re at risk of dropping below these targets.
-            </p>
+        {credentials.map((cred) => (
+          <div key={cred.id} className="flex items-center gap-3 p-3 bg-bg-dark rounded-lg">
+            <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center text-accent text-lg">
+              {cred.lms_type === "teamie" ? "T" : cred.lms_type === "canvas" ? "C" : cred.lms_type === "blackboard" ? "B" : "G"}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-white text-sm font-medium capitalize">{cred.lms_type}</p>
+              <p className="text-text-muted text-xs truncate">{cred.lms_url}</p>
+              {cred.last_sync_at && (
+                <p className="text-text-muted text-xs">
+                  Last sync: {new Date(cred.last_sync_at).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${
+                cred.last_login_success === true ? "bg-success" :
+                cred.last_login_success === false ? "bg-error" : "bg-text-muted"
+              }`} />
+              <button
+                onClick={() => deleteLMSCredential(cred.id)}
+                className="p-1.5 rounded-lg hover:bg-error/10 text-text-muted hover:text-error transition-colors cursor-pointer"
+                aria-label="Delete credential"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
           </div>
+        ))}
 
-          <div className="p-5 rounded-xl bg-bg-card border border-border space-y-4">
-            {courses.map((course) => {
-              const currentTarget = targetGrades[course.name] || 90;
-              return (
-                <div key={course.id} className="flex items-center justify-between gap-4">
-                  <span className="text-white text-sm font-medium truncate flex-1">{course.name}</span>
-                  <div className="flex items-center gap-2">
-                    {[90, 85, 80, 75, 70].map((pct) => (
-                      <button
-                        key={pct}
-                        onClick={() => {
-                          setTargetGrades({ ...targetGrades, [course.name]: pct });
-                        }}
-                        className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                          currentTarget === pct
-                            ? "bg-accent text-white"
-                            : "bg-bg-dark border border-border text-text-muted hover:border-accent/30"
-                        }`}
-                      >
-                        {pct}%
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-
+        {showAddLMS && (
+          <div className="space-y-3 p-4 bg-bg-dark rounded-lg">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="lms-type" className="block text-text-secondary text-sm mb-1.5">LMS Type</label>
+                <select
+                  id="lms-type"
+                  value={lmsType}
+                  onChange={(e) => setLmsType(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-lg bg-bg-card border border-border text-white text-sm focus:outline-none focus:border-accent"
+                >
+                  <option value="teamie">Teamie</option>
+                  <option value="canvas">Canvas</option>
+                  <option value="blackboard">Blackboard</option>
+                  <option value="google_classroom">Google Classroom</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="lms-url" className="block text-text-secondary text-sm mb-1.5">LMS URL</label>
+                <input
+                  id="lms-url"
+                  type="url"
+                  value={lmsUrl}
+                  onChange={(e) => setLmsUrl(e.target.value)}
+                  placeholder="https://lms.school.edu"
+                  className="w-full px-3 py-2.5 rounded-lg bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent text-sm"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="lms-user" className="block text-text-secondary text-sm mb-1.5">Username</label>
+                <input
+                  id="lms-user"
+                  type="text"
+                  value={lmsUser}
+                  onChange={(e) => setLmsUser(e.target.value)}
+                  placeholder="Your LMS username"
+                  autoComplete="username"
+                  className="w-full px-3 py-2.5 rounded-lg bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent text-sm"
+                />
+              </div>
+              <div>
+                <label htmlFor="lms-pass" className="block text-text-secondary text-sm mb-1.5">Password</label>
+                <input
+                  id="lms-pass"
+                  type="password"
+                  value={lmsPass}
+                  onChange={(e) => setLmsPass(e.target.value)}
+                  placeholder="Your LMS password"
+                  autoComplete="current-password"
+                  className="w-full px-3 py-2.5 rounded-lg bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent text-sm"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-text-muted text-xs">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              Credentials are encrypted and stored securely.
+            </div>
             <button
-              onClick={async () => {
-                setSavingTargets(true);
-                const supabase = createClient();
-                const { error: updateError } = await supabase.auth.updateUser({
-                  data: { target_grades: targetGrades },
-                });
-                if (updateError) {
-                  setMessage({ type: "error", text: updateError.message });
-                } else {
-                  setMessage({ type: "success", text: "Target grades saved!" });
-                  setTimeout(() => setMessage(null), 2000);
-                }
-                setSavingTargets(false);
-              }}
-              disabled={savingTargets}
+              onClick={saveLMSCredential}
+              disabled={lmsSaving || !lmsUrl.trim() || !lmsUser.trim() || !lmsPass}
               className="w-full py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors cursor-pointer disabled:opacity-50"
             >
-              {savingTargets ? "Saving..." : "Save Target Grades"}
+              {lmsSaving ? "Saving..." : "Save Credentials"}
             </button>
           </div>
+        )}
+      </section>
+
+      {/* ====== Data & Account ====== */}
+      <section className="bg-bg-card border border-border rounded-xl p-5 space-y-4">
+        <h3 className="text-lg font-semibold text-white">Data & Account</h3>
+
+        <div className="flex gap-3">
+          <button
+            onClick={exportData}
+            disabled={exporting}
+            className="flex-1 py-2.5 rounded-lg bg-bg-dark border border-border text-text-secondary text-sm font-medium hover:text-white hover:border-accent/30 transition-colors cursor-pointer disabled:opacity-50"
+          >
+            {exporting ? "Exporting..." : "Export All Data"}
+          </button>
+          <button
+            onClick={handleSignOut}
+            className="flex-1 py-2.5 rounded-lg bg-error/10 border border-error/20 text-error text-sm font-medium hover:bg-error/20 transition-colors cursor-pointer"
+          >
+            Sign Out
+          </button>
         </div>
-      )}
+      </section>
 
-      {/* Daily Autopilot Settings */}
-      <div className="space-y-4">
-        <div>
-          <h3 className="text-lg font-semibold text-white mb-1">⚡ Daily Autopilot</h3>
-          <p className="text-text-muted text-sm">
-            Wake up to a personalized daily plan. No decision-making required - just follow the checklist.
-          </p>
-        </div>
-
-        <div className="p-5 rounded-xl bg-bg-card border border-border space-y-5">
-          {/* Morning Email Toggle */}
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-white font-medium">Daily Morning Email</div>
-              <div className="text-text-muted text-sm">Send yourself a plan from the Today page (auto-scheduling coming soon)</div>
-            </div>
-            <button
-              role="switch"
-              aria-checked={autoEmailEnabled}
-              onClick={() => {
-                const newValue = !autoEmailEnabled;
-                setAutoEmailEnabled(newValue);
-                localStorage.setItem("autopilot_prefs", JSON.stringify({
-                  wakeTime, studyHours, autoEmailEnabled: newValue, autoEmailTime
-                }));
-              }}
-              className={`w-14 h-7 rounded-full transition-colors cursor-pointer relative ${
-                autoEmailEnabled ? "bg-accent" : "bg-bg-dark border border-border"
-              }`}
-            >
-              <span
-                className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${
-                  autoEmailEnabled ? "left-8" : "left-1"
-                }`}
-              />
-            </button>
-          </div>
-
-          {/* Email Time */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-text-secondary text-sm block mb-2">Email Send Time</label>
-              <select
-                value={autoEmailTime}
-                onChange={(e) => {
-                  setAutoEmailTime(e.target.value);
-                  localStorage.setItem("autopilot_prefs", JSON.stringify({
-                    wakeTime, studyHours, autoEmailEnabled, autoEmailTime: e.target.value
-                  }));
-                }}
-                className="w-full px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-white text-sm focus:outline-none focus:border-accent"
-              >
-                {["5:00 AM", "5:30 AM", "6:00 AM", "6:30 AM", "7:00 AM", "7:30 AM", "8:00 AM"].map(t => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-text-secondary text-sm block mb-2">Your Wake Time</label>
-              <select
-                value={wakeTime}
-                onChange={(e) => {
-                  setWakeTime(e.target.value);
-                  localStorage.setItem("autopilot_prefs", JSON.stringify({
-                    wakeTime: e.target.value, studyHours, autoEmailEnabled, autoEmailTime
-                  }));
-                }}
-                className="w-full px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-white text-sm focus:outline-none focus:border-accent"
-              >
-                {["5:00 AM", "5:30 AM", "6:00 AM", "6:30 AM", "7:00 AM", "7:30 AM", "8:00 AM", "8:30 AM", "9:00 AM"].map(t => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Study Hours */}
-          <div>
-            <label className="text-text-secondary text-sm block mb-2">Daily Study Hours Available</label>
-            <div className="flex gap-2">
-              {[1, 1.5, 2, 2.5, 3, 4, 5].map(h => (
-                <button
-                  key={h}
-                  onClick={() => {
-                    setStudyHours(h);
-                    localStorage.setItem("autopilot_prefs", JSON.stringify({
-                      wakeTime, studyHours: h, autoEmailEnabled, autoEmailTime
-                    }));
-                  }}
-                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                    studyHours === h
-                      ? "bg-accent text-white"
-                      : "bg-bg-dark border border-border text-text-muted hover:border-accent/30"
-                  }`}
-                >
-                  {h}h
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Email recipient */}
-          <div className="pt-3 border-t border-border/50">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-text-secondary text-sm">Email recipient</div>
-                <div className="text-white text-sm font-medium">{userEmail || "Not set"}</div>
-              </div>
-              <a
-                href="/today"
-                className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
-              >
-                Open Today&apos;s Plan →
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* About */}
-      <div className="p-5 rounded-xl bg-bg-card border border-border">
-        <h3 className="text-sm font-semibold text-text-secondary mb-2">About SchoolPilot</h3>
-        <p className="text-text-muted text-sm">
-          Built by a student who got tired of staring at a messy todo list. SchoolPilot uses AI to turn chaos into clarity.
-        </p>
-        <div className="mt-4 flex items-center gap-4 text-xs text-text-muted">
-          <a href="https://schoolpilot.co" className="hover:text-accent transition-colors">Website</a>
-          <span>•</span>
-          <span>v2.2.0</span>
-        </div>
+      {/* Footer */}
+      <div className="text-center text-text-muted text-xs pb-8">
+        SchoolPilot v3.0 &middot; Built for students, by students.
       </div>
     </div>
   );
