@@ -103,7 +103,8 @@ const LMS_OPTIONS = [
   { value: "canvas", label: "Canvas" },
   { value: "blackboard", label: "Blackboard" },
   { value: "google_classroom", label: "Google Classroom" },
-  { value: "other", label: "Other" },
+  { value: "schoology", label: "Schoology" },
+  { value: "moodle", label: "Moodle" },
 ];
 
 // ---------------------------------------------------------------------------

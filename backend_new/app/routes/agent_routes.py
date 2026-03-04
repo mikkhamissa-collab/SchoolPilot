@@ -1,5 +1,4 @@
 # agent_routes.py — Browser agent control endpoints.
-import asyncio
 import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException

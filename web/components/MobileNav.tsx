@@ -6,8 +6,10 @@ import { usePathname } from "next/navigation";
 
 const navItems = [
   { href: "/today", label: "Today", icon: "🛡️" },
+  { href: "/focus", label: "Focus", icon: "🎯" },
+  { href: "/plan", label: "Plan", icon: "📅" },
+  { href: "/sprint", label: "Sprint", icon: "⚡" },
   { href: "/grades", label: "Grades", icon: "📊" },
-  { href: "/settings", label: "Settings", icon: "⚙️" },
 ];
 
 export default function MobileNav() {

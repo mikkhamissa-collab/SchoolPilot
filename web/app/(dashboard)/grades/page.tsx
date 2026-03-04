@@ -81,12 +81,12 @@ export default function GradesPage() {
   const [whatifScore, setWhatifScore] = useState("");
   const [whatifMax, setWhatifMax] = useState("100");
   const [whatifCat, setWhatifCat] = useState("");
-  const [whatifResult, setWhatifResult] = useState<{ current: number; projected: number; projected_letter: string; change: number } | null>(null);
+  const [whatifResult, setWhatifResult] = useState<{ overall: number; letter: string; categories: Record<string, { average: number | null; weight: number }> } | null>(null);
 
   // Required
   const [reqTarget, setReqTarget] = useState("90");
   const [reqCat, setReqCat] = useState("");
-  const [reqResult, setReqResult] = useState<{ required_pct: number; achievable: boolean; explanation: string } | null>(null);
+  const [reqResult, setReqResult] = useState<{ needed_on_next_assignment: number; achievable: boolean; needed_average_in_category: number; target_percentage: number; target_category: string } | null>(null);
 
   const [deleteConfirm, setDeleteConfirm] = useState<{ courseId: string; courseName: string } | null>(null);
   const [error, setError] = useState("");
@@ -195,6 +195,12 @@ export default function GradesPage() {
 
   const handleAddGrade = async () => {
     if (!activeCourse || !gradeName.trim() || !gradeScore) return;
+    const parsedScore = parseFloat(gradeScore);
+    const parsedMax = parseFloat(gradeMax) || 100;
+    if (isNaN(parsedScore) || isNaN(parsedMax) || parsedMax <= 0) {
+      setError("Please enter valid numeric scores.");
+      return;
+    }
     const supabase = createClient();
     const { data, error: err } = await supabase
       .from("grades")
@@ -202,8 +208,8 @@ export default function GradesPage() {
         course_id: activeCourse.id,
         category: gradeCategory,
         name: gradeName.trim(),
-        score: parseFloat(gradeScore),
-        max_score: parseFloat(gradeMax) || 100,
+        score: parsedScore,
+        max_score: parsedMax,
       })
       .select()
       .single();
@@ -221,11 +227,13 @@ export default function GradesPage() {
   const handleWhatif = async () => {
     if (!activeCourse || !whatifScore) return;
     try {
-      const result = await apiFetch<{ current: number; projected: number; projected_letter: string; change: number }>("grades/whatif", {
+      const result = await apiFetch<{ overall: number; letter: string; categories: Record<string, { average: number | null; weight: number }> }>("grades/what-if", {
         categories: activeCourse.categories,
         grades: grades.map(g => ({ category: g.category, name: g.name, score: g.score, max: g.max_score })),
         policies: activeCourse.policies || {},
-        hypotheticals: [{ category: whatifCat, name: "What-if", score: parseFloat(whatifScore), max: parseFloat(whatifMax) || 100 }],
+        hypothetical_category: whatifCat,
+        hypothetical_score: parseFloat(whatifScore),
+        hypothetical_max: parseFloat(whatifMax) || 100,
       });
       setWhatifResult(result);
     } catch (err) {
@@ -237,13 +245,12 @@ export default function GradesPage() {
   const handleRequired = async () => {
     if (!activeCourse) return;
     try {
-      const result = await apiFetch<{ required_pct: number; achievable: boolean; explanation: string }>("grades/required", {
+      const result = await apiFetch<{ needed_on_next_assignment: number; achievable: boolean; needed_average_in_category: number; target_percentage: number; target_category: string }>("grades/required-score", {
         categories: activeCourse.categories,
         grades: grades.map(g => ({ category: g.category, name: g.name, score: g.score, max: g.max_score })),
         policies: activeCourse.policies || {},
-        target: parseFloat(reqTarget),
-        category: reqCat,
-        max_score: 100,
+        target_percentage: parseFloat(reqTarget),
+        target_category: reqCat,
       });
       setReqResult(result);
     } catch (err) {
@@ -512,7 +519,9 @@ export default function GradesPage() {
             </div>
             {reqResult && (
               <div className={`p-3 rounded-lg text-sm ${reqResult.achievable ? "bg-success/10 text-success" : "bg-error/10 text-error"}`}>
-                {reqResult.explanation}
+                {reqResult.achievable
+                  ? `You need ${reqResult.needed_on_next_assignment.toFixed(1)}% on your next ${reqResult.target_category} assignment to reach ${reqResult.target_percentage}% overall.`
+                  : `Reaching ${reqResult.target_percentage}% would require ${reqResult.needed_on_next_assignment.toFixed(1)}% on your next assignment, which may not be achievable.`}
               </div>
             )}
           </div>
@@ -549,11 +558,13 @@ export default function GradesPage() {
             </div>
             {whatifResult && (
               <div className="p-3 rounded-lg bg-bg-dark text-sm">
-                <span className="text-white font-medium">{whatifResult.projected.toFixed(1)}%</span>
-                <span className="text-text-muted"> ({whatifResult.projected_letter})</span>
-                <span className={`ml-2 font-medium ${whatifResult.change >= 0 ? "text-success" : "text-error"}`}>
-                  {whatifResult.change >= 0 ? "+" : ""}{whatifResult.change.toFixed(1)}%
-                </span>
+                <span className="text-white font-medium">{whatifResult.overall?.toFixed(1)}%</span>
+                <span className="text-text-muted"> ({whatifResult.letter})</span>
+                {gradeResult && (
+                  <span className={`ml-2 font-medium ${whatifResult.overall - gradeResult.overall >= 0 ? "text-success" : "text-error"}`}>
+                    {whatifResult.overall - gradeResult.overall >= 0 ? "+" : ""}{(whatifResult.overall - gradeResult.overall).toFixed(1)}%
+                  </span>
+                )}
               </div>
             )}
           </div>

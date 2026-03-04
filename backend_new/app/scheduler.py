@@ -81,37 +81,39 @@ async def check_reminders_job():
 
     for reminder in due.data:
         try:
-            # Mark as sent
-            db.table("reminders").update({
-                "sent": True,
-                "sent_at": now,
-            }).eq("id", reminder["id"]).execute()
-
             # Send email notification via Resend
             user_data = db.auth.admin.get_user_by_id(reminder["user_id"])
             user_email = user_data.user.email if user_data and user_data.user else None
 
             if user_email and settings.resend_api_key:
+                import html as html_mod
+                safe_title = html_mod.escape(reminder.get("title", ""))
                 resend.api_key = settings.resend_api_key
                 resend.Emails.send({
                     "from": "SchoolPilot <reminders@schoolpilot.co>",
                     "to": user_email,
-                    "subject": f"Reminder: {reminder['title']}",
+                    "subject": f"Reminder: {safe_title}",
                     "html": (
                         "<div style='font-family: sans-serif;'>"
                         "<h2>&#9200; Reminder</h2>"
-                        f"<p><strong>{reminder['title']}</strong></p>"
+                        f"<p><strong>{safe_title}</strong></p>"
                         "<p>This is your scheduled reminder from SchoolPilot.</p>"
                         "</div>"
                     ),
                 })
-                logger.info(f"Reminder email sent to {user_email}: {reminder['title']}")
+                logger.info(f"Reminder email sent to {user_email}: {safe_title}")
             else:
                 logger.warning(
                     f"Could not send reminder email for user {reminder['user_id']}: "
                     f"email={'found' if user_email else 'missing'}, "
                     f"resend_key={'set' if settings.resend_api_key else 'missing'}"
                 )
+
+            # Mark as sent only AFTER email succeeds
+            db.table("reminders").update({
+                "sent": True,
+                "sent_at": now,
+            }).eq("id", reminder["id"]).execute()
 
         except Exception as e:
             logger.exception(f"Failed to process reminder {reminder['id']}: {e}")
@@ -175,7 +177,8 @@ Keep it short — this is a morning email, not an essay. Use HTML formatting (bo
                 }],
             )
 
-            briefing_html = response.content[0].text
+            import html as html_mod
+            briefing_html = html_mod.escape(response.content[0].text).replace("\n", "<br>")
 
             # Get user email from Supabase auth
             user_data = db.auth.admin.get_user_by_id(user_id)

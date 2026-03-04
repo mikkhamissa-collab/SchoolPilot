@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
 import ChatSidebar from "@/components/ChatSidebar";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 export default function DashboardLayout({
   children,
@@ -73,10 +74,10 @@ export default function DashboardLayout({
       <main
         id="main-content"
         className={`md:ml-14 p-6 pb-24 md:pb-6 transition-all duration-300 ${
-          chatExpanded ? "sm:mr-[400px]" : "md:mr-0"
+          chatExpanded ? "md:mr-[400px]" : "md:mr-0"
         }`}
       >
-        {children}
+        <ErrorBoundary>{children}</ErrorBoundary>
       </main>
 
       {/* Right chat sidebar — self-contained, 400px wide */}

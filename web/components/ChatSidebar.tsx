@@ -147,18 +147,23 @@ export default function ChatSidebar() {
 
   // ---- Listen for open-chat events with optional pre-filled message ----
   useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const handleOpen = (e: Event) => {
       setIsExpanded(true);
       setShowConversations(false);
       const detail = (e as CustomEvent).detail;
       if (detail?.message) {
-        setTimeout(() => {
+        timeoutId = setTimeout(() => {
           sendMessageRef.current?.(detail.message);
+          timeoutId = null;
         }, 400);
       }
     };
     window.addEventListener("open-chat", handleOpen);
-    return () => window.removeEventListener("open-chat", handleOpen);
+    return () => {
+      window.removeEventListener("open-chat", handleOpen);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, []);
 
   // ---- Focus input when sidebar opens ----

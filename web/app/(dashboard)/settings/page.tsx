@@ -509,7 +509,8 @@ export default function SettingsPage() {
                   <option value="canvas">Canvas</option>
                   <option value="blackboard">Blackboard</option>
                   <option value="google_classroom">Google Classroom</option>
-                  <option value="other">Other</option>
+                  <option value="schoology">Schoology</option>
+                  <option value="moodle">Moodle</option>
                 </select>
               </div>
               <div>

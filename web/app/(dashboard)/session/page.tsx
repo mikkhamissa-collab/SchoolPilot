@@ -73,33 +73,49 @@ type Phase = "loading" | "diagnostic" | "generating" | "session" | "complete";
 function useTimer(targetMinutes: number, onComplete: () => void) {
   const [secondsLeft, setSecondsLeft] = useState(targetMinutes * 60);
   const [isRunning, setIsRunning] = useState(false);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const onCompleteRef = useRef(onComplete);
+
+  // Keep onComplete ref in sync without triggering effect re-runs
+  onCompleteRef.current = onComplete;
+
+  const stopInterval = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     if (isRunning && secondsLeft > 0) {
       intervalRef.current = setInterval(() => {
         setSecondsLeft((prev) => {
           if (prev <= 1) {
-            clearInterval(intervalRef.current!);
-            setIsRunning(false);
-            onComplete();
             return 0;
           }
           return prev - 1;
         });
       }, 1000);
     }
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [isRunning, secondsLeft, onComplete]);
+    return () => stopInterval();
+  }, [isRunning, stopInterval]);
 
-  const reset = (minutes: number) => {
+  // Watch for timer hitting zero
+  useEffect(() => {
+    if (secondsLeft === 0 && isRunning) {
+      stopInterval();
+      setIsRunning(false);
+      onCompleteRef.current();
+    }
+  }, [secondsLeft, isRunning, stopInterval]);
+
+  const reset = useCallback((minutes: number) => {
+    stopInterval();
     setSecondsLeft(minutes * 60);
     setIsRunning(false);
-  };
+  }, [stopInterval]);
 
-  const toggle = () => setIsRunning(!isRunning);
+  const toggle = useCallback(() => setIsRunning((prev) => !prev), []);
 
   const minutes = Math.floor(secondsLeft / 60);
   const seconds = secondsLeft % 60;
@@ -139,6 +155,9 @@ function SessionInner() {
   const timer = useTimer(chunk?.minutes || 25, () => {
     // Timer completed — auto-advance prompt
   });
+  // Keep timer ref to avoid circular dependency with generateSession
+  const timerRef = useRef(timer);
+  timerRef.current = timer;
 
   // Load course materials if available
   useEffect(() => {
@@ -250,12 +269,12 @@ function SessionInner() {
       setCurrentChunk(0);
       setCompletedChunks(new Set());
       setPhase("session");
-      timer.reset(result.chunks?.[0]?.minutes || 25);
+      timerRef.current.reset(result.chunks?.[0]?.minutes || 25);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to generate session");
       setPhase("loading");
     }
-  }, [assignment, type, course, grade, target, courseContent, timer]);
+  }, [assignment, type, course, grade, target, courseContent]);
 
   const submitDiagnostic = () => {
     if (!diagnostic) return;
@@ -299,7 +318,12 @@ function SessionInner() {
       // All chunks done!
       setPhase("complete");
       setShowConfetti(true);
-      setTimeout(() => setShowConfetti(false), 100);
+      // Use requestAnimationFrame to ensure React renders true before setting false
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setShowConfetti(false);
+        });
+      });
     }
   };
 

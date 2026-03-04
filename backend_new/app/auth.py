@@ -4,8 +4,7 @@ import logging
 import time
 import httpx
 from fastapi import HTTPException, Request
-from jose import jwt, JWTError, jwk
-from jose.utils import base64url_decode
+from jose import jwt, JWTError
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
