@@ -1,9 +1,10 @@
 # auth_routes.py — Authentication and credential management.
 from __future__ import annotations
 import logging
+import re
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from cryptography.fernet import Fernet
 from app.auth import get_current_user
 from app.db import get_db
@@ -14,10 +15,29 @@ router = APIRouter()
 
 
 class LMSCredentialRequest(BaseModel):
-    lms_type: str       # 'teamie', 'canvas', 'blackboard', 'google_classroom'
+    lms_type: str       # 'teamie', 'canvas', 'blackboard', 'google_classroom', 'schoology', 'moodle'
     lms_url: str        # 'https://lms.asl.org'
     username: str
     password: str
+
+    @field_validator("lms_type")
+    @classmethod
+    def validate_lms_type(cls, v):
+        allowed = {"teamie", "canvas", "blackboard", "google_classroom", "schoology", "moodle"}
+        if v.lower() not in allowed:
+            raise ValueError(f"Invalid LMS type. Allowed: {', '.join(sorted(allowed))}")
+        return v.lower()
+
+    @field_validator("lms_url")
+    @classmethod
+    def validate_lms_url(cls, v):
+        if not re.match(r'^https?://', v):
+            raise ValueError("LMS URL must start with http:// or https://")
+        dangerous = ["file://", "javascript:", "data:", "ftp://"]
+        for scheme in dangerous:
+            if v.lower().startswith(scheme):
+                raise ValueError(f"Invalid URL scheme: {scheme}")
+        return v.rstrip("/")
 
 
 class LMSCredentialResponse(BaseModel):
@@ -44,7 +64,7 @@ async def save_lms_credentials(body: LMSCredentialRequest, user_id: str = Depend
     result = db.table("lms_credentials").upsert({
         "user_id": user_id,
         "lms_type": body.lms_type,
-        "lms_url": body.lms_url.rstrip("/"),
+        "lms_url": body.lms_url,
         "encrypted_username": encrypted_username,
         "encrypted_password": encrypted_password,
         "sync_enabled": True,

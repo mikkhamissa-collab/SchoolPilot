@@ -27,6 +27,32 @@ function getMarzanoLabel(score: number): { label: string; color: string } {
   return MARZANO_LABELS[rounded] || MARZANO_LABELS[Math.floor(score)] || { label: "", color: "text-text-muted" };
 }
 
+function ConfirmModal({ isOpen, title, message, onConfirm, onCancel }: {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="bg-bg-card border border-border rounded-2xl p-6 max-w-sm mx-4 shadow-2xl">
+        <h3 className="text-lg font-semibold text-white mb-2">{title}</h3>
+        <p className="text-text-secondary text-sm mb-6">{message}</p>
+        <div className="flex gap-3 justify-end">
+          <button onClick={onCancel} className="px-4 py-2 rounded-lg bg-bg-hover text-text-secondary hover:text-white text-sm transition-colors">
+            Cancel
+          </button>
+          <button onClick={onConfirm} className="px-4 py-2 rounded-lg bg-error hover:bg-error/80 text-white text-sm font-medium transition-colors">
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function GradesPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [activeCourse, setActiveCourse] = useState<Course | null>(null);
@@ -62,6 +88,7 @@ export default function GradesPage() {
   const [reqCat, setReqCat] = useState("");
   const [reqResult, setReqResult] = useState<{ required_pct: number; achievable: boolean; explanation: string } | null>(null);
 
+  const [deleteConfirm, setDeleteConfirm] = useState<{ courseId: string; courseName: string } | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -147,9 +174,14 @@ export default function GradesPage() {
     }
   };
 
-  const handleDeleteCourse = async (courseId: string) => {
-    if (!confirm("Delete this course and all its grades?")) return;
-    if (!userId) return;
+  const handleDeleteCourse = (courseId: string, courseName: string) => {
+    setDeleteConfirm({ courseId, courseName });
+  };
+
+  const confirmDeleteCourse = async () => {
+    if (!deleteConfirm || !userId) return;
+    const { courseId } = deleteConfirm;
+    setDeleteConfirm(null);
     const supabase = createClient();
     const { error: delErr } = await supabase.from("courses").delete().eq("id", courseId).eq("user_id", userId);
     if (delErr) { setError(delErr.message); return; }
@@ -252,7 +284,7 @@ export default function GradesPage() {
               {c.name}
             </button>
             <button
-              onClick={() => handleDeleteCourse(c.id)}
+              onClick={() => handleDeleteCourse(c.id, c.name)}
               aria-label={`Delete ${c.name}`}
               className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-error text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
             >
@@ -267,6 +299,14 @@ export default function GradesPage() {
           + Add Course
         </button>
       </div>
+
+      <ConfirmModal
+        isOpen={deleteConfirm !== null}
+        title="Delete Course"
+        message={`Delete "${deleteConfirm?.courseName}" and all its grades? This cannot be undone.`}
+        onConfirm={confirmDeleteCourse}
+        onCancel={() => setDeleteConfirm(null)}
+      />
 
       {error && <p className="text-error text-sm">{error}</p>}
 

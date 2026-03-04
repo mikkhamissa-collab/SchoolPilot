@@ -1,6 +1,9 @@
 # profile_routes.py — Student profile and settings management.
+import json
 import logging
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
 from app.auth import get_current_user
@@ -139,28 +142,51 @@ async def get_full_context(user_id: str = Depends(get_current_user)):
 
 @router.get("/export")
 async def export_all_data(user_id: str = Depends(get_current_user)):
-    """Export all student data (GDPR-style full data export)."""
-    db = get_db()
+    """Export all student data as a streaming JSON download (GDPR-style full data export).
+
+    Streams each data section incrementally to avoid loading everything into memory at once.
+    """
     memory = MemoryStore(user_id)
 
-    profile = await memory.get_profile()
-    classes = await memory.get_all_classes()
-    conversations = await memory.get_conversations(limit=1000)
-    assignments = await memory.get_all_assignments(limit=1000)
-    grades = await memory.get_all_grades()
+    async def generate():
+        exported_at = datetime.now(timezone.utc).isoformat()
+        yield '{"exported_at":' + json.dumps(exported_at)
 
-    # Get all messages across all conversations
-    all_messages = []
-    for conv in conversations:
-        msgs = await memory.get_conversation_messages(conv["id"], limit=10000)
-        all_messages.extend(msgs)
+        yield ',"profile":'
+        profile = await memory.get_profile()
+        yield json.dumps(profile)
 
-    return {
-        "exported_at": "now",
-        "profile": profile,
-        "classes": classes,
-        "conversations": conversations,
-        "messages": all_messages,
-        "assignments": assignments,
-        "grades": grades,
-    }
+        yield ',"classes":'
+        classes = await memory.get_all_classes()
+        yield json.dumps(classes)
+
+        yield ',"conversations":'
+        conversations = await memory.get_conversations(limit=1000)
+        yield json.dumps(conversations)
+
+        yield ',"messages":['
+        first_msg = True
+        for conv in conversations:
+            msgs = await memory.get_conversation_messages(conv["id"], limit=10000)
+            for msg in msgs:
+                if not first_msg:
+                    yield ","
+                yield json.dumps(msg)
+                first_msg = False
+        yield "]"
+
+        yield ',"assignments":'
+        assignments = await memory.get_all_assignments(limit=1000)
+        yield json.dumps(assignments)
+
+        yield ',"grades":'
+        grades = await memory.get_all_grades()
+        yield json.dumps(grades)
+
+        yield "}"
+
+    return StreamingResponse(
+        generate(),
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=schoolpilot_export.json"},
+    )

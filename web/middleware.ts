@@ -20,6 +20,10 @@ const PROTECTED_PREFIXES = [
   "/session",
   "/onboarding",
   "/chat",
+  "/dashboard",
+  "/focus",
+  "/plan",
+  "/sprint",
 ];
 
 export async function middleware(request: NextRequest) {

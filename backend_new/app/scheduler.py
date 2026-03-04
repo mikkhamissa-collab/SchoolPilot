@@ -56,8 +56,9 @@ async def daily_sync_job():
 
 
 async def check_reminders_job():
-    """Check for due reminders and create notification messages."""
+    """Check for due reminders and send email notifications."""
     db = get_db()
+    settings = get_settings()
     now = datetime.now(timezone.utc).isoformat()
 
     # Find unsent reminders that are due
@@ -76,6 +77,8 @@ async def check_reminders_job():
 
     logger.info(f"Processing {len(due.data)} due reminders...")
 
+    import resend
+
     for reminder in due.data:
         try:
             # Mark as sent
@@ -84,8 +87,31 @@ async def check_reminders_job():
                 "sent_at": now,
             }).eq("id", reminder["id"]).execute()
 
-            # TODO: Send push notification or in-app message
-            logger.info(f"Reminder sent: {reminder['title']} for user {reminder['user_id']}")
+            # Send email notification via Resend
+            user_data = db.auth.admin.get_user_by_id(reminder["user_id"])
+            user_email = user_data.user.email if user_data and user_data.user else None
+
+            if user_email and settings.resend_api_key:
+                resend.api_key = settings.resend_api_key
+                resend.Emails.send({
+                    "from": "SchoolPilot <reminders@schoolpilot.co>",
+                    "to": user_email,
+                    "subject": f"Reminder: {reminder['title']}",
+                    "html": (
+                        "<div style='font-family: sans-serif;'>"
+                        "<h2>&#9200; Reminder</h2>"
+                        f"<p><strong>{reminder['title']}</strong></p>"
+                        "<p>This is your scheduled reminder from SchoolPilot.</p>"
+                        "</div>"
+                    ),
+                })
+                logger.info(f"Reminder email sent to {user_email}: {reminder['title']}")
+            else:
+                logger.warning(
+                    f"Could not send reminder email for user {reminder['user_id']}: "
+                    f"email={'found' if user_email else 'missing'}, "
+                    f"resend_key={'set' if settings.resend_api_key else 'missing'}"
+                )
 
         except Exception as e:
             logger.exception(f"Failed to process reminder {reminder['id']}: {e}")
@@ -117,7 +143,7 @@ async def send_daily_briefings_job():
     import resend
 
     resend.api_key = settings.resend_api_key
-    client = anthropic_sdk.Anthropic(api_key=settings.anthropic_api_key)
+    client = anthropic_sdk.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
     from app.memory.store import MemoryStore
     from app.agent.prompts.personalities import get_personality
@@ -131,7 +157,7 @@ async def send_daily_briefings_job():
             personality = get_personality(profile.get("personality_preset", "coach"))
             today = datetime.now(timezone.utc).strftime("%A, %B %d, %Y")
 
-            response = client.messages.create(
+            response = await client.messages.create(
                 model=settings.claude_model,
                 max_tokens=1024,
                 system=f"""{personality['system_prompt']}

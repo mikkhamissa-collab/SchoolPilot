@@ -77,6 +77,7 @@ export default function ChatSidebar() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const personalityPickerRef = useRef<HTMLDivElement>(null);
+  const sendMessageRef = useRef<((text?: string) => Promise<void>) | undefined>(undefined);
 
   // ---- Persist expand state and personality via localStorage ----
   useEffect(() => {
@@ -151,15 +152,14 @@ export default function ChatSidebar() {
       setShowConversations(false);
       const detail = (e as CustomEvent).detail;
       if (detail?.message) {
-        // Small delay to let the sidebar render, then send the message
         setTimeout(() => {
-          sendMessage(detail.message);
+          sendMessageRef.current?.(detail.message);
         }, 400);
       }
     };
     window.addEventListener("open-chat", handleOpen);
     return () => window.removeEventListener("open-chat", handleOpen);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // ---- Focus input when sidebar opens ----
   useEffect(() => {
@@ -332,6 +332,9 @@ export default function ChatSidebar() {
     [input, isLoading, activeConversationId, personality, loadConversations]
   );
 
+  // Keep ref in sync so event listeners can call sendMessage without stale closures
+  sendMessageRef.current = sendMessage;
+
   // =========================================================================
   // Keyboard & input handlers
   // =========================================================================
@@ -392,7 +395,7 @@ export default function ChatSidebar() {
       {/* ---- Sidebar panel ---- */}
       <aside
         className={`fixed right-0 top-0 h-screen z-30 flex flex-col bg-bg-card border-l border-border transition-all duration-300 ease-in-out ${
-          isExpanded ? "w-[400px] translate-x-0" : "w-[400px] translate-x-full"
+          isExpanded ? "w-full sm:w-[400px] translate-x-0" : "w-full sm:w-[400px] translate-x-full"
         }`}
         aria-label="Chat sidebar"
         role="complementary"
@@ -402,6 +405,16 @@ export default function ChatSidebar() {
         {/* ============================================================= */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
           <div className="flex items-center gap-2 min-w-0">
+            {/* Mobile close button */}
+            <button
+              onClick={() => setIsExpanded(false)}
+              className="sm:hidden p-1 rounded-md hover:bg-bg-hover text-text-muted hover:text-white transition-colors shrink-0 mr-1"
+              aria-label="Close chat"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
             {/* Back arrow — shown when viewing a conversation */}
             {(activeConversationId || messages.length > 0) && !showConversations && (
               <button

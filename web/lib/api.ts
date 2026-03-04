@@ -194,10 +194,11 @@ export function apiStream(path: string, body: object): StreamController {
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i];
 
-          // If this is the last line and doesn't end with \n, it's incomplete
-          if (i === lines.length - 1 && !line.endsWith("")) {
-            // Actually check if the original buffer ended with \n
-            // Keep incomplete lines in the buffer
+          // If this is the last line and might be incomplete (no trailing newline in the chunk)
+          if (i === lines.length - 1 && line !== "") {
+            // This is likely an incomplete line — keep it in the buffer
+            buffer = line;
+            continue;
           }
 
           if (line.startsWith("data: ")) {

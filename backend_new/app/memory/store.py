@@ -452,7 +452,7 @@ class MemoryStore:
         conversation_id : str
             The conversation to summarize.
         anthropic_client :
-            An ``anthropic.Anthropic`` (sync) client instance.
+            An ``anthropic.AsyncAnthropic`` client instance.
 
         Returns
         -------
@@ -495,7 +495,7 @@ class MemoryStore:
             text_parts.append(f"{msg.get('role', 'unknown').upper()}: {content_preview}")
 
         try:
-            response = anthropic_client.messages.create(
+            response = await anthropic_client.messages.create(
                 model=settings.claude_model,
                 max_tokens=500,
                 system=(

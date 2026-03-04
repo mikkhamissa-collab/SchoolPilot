@@ -19,14 +19,17 @@ class Settings(BaseSettings):
     # Encryption key for LMS credentials (Fernet, 32-byte base64)
     credential_encryption_key: str = ""
 
-    # CORS origins
+    # CORS origins — explicit list (FastAPI CORSMiddleware does not support wildcards in domains)
     cors_origins: list[str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "https://schoolpilot.co",
-        "https://*.schoolpilot.co",
-        "https://*.vercel.app",
+        "https://www.schoolpilot.co",
+        "https://app.schoolpilot.co",
     ]
+
+    # CORS origin regex for dynamic subdomains (e.g. Vercel preview deploys)
+    cors_origin_regex: str = ""
 
     # Playwright
     playwright_headless: bool = True

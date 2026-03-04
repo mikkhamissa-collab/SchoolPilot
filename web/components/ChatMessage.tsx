@@ -39,7 +39,20 @@ interface ChatMessageProps {
  * bullet lists (- item), numbered lists (1. item), and line breaks.
  */
 function renderMarkdown(text: string): React.ReactNode[] {
-  const lines = text.split("\n");
+  // First, handle fenced code blocks
+  const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
+  let processedText = text;
+  const codeBlocks: { placeholder: string; lang: string; code: string }[] = [];
+  let codeMatch;
+  let codeIndex = 0;
+  while ((codeMatch = codeBlockRegex.exec(text)) !== null) {
+    const placeholder = `__CODE_BLOCK_${codeIndex}__`;
+    codeBlocks.push({ placeholder, lang: codeMatch[1], code: codeMatch[2].trimEnd() });
+    processedText = processedText.replace(codeMatch[0], placeholder);
+    codeIndex++;
+  }
+
+  const lines = processedText.split("\n");
   const elements: React.ReactNode[] = [];
   let listItems: React.ReactNode[] = [];
   let listType: "ul" | "ol" | null = null;
@@ -89,6 +102,20 @@ function renderMarkdown(text: string): React.ReactNode[] {
         <h2 key={`h2-${key++}`} className="text-base font-bold text-white mt-2 mb-1">
           {formatInline(trimmed.slice(2))}
         </h2>
+      );
+      continue;
+    }
+
+    // Code block placeholder
+    const codeBlock = codeBlocks.find(cb => trimmed === cb.placeholder);
+    if (codeBlock) {
+      flushList();
+      elements.push(
+        <pre key={`pre-${key++}`} className="bg-bg-dark rounded-lg p-3 my-2 overflow-x-auto">
+          <code className="text-xs text-text-secondary font-mono whitespace-pre">
+            {codeBlock.code}
+          </code>
+        </pre>
       );
       continue;
     }
@@ -149,6 +176,19 @@ function formatInline(text: string): React.ReactNode {
   let partKey = 0;
 
   while (remaining.length > 0) {
+    // Link: [text](url)
+    const linkMatch = remaining.match(/^(.*?)\[([^\]]+)\]\(([^)]+)\)(.*)/s);
+    if (linkMatch) {
+      if (linkMatch[1]) parts.push(processCode(linkMatch[1], partKey++));
+      parts.push(
+        <a key={`link-${partKey++}`} href={linkMatch[3]} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+          {linkMatch[2]}
+        </a>
+      );
+      remaining = linkMatch[4];
+      continue;
+    }
+
     // Bold: **text**
     const boldMatch = remaining.match(/^(.*?)\*\*(.+?)\*\*(.*)/s);
     if (boldMatch) {

@@ -1,30 +1,41 @@
 # auth.py — JWT verification for Supabase auth tokens.
 # Supports both legacy HS256 (shared secret) and modern JWKS (ECC/RSA) verification.
 import logging
+import time
 import httpx
 from fastapi import HTTPException, Request
 from jose import jwt, JWTError, jwk
 from jose.utils import base64url_decode
-from functools import lru_cache
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
+# TTL-based JWKS cache (refreshes every 6 hours instead of caching forever)
+_jwks_cache: dict = {}
+_jwks_cache_time: float = 0
+_JWKS_TTL = 6 * 60 * 60  # 6 hours
 
-@lru_cache(maxsize=1)
+
 def _fetch_jwks(supabase_url: str) -> dict:
     """Fetch the JWKS from Supabase's well-known endpoint.
 
-    Cached so we only hit the network once per process lifetime.
+    Uses a TTL-based cache that expires every 6 hours so key rotations
+    are picked up without requiring a process restart.
     """
+    global _jwks_cache, _jwks_cache_time
+    now = time.time()
+    if _jwks_cache and (now - _jwks_cache_time) < _JWKS_TTL:
+        return _jwks_cache
     url = f"{supabase_url}/auth/v1/.well-known/jwks.json"
     try:
         resp = httpx.get(url, timeout=10)
         resp.raise_for_status()
-        return resp.json()
+        _jwks_cache = resp.json()
+        _jwks_cache_time = now
+        return _jwks_cache
     except Exception:
         logger.warning("Failed to fetch JWKS from %s", url, exc_info=True)
-        return {"keys": []}
+        return _jwks_cache if _jwks_cache else {"keys": []}
 
 
 def _get_signing_key(token: str, jwks: dict):

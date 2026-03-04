@@ -137,7 +137,7 @@ class BrowserAgent:
     def __init__(self, user_id: str) -> None:
         self.user_id = user_id
         self.settings = get_settings()
-        self.client = anthropic.Anthropic(api_key=self.settings.anthropic_api_key)
+        self.client = anthropic.AsyncAnthropic(api_key=self.settings.anthropic_api_key)
 
         self._pw: Optional[Playwright] = None
         self.browser: Optional[Browser] = None
@@ -219,7 +219,7 @@ class BrowserAgent:
 
     # ── Claude helpers ────────────────────────────────────────────────
 
-    def _ask_claude(
+    async def _ask_claude(
         self,
         *,
         system: str,
@@ -232,7 +232,7 @@ class BrowserAgent:
         Returns the parsed dict, or ``{"action": "_parse_error", "raw": ...}``
         if the response is not valid JSON.
         """
-        response = self.client.messages.create(
+        response = await self.client.messages.create(
             model=self.settings.claude_model,
             max_tokens=max_tokens,
             system=system,
@@ -381,7 +381,7 @@ class BrowserAgent:
 
         for step in range(1, self.max_login_steps + 1):
             screenshot_b64 = await self.screenshot()
-            action = self._ask_claude(
+            action = await self._ask_claude(
                 system=_LOGIN_SYSTEM_PROMPT,
                 screenshot_b64=screenshot_b64,
                 user_text=(
@@ -456,7 +456,7 @@ class BrowserAgent:
                 h["url"] for h in self.history if h.get("phase") == "explore"
             ))[-15:]  # last 15 unique URLs
 
-            action = self._ask_claude(
+            action = await self._ask_claude(
                 system=_EXPLORER_SYSTEM_PROMPT,
                 screenshot_b64=screenshot_b64,
                 user_text=(

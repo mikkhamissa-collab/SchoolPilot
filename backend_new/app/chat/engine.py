@@ -3,6 +3,9 @@
 # full lifecycle of a chat turn: build context from memory, stream Claude's
 # response via SSE, execute any tool calls the agent makes, get follow-up
 # responses, and persist everything back to the memory store.
+#
+# IMPORTANT: Uses AsyncAnthropic so that streaming does NOT block the FastAPI
+# event loop.  All generators are async generators that yield SSE strings.
 
 import json
 import logging
@@ -135,9 +138,9 @@ CHAT_TOOLS = [
 class ChatEngine:
     """Manages chat interactions with streaming and tool use.
 
-    Each instance is scoped to a single user.  It holds a sync Anthropic
-    client (streaming is handled via the sync ``messages.stream`` context
-    manager) and a ``MemoryStore`` for reading/writing persistent state.
+    Each instance is scoped to a single user.  It holds an async Anthropic
+    client (``AsyncAnthropic``) so that streaming does NOT block the FastAPI
+    event loop.  All streaming methods are async generators.
 
     The main entry point is ``stream_response`` which yields SSE-formatted
     strings suitable for direct use with a ``StreamingResponse``.
@@ -146,7 +149,7 @@ class ChatEngine:
     def __init__(self, user_id: str) -> None:
         self.user_id = user_id
         self.settings = get_settings()
-        self.client = anthropic.Anthropic(api_key=self.settings.anthropic_api_key)
+        self.client = anthropic.AsyncAnthropic(api_key=self.settings.anthropic_api_key)
         self.memory = MemoryStore(user_id)
 
     # ── Public API ────────────────────────────────────────────────────────
@@ -187,17 +190,13 @@ class ChatEngine:
 
         try:
             # First turn — may include tool_use blocks
-            # _stream_turn is a sync generator; iterate and forward yields
-            _turn_gen = self._stream_turn(
+            async for sse_chunk in self._stream_turn(
                 system_prompt, claude_messages, full_response, actions_taken
-            )
-            for sse_chunk in _turn_gen:
+            ):
                 yield sse_chunk
-            # The generator's return value is the updated (full_response, actions_taken)
-            # We must catch StopIteration to retrieve it; but the for-loop already
-            # consumed it.  Refactored _stream_turn to stash the result on self.
-            full_response = self._turn_result[0]
-            actions_taken = self._turn_result[1]
+            # Retrieve accumulated state from the async generator
+            full_response = self._turn_full_response
+            actions_taken = self._turn_actions_taken
         except anthropic.APIConnectionError:
             logger.error("Cannot reach Claude API")
             yield _sse({"type": "error", "message": "Cannot reach AI service. Please try again."})
@@ -222,12 +221,12 @@ class ChatEngine:
         # 6. If the model used tools, execute them and get a follow-up response
         if actions_taken:
             try:
-                _followup_gen = self._handle_tool_results(
+                followup_text = ""
+                async for sse_chunk in self._handle_tool_results(
                     system_prompt, claude_messages, actions_taken
-                )
-                for sse_chunk in _followup_gen:
+                ):
                     yield sse_chunk
-                followup_text = self._followup_result
+                followup_text = self._followup_text
                 full_response += followup_text
             except Exception:
                 logger.exception("Tool follow-up failed for user %s", self.user_id)
@@ -252,34 +251,35 @@ class ChatEngine:
 
     # ── Streaming internals ──────────────────────────────────────────────
 
-    def _stream_turn(
+    async def _stream_turn(
         self,
         system_prompt: str,
         claude_messages: list[dict],
         full_response: str,
         actions_taken: list[dict],
-    ):
+    ) -> AsyncGenerator[str, None]:
         """Run one Claude streaming turn.  Yields SSE strings.
 
-        Returns the updated (full_response, actions_taken) tuple.
-        This is a generator (not async generator) because the Anthropic
-        sync streaming client uses a context manager that yields events
-        synchronously.  The caller uses ``yield from`` to forward SSE
-        strings.
+        After the generator is exhausted, the caller reads
+        ``self._turn_full_response`` and ``self._turn_actions_taken``
+        to get the accumulated state.
+
+        This is an async generator because it uses the AsyncAnthropic
+        streaming client, which does NOT block the event loop.
         """
         tool_use_blocks: list[dict] = []  # Collect tool_use content blocks
         current_tool_input_json = ""
         current_tool_name: Optional[str] = None
         current_tool_id: Optional[str] = None
 
-        with self.client.messages.stream(
+        async with self.client.messages.stream(
             model=self.settings.claude_model,
             max_tokens=2048,
             system=system_prompt,
             messages=claude_messages,
             tools=CHAT_TOOLS,
         ) as stream:
-            for event in stream:
+            async for event in stream:
                 if event.type == "content_block_start":
                     if hasattr(event.content_block, "name"):
                         # Tool use block starting
@@ -319,7 +319,7 @@ class ChatEngine:
                         current_tool_input_json = ""
 
             # Capture usage for persistence
-            final_message = stream.get_final_message()
+            final_message = await stream.get_final_message()
             if final_message.usage:
                 self._last_usage_tokens = (
                     final_message.usage.input_tokens + final_message.usage.output_tokens
@@ -327,9 +327,7 @@ class ChatEngine:
 
         # Execute each tool and yield action events
         for tool_block in tool_use_blocks:
-            result = _run_async(
-                self._execute_tool(tool_block["name"], tool_block["input"])
-            )
+            result = await self._execute_tool(tool_block["name"], tool_block["input"])
             action = {
                 "tool": tool_block["name"],
                 "tool_use_id": tool_block["id"],
@@ -343,18 +341,20 @@ class ChatEngine:
                 "result": result,
             }})
 
-        # Stash result for the caller (async generator can't use yield from)
-        self._turn_result = (full_response, actions_taken)
+        # Stash accumulated state for the caller
+        self._turn_full_response = full_response
+        self._turn_actions_taken = actions_taken
 
-    def _handle_tool_results(
+    async def _handle_tool_results(
         self,
         system_prompt: str,
         original_messages: list[dict],
         actions_taken: list[dict],
-    ):
+    ) -> AsyncGenerator[str, None]:
         """Send tool results back to Claude and stream the follow-up.
 
-        Yields SSE strings.  Returns the follow-up text as a plain string.
+        Yields SSE strings.  After exhaustion the caller reads
+        ``self._followup_text`` for the accumulated follow-up text.
         """
         # Reconstruct the assistant turn that contained tool_use blocks
         assistant_content: list[dict] = []
@@ -382,26 +382,26 @@ class ChatEngine:
 
         # Stream follow-up
         followup_text = ""
-        with self.client.messages.stream(
+        async with self.client.messages.stream(
             model=self.settings.claude_model,
             max_tokens=1024,
             system=system_prompt,
             messages=followup_messages,
         ) as followup_stream:
-            for event in followup_stream:
+            async for event in followup_stream:
                 if event.type == "content_block_delta" and hasattr(event.delta, "text"):
                     chunk = event.delta.text
                     followup_text += chunk
                     yield _sse({"type": "text", "content": chunk})
 
             # Update usage
-            final = followup_stream.get_final_message()
+            final = await followup_stream.get_final_message()
             if final.usage:
                 prev = getattr(self, "_last_usage_tokens", 0) or 0
                 self._last_usage_tokens = prev + final.usage.input_tokens + final.usage.output_tokens
 
-        # Stash result for the caller (async generator can't use yield from)
-        self._followup_result = followup_text
+        # Stash result for the caller
+        self._followup_text = followup_text
 
     # ── Message building ─────────────────────────────────────────────────
 
@@ -768,31 +768,3 @@ Today is {today}. Current time: {time_now}.
 def _sse(data: dict) -> str:
     """Format a dict as a Server-Sent Events data line."""
     return f"data: {json.dumps(data)}\n\n"
-
-
-def _run_async(coro):
-    """Run an async coroutine from synchronous context.
-
-    The streaming methods use ``yield from`` (sync generators) but need to
-    call async tool handlers.  This helper bridges the gap by running the
-    coroutine in the current event loop if one is running, or creating a
-    new one otherwise.
-
-    In production this is called from within an async context (FastAPI),
-    so the event loop is always available.
-    """
-    import asyncio
-
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-
-    if loop is not None and loop.is_running():
-        # We're inside an async context — create a task and run until done.
-        # Since we can't await in a sync generator, use a future.
-        import concurrent.futures
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            return pool.submit(asyncio.run, coro).result(timeout=30)
-    else:
-        return asyncio.run(coro)

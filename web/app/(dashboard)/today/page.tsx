@@ -1,7 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase-client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -51,6 +51,16 @@ export default function TodayPage() {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
   const [token, setToken] = useState("");
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
+  const safetyRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup poll/safety timers on unmount
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      if (safetyRef.current) clearTimeout(safetyRef.current);
+    };
+  }, []);
 
   // Get auth token
   useEffect(() => {
@@ -125,22 +135,35 @@ export default function TodayPage() {
         setSyncing(false);
         return;
       }
+      // Clear any existing poll
+      if (pollRef.current) clearInterval(pollRef.current);
+      if (safetyRef.current) clearTimeout(safetyRef.current);
+
       // Poll for completion
-      const pollInterval = setInterval(async () => {
+      pollRef.current = setInterval(async () => {
         const syncRes = await fetch(`${API_URL}/api/agent/sync-status`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (syncRes.ok) {
           const data = await syncRes.json();
           if (!data.is_syncing) {
-            clearInterval(pollInterval);
+            if (pollRef.current) clearInterval(pollRef.current);
+            if (safetyRef.current) clearTimeout(safetyRef.current);
+            pollRef.current = null;
+            safetyRef.current = null;
             setSyncing(false);
             fetchData();
           }
         }
       }, 3000);
+
       // Safety timeout
-      setTimeout(() => { clearInterval(pollInterval); setSyncing(false); }, 120000);
+      safetyRef.current = setTimeout(() => {
+        if (pollRef.current) clearInterval(pollRef.current);
+        pollRef.current = null;
+        safetyRef.current = null;
+        setSyncing(false);
+      }, 120000);
     } catch {
       setError("Failed to start sync");
       setSyncing(false);

@@ -11,11 +11,17 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "SchoolPilot — AI Study Assistant",
   description: "AI-powered study planning. Smart daily plans, grade tracking, study guides, and sprint mode.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  themeColor: "#6366f1",
 };
 
 export default function RootLayout({
