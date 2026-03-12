@@ -3,7 +3,7 @@
 // STUDY SESSION PAGE — Guided chunks with timer, pre-session diagnostic,
 // and confetti on completion. Same dark theme vibes as the rest of the app.
 
-import { apiFetch } from "@/lib/api";
+import { backendFetch } from "@/lib/api";
 import { createClient } from "@/lib/supabase-client";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useState, useCallback, useRef, Suspense } from "react";
@@ -231,10 +231,13 @@ function SessionInner() {
 
     const loadDiagnostic = async () => {
       try {
-        const result = await apiFetch<DiagnosticData>("plan/study-session/diagnostic", {
-          assignmentName: assignment,
-          course,
-          courseContent,
+        const result = await backendFetch<DiagnosticData>("/api/plan/study-session/diagnostic", {
+          method: "POST",
+          body: JSON.stringify({
+            assignmentName: assignment,
+            course,
+            courseContent,
+          }),
         });
         setDiagnostic(result);
         setPhase("diagnostic");
@@ -254,15 +257,18 @@ function SessionInner() {
     setError("");
 
     try {
-      const result = await apiFetch<SessionData>("plan/study-session", {
-        assignmentName: assignment,
-        assignmentType: type,
-        course,
-        currentGrade: grade ? parseFloat(grade) : undefined,
-        targetScore: target ? parseFloat(target) : undefined,
-        courseContent,
-        studentProfile: profile,
-        availableMinutes: 120,
+      const result = await backendFetch<SessionData>("/api/plan/study-session", {
+        method: "POST",
+        body: JSON.stringify({
+          assignmentName: assignment,
+          assignmentType: type,
+          course,
+          currentGrade: grade ? parseFloat(grade) : undefined,
+          targetScore: target ? parseFloat(target) : undefined,
+          courseContent,
+          studentProfile: profile,
+          availableMinutes: 120,
+        }),
       });
 
       setSession(result);

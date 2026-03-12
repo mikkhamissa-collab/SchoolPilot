@@ -58,6 +58,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid token" }, { status: 401 });
   }
 
+  // Rate limit: 2 sync requests per minute per user
+  const { checkRateLimit } = await import("@/lib/rate-limit");
+  const { allowed } = checkRateLimit(`${user.id}:sync`, 2);
+  if (!allowed) {
+    return NextResponse.json({ error: "Too many requests. Please wait before syncing again." }, { status: 429 });
+  }
+
   const body = await request.json();
   const {
     assignments = [],

@@ -113,8 +113,19 @@ const LMS_OPTIONS = [
 
 async function getAuthToken(): Promise<string | null> {
   const supabase = createClient();
+  // Use getSession first, but refresh if expired
   const { data: { session } } = await supabase.auth.getSession();
-  return session?.access_token ?? null;
+  if (session?.access_token) {
+    // Check if token is about to expire (within 60 seconds)
+    const expiresAt = session.expires_at ?? 0;
+    const now = Math.floor(Date.now() / 1000);
+    if (expiresAt - now > 60) {
+      return session.access_token;
+    }
+  }
+  // Token missing or about to expire — refresh it
+  const { data: { session: refreshed } } = await supabase.auth.refreshSession();
+  return refreshed?.access_token ?? null;
 }
 
 async function authedFetch(path: string, body: Record<string, unknown>) {
@@ -293,21 +304,26 @@ export default function OnboardingPage() {
     setSaving(true);
     setError("");
     try {
-      // Save LMS credentials
       await authedFetch("/api/auth/lms-credentials", {
         lms_type: lmsType,
         lms_url: lmsUrl.trim(),
         username: lmsUsername.trim(),
         password: lmsPassword,
       });
-      // Advance onboarding
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save credentials.");
+      setSaving(false);
+      return;
+    }
+
+    try {
       await authedFetch("/api/profile/onboarding", {
         step: "lms",
         answers: { lms_type: lmsType, lms_url: lmsUrl.trim() },
       });
       goNext();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save credentials.");
+      setError("Credentials saved, but we couldn't advance. Please click Connect again.");
     } finally {
       setSaving(false);
     }
@@ -822,7 +838,7 @@ export default function OnboardingPage() {
               onClick={skipLms}
               className="w-full text-center text-text-muted text-sm hover:text-text-secondary transition-colors cursor-pointer"
             >
-              Skip for now &mdash; I&apos;ll use the Chrome extension instead
+              Skip for now &mdash; I&apos;ll connect my LMS later in Settings
             </button>
           </div>
         )}
@@ -957,7 +973,7 @@ export default function OnboardingPage() {
                   </div>
                 ) : (
                   <p className="text-text-muted text-sm">
-                    Not connected &mdash; you can use the Chrome extension to sync manually.
+                    Not connected &mdash; you can connect your LMS later in Settings.
                   </p>
                 )}
               </div>

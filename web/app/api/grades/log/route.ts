@@ -1,10 +1,16 @@
 // Log a grade after completing a task
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, isAuthError, createAdminClient } from "@/lib/auth";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
   const auth = await authenticateRequest();
   if (isAuthError(auth)) return auth.response;
+
+  const { allowed } = checkRateLimit(`${auth.userId}:grades-log`, 20);
+  if (!allowed) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
 
   let body: Record<string, unknown>;
   try {

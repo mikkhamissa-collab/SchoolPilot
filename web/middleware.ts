@@ -16,14 +16,11 @@ const SUPABASE_ANON_KEY = requireEnvVar("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 const PROTECTED_PREFIXES = [
   "/today",
   "/grades",
-  "/settings",
-  "/session",
-  "/onboarding",
-  "/chat",
-  "/dashboard",
+  "/study",
   "/focus",
-  "/plan",
-  "/sprint",
+  "/buddy",
+  "/settings",
+  "/onboarding",
 ];
 
 export async function middleware(request: NextRequest) {

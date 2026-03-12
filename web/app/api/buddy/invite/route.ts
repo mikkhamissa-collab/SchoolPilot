@@ -2,10 +2,16 @@
 import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { authenticateRequest, isAuthError, createAdminClient, requireEnv } from "@/lib/auth";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST() {
   const auth = await authenticateRequest();
   if (isAuthError(auth)) return auth.response;
+
+  const { allowed } = checkRateLimit(`${auth.userId}:buddy-invite`, 10);
+  if (!allowed) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
 
   const db = createAdminClient();
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase-client";
-import { apiFetch } from "@/lib/api";
+import { backendFetch } from "@/lib/api";
 import { useEffect, useState, useCallback } from "react";
 
 interface Category { name: string; weight: number; }
@@ -138,10 +138,13 @@ export default function GradesPage() {
   const calculateGrades = useCallback(async (course: Course, gradeList: Grade[]) => {
     if (gradeList.length === 0) { setGradeResult(null); return; }
     try {
-      const result = await apiFetch<GradeResult>("grades/calculate", {
-        categories: course.categories,
-        grades: gradeList.map(g => ({ category: g.category, name: g.name, score: g.score, max: g.max_score })),
-        policies: course.policies || {},
+      const result = await backendFetch<GradeResult>("/api/grades/calculate", {
+        method: "POST",
+        body: JSON.stringify({
+          categories: course.categories,
+          grades: gradeList.map(g => ({ category: g.category, name: g.name, score: g.score, max: g.max_score })),
+          policies: course.policies || {},
+        }),
       });
       setGradeResult(result);
     } catch (err) {
@@ -227,13 +230,16 @@ export default function GradesPage() {
   const handleWhatif = async () => {
     if (!activeCourse || !whatifScore) return;
     try {
-      const result = await apiFetch<{ overall: number; letter: string; categories: Record<string, { average: number | null; weight: number }> }>("grades/what-if", {
-        categories: activeCourse.categories,
-        grades: grades.map(g => ({ category: g.category, name: g.name, score: g.score, max: g.max_score })),
-        policies: activeCourse.policies || {},
-        hypothetical_category: whatifCat,
-        hypothetical_score: parseFloat(whatifScore),
-        hypothetical_max: parseFloat(whatifMax) || 100,
+      const result = await backendFetch<{ overall: number; letter: string; categories: Record<string, { average: number | null; weight: number }> }>("/api/grades/what-if", {
+        method: "POST",
+        body: JSON.stringify({
+          categories: activeCourse.categories,
+          grades: grades.map(g => ({ category: g.category, name: g.name, score: g.score, max: g.max_score })),
+          policies: activeCourse.policies || {},
+          hypothetical_category: whatifCat,
+          hypothetical_score: parseFloat(whatifScore),
+          hypothetical_max: parseFloat(whatifMax) || 100,
+        }),
       });
       setWhatifResult(result);
     } catch (err) {
@@ -245,12 +251,15 @@ export default function GradesPage() {
   const handleRequired = async () => {
     if (!activeCourse) return;
     try {
-      const result = await apiFetch<{ needed_on_next_assignment: number; achievable: boolean; needed_average_in_category: number; target_percentage: number; target_category: string }>("grades/required-score", {
-        categories: activeCourse.categories,
-        grades: grades.map(g => ({ category: g.category, name: g.name, score: g.score, max: g.max_score })),
-        policies: activeCourse.policies || {},
-        target_percentage: parseFloat(reqTarget),
-        target_category: reqCat,
+      const result = await backendFetch<{ needed_on_next_assignment: number; achievable: boolean; needed_average_in_category: number; target_percentage: number; target_category: string }>("/api/grades/required-score", {
+        method: "POST",
+        body: JSON.stringify({
+          categories: activeCourse.categories,
+          grades: grades.map(g => ({ category: g.category, name: g.name, score: g.score, max: g.max_score })),
+          policies: activeCourse.policies || {},
+          target_percentage: parseFloat(reqTarget),
+          target_category: reqCat,
+        }),
       });
       setReqResult(result);
     } catch (err) {

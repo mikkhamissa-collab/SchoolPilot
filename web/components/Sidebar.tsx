@@ -7,11 +7,11 @@ import { createClient } from "@/lib/supabase-client";
 import { useEffect, useState } from "react";
 
 const navItems = [
-  { href: "/today", label: "Today", icon: "🛡️" },
-  { href: "/focus", label: "Focus", icon: "🎯" },
-  { href: "/plan", label: "Plan", icon: "📅" },
-  { href: "/sprint", label: "Sprint", icon: "⚡" },
+  { href: "/today", label: "Today", icon: "🏠" },
   { href: "/grades", label: "Grades", icon: "📊" },
+  { href: "/study", label: "Study", icon: "📖" },
+  { href: "/focus", label: "Focus", icon: "🕐" },
+  { href: "/buddy", label: "Buddy", icon: "👥" },
   { href: "/settings", label: "Settings", icon: "⚙️" },
 ];
 
@@ -38,33 +38,13 @@ export default function Sidebar() {
       }
     });
 
-    // Write access token to localStorage so the Chrome extension can read it
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.access_token) {
-        try {
-          localStorage.setItem("schoolpilot_ext_token", session.access_token);
-        } catch {
-          // localStorage unavailable in SSR/incognito
-        }
-      }
-    });
-
-    // Listen for token refreshes so extension always has a valid token
+    // Listen for auth state changes (e.g., sign-out from another tab)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.access_token) {
-        try {
-          localStorage.setItem("schoolpilot_ext_token", session.access_token);
-        } catch {
-          // localStorage unavailable in SSR/incognito
-        }
-      } else {
-        try {
-          localStorage.removeItem("schoolpilot_ext_token");
-        } catch {
-          // localStorage unavailable in SSR/incognito
-        }
+      if (!session) {
+        // User signed out — redirect to home
+        window.location.href = "/";
       }
     });
 
@@ -74,11 +54,6 @@ export default function Sidebar() {
   const handleSignOut = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
-    try {
-      localStorage.removeItem("schoolpilot_ext_token");
-    } catch {
-      /* ignore */
-    }
     window.location.href = "/";
   };
 
@@ -96,7 +71,7 @@ export default function Sidebar() {
       </div>
 
       {/* Nav — icon-only rail */}
-      <nav className="flex-1 py-3 flex flex-col items-center gap-1">
+      <nav aria-label="Main navigation" className="flex-1 py-3 flex flex-col items-center gap-1">
         {navItems.map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
@@ -104,13 +79,15 @@ export default function Sidebar() {
               key={item.href}
               href={item.href}
               title={item.label}
+              aria-label={item.label}
+              aria-current={active ? "page" : undefined}
               className={`flex items-center justify-center w-10 h-10 rounded-lg text-base transition-colors ${
                 active
                   ? "bg-accent/15 text-accent"
                   : "text-text-secondary hover:text-white hover:bg-bg-hover"
               }`}
             >
-              <span>{item.icon}</span>
+              <span aria-hidden="true">{item.icon}</span>
             </Link>
           );
         })}
@@ -119,9 +96,10 @@ export default function Sidebar() {
         <button
           onClick={handleChatToggle}
           title="Toggle Chat"
+          aria-label="Toggle chat sidebar"
           className="flex items-center justify-center w-10 h-10 rounded-lg text-base text-text-secondary hover:text-white hover:bg-bg-hover transition-colors cursor-pointer"
         >
-          <span>💬</span>
+          <span aria-hidden="true">💬</span>
         </button>
       </nav>
 

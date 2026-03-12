@@ -1,10 +1,16 @@
 // Streak management — GET to fetch, POST to update on task completion
 import { NextResponse } from "next/server";
 import { authenticateRequest, isAuthError, createAdminClient } from "@/lib/auth";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function GET() {
   const auth = await authenticateRequest();
   if (isAuthError(auth)) return auth.response;
+
+  const { allowed } = checkRateLimit(`${auth.userId}:streak`, 30);
+  if (!allowed) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
 
   const db = createAdminClient();
   const { data, error } = await db
@@ -43,7 +49,7 @@ export async function GET() {
         .update({ freeze_available: true })
         .eq("user_id", auth.userId);
       if (updateErr) {
-        console.error("Failed to refresh freeze:", updateErr.message);
+        // Freeze refresh failed — non-critical, continue
       }
       data.freeze_available = true;
     }

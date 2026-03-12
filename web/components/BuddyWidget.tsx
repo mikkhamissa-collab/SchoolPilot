@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { backendFetch } from "@/lib/api";
 import type { BuddyData } from "@/lib/types";
 
 interface BuddyWidgetProps {
@@ -18,18 +19,12 @@ export default function BuddyWidget({ data }: BuddyWidgetProps) {
     setNudgeLoading(true);
     setNudgeError("");
     try {
-      const res = await fetch("/api/buddy/nudge", { method: "POST" });
-      if (res.ok) {
-        setNudgeSent(true);
-        setTimeout(() => setNudgeSent(false), 60000);
-      } else {
-        const err = await res.json();
-        setNudgeError(err.error || "Failed");
-        setTimeout(() => setNudgeError(""), 3000);
-      }
+      await backendFetch("/api/buddy/nudge", { method: "POST" });
+      setNudgeSent(true);
+      setTimeout(() => setNudgeSent(false), 60000);
     } catch (err) {
-      console.error("Nudge error:", err);
-      setNudgeError("Network error");
+      const message = err instanceof Error ? err.message : "Failed";
+      setNudgeError(message);
       setTimeout(() => setNudgeError(""), 3000);
     }
     setNudgeLoading(false);

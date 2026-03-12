@@ -5,11 +5,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navItems = [
-  { href: "/today", label: "Today", icon: "🛡️" },
-  { href: "/focus", label: "Focus", icon: "🎯" },
-  { href: "/plan", label: "Plan", icon: "📅" },
-  { href: "/sprint", label: "Sprint", icon: "⚡" },
+  { href: "/today", label: "Today", icon: "🏠" },
   { href: "/grades", label: "Grades", icon: "📊" },
+  { href: "/study", label: "Study", icon: "📖" },
+  { href: "/focus", label: "Focus", icon: "🕐" },
+  { href: "/buddy", label: "Buddy", icon: "👥" },
 ];
 
 export default function MobileNav() {
@@ -31,11 +31,12 @@ export default function MobileNav() {
             <Link
               key={item.href}
               href={item.href}
+              aria-current={active ? "page" : undefined}
               className={`flex flex-col items-center gap-0.5 px-2 py-1 text-xs transition-colors ${
                 active ? "text-accent" : "text-text-muted"
               }`}
             >
-              <span className="text-lg">{item.icon}</span>
+              <span className="text-lg" aria-hidden="true">{item.icon}</span>
               <span>{item.label}</span>
             </Link>
           );
@@ -44,9 +45,10 @@ export default function MobileNav() {
         {/* Chat toggle */}
         <button
           onClick={handleChatToggle}
+          aria-label="Toggle chat"
           className="flex flex-col items-center gap-0.5 px-2 py-1 text-xs text-text-muted hover:text-accent transition-colors cursor-pointer"
         >
-          <span className="text-lg">💬</span>
+          <span className="text-lg" aria-hidden="true">💬</span>
           <span>Chat</span>
         </button>
       </div>

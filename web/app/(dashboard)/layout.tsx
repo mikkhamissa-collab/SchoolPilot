@@ -6,6 +6,7 @@ import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
 import ChatSidebar from "@/components/ChatSidebar";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { OfflineIndicator } from "@/components/OfflineIndicator";
 
 export default function DashboardLayout({
   children,
@@ -59,6 +60,7 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-bg-dark">
+      <OfflineIndicator />
       {/* Accessibility: skip link */}
       <a
         href="#main-content"

@@ -88,16 +88,16 @@ export default function ChatSidebar() {
       if (savedPers && PERSONALITIES.some((p) => p.id === savedPers)) {
         setPersonality(savedPers);
       }
-    } catch {
-      // localStorage unavailable (SSR / incognito)
+    } catch (err) {
+      console.warn("localStorage unavailable (SSR / incognito):", err);
     }
   }, []);
 
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY_EXPANDED, String(isExpanded));
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn("Failed to persist chat expanded state:", err);
     }
     // Notify the dashboard layout so it can adjust the main content margin
     window.dispatchEvent(new CustomEvent("schoolpilot-chat-toggle"));
@@ -106,17 +106,10 @@ export default function ChatSidebar() {
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY_PERSONALITY, personality);
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn("Failed to persist personality preference:", err);
     }
   }, [personality]);
-
-  // ---- Load conversations when sidebar expands ----
-  useEffect(() => {
-    if (isExpanded) {
-      loadConversations();
-    }
-  }, [isExpanded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- Auto-scroll to bottom on new content ----
   useEffect(() => {
@@ -181,11 +174,18 @@ export default function ChatSidebar() {
     try {
       const data = await backendFetch<Conversation[]>("/api/chat/conversations");
       setConversations(Array.isArray(data) ? data : []);
-    } catch {
-      // Conversations list is non-critical — fail silently
+    } catch (err) {
+      console.warn("Failed to load conversations:", err);
       setConversations([]);
     }
   }, []);
+
+  // ---- Load conversations when sidebar expands ----
+  useEffect(() => {
+    if (isExpanded) {
+      loadConversations();
+    }
+  }, [isExpanded, loadConversations]);
 
   const loadMessages = useCallback(async (conversationId: string) => {
     try {
@@ -193,7 +193,8 @@ export default function ChatSidebar() {
         `/api/chat/conversations/${conversationId}/messages`
       );
       setMessages(Array.isArray(data) ? data : []);
-    } catch {
+    } catch (err) {
+      console.error("Failed to load messages for conversation:", err);
       setMessages([]);
     }
   }, []);
@@ -233,8 +234,8 @@ export default function ChatSidebar() {
         if (activeConversationId === id) {
           startNewChat();
         }
-      } catch {
-        // ignore
+      } catch (err) {
+        console.error("Failed to delete conversation:", err);
       }
     },
     [activeConversationId, startNewChat]
@@ -310,8 +311,10 @@ export default function ChatSidebar() {
               break;
           }
         }
-      } catch {
-        // Stream aborted or network error — already handled above
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") {
+          console.error("Chat stream error:", err);
+        }
       }
 
       // Finalize: commit the streamed content as a real message
@@ -757,7 +760,8 @@ function formatRelativeDate(iso: string): string {
     if (diffDay === 1) return "yesterday";
     if (diffDay < 7) return `${diffDay}d ago`;
     return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  } catch {
+  } catch (err) {
+    console.warn("Failed to format relative date:", err);
     return "";
   }
 }

@@ -1,30 +1,10 @@
-// API helpers for calling Next.js API routes (proxy to Flask) and the new
-// FastAPI backend directly.  Includes streaming SSE support for the chat engine.
+// API helpers for calling the FastAPI backend directly.
+// Includes streaming SSE support for the chat engine.
 
 import { createClient } from "@/lib/supabase-client";
 
 // ---------------------------------------------------------------------------
-// Existing proxy helper (used by today page, grades, etc.)
-// ---------------------------------------------------------------------------
-
-export async function apiFetch<T = unknown>(
-  path: string,
-  body: Record<string, unknown>
-): Promise<T> {
-  const res = await fetch(`/api/ai/${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error || `API error: ${res.status}`);
-  }
-  return data as T;
-}
-
-// ---------------------------------------------------------------------------
-// New backend helpers (FastAPI at NEXT_PUBLIC_API_URL)
+// Backend helpers (FastAPI at NEXT_PUBLIC_API_URL)
 // ---------------------------------------------------------------------------
 
 const API_URL =
@@ -32,6 +12,7 @@ const API_URL =
 
 /**
  * Get a valid Supabase access token for the current session.
+ * Proactively refreshes the token if it's about to expire (within 60s).
  * Returns null if the user is not signed in.
  */
 async function getAccessToken(): Promise<string | null> {
@@ -40,7 +21,17 @@ async function getAccessToken(): Promise<string | null> {
     const {
       data: { session },
     } = await supabase.auth.getSession();
-    return session?.access_token ?? null;
+    if (session?.access_token) {
+      // Check if token is about to expire (within 60 seconds)
+      const expiresAt = session.expires_at ?? 0;
+      const now = Math.floor(Date.now() / 1000);
+      if (expiresAt - now > 60) {
+        return session.access_token;
+      }
+    }
+    // Token missing or about to expire — refresh
+    const { data: { session: refreshed } } = await supabase.auth.refreshSession();
+    return refreshed?.access_token ?? null;
   } catch {
     return null;
   }
@@ -73,11 +64,16 @@ export async function backendFetch<T = unknown>(
   });
 
   if (!res.ok) {
+    // For 500-level errors, show a generic message to avoid leaking internals
+    if (res.status >= 500) {
+      throw new Error("Something went wrong. Please try again later.");
+    }
     let message = `API error: ${res.status}`;
     try {
       const err = await res.json();
-      if (err.detail) message = typeof err.detail === "string" ? err.detail : JSON.stringify(err.detail);
-      else if (err.error) message = err.error;
+      // Only show err.detail if it's a plain string — never stringify objects
+      if (typeof err.detail === "string") message = err.detail;
+      else if (typeof err.error === "string") message = err.error;
     } catch {
       // response body wasn't JSON — use the status text
       message = res.statusText || message;
@@ -179,6 +175,8 @@ export function apiStream(path: string, body: object): StreamController {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    let parseFailures = 0;
+    const MAX_PARSE_FAILURES = 3;
 
     try {
       while (true) {
@@ -206,11 +204,19 @@ export function apiStream(path: string, body: object): StreamController {
             if (!jsonStr) continue;
             try {
               const event = JSON.parse(jsonStr) as SSEEvent;
+              parseFailures = 0;
               yield event;
               if (event.type === "done") return;
             } catch {
-              // Partial JSON — put it back in the buffer
-              buffer = line + "\n";
+              parseFailures++;
+              if (parseFailures >= MAX_PARSE_FAILURES) {
+                // This line is not recoverable — skip it
+                parseFailures = 0;
+                buffer = "";
+              } else {
+                // Might be partial — put back in buffer for next chunk
+                buffer = line + "\n";
+              }
             }
           } else if (line.trim() === "" || line.startsWith(":")) {
             // Empty line (event separator) or comment — skip

@@ -273,7 +273,7 @@ export default function TodayPage() {
           <p className="text-text-muted text-xs uppercase tracking-wider mb-1">Last Sync</p>
           <p className="text-lg font-bold text-white">
             {syncStatus?.last_sync?.completed_at
-              ? new Date(syncStatus.last_sync.completed_at).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+              ? new Date(syncStatus.last_sync.completed_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
               : "Never"}
           </p>
           <p className="text-text-secondary text-sm">
