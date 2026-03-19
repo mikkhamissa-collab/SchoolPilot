@@ -288,6 +288,23 @@ export default function OnboardingPage() {
     goNext();
   };
 
+  // Clean LMS URL — strip hash fragments, post-login paths, trailing slashes
+  const cleanLmsUrl = (raw: string): string => {
+    let url = raw.trim();
+    // Remove hash fragment (e.g. #/dashboard)
+    url = url.split("#")[0];
+    // Remove common post-login paths
+    for (const suffix of ["/dash/", "/dash", "/dashboard/", "/dashboard", "/home/", "/home"]) {
+      if (url.endsWith(suffix)) {
+        url = url.slice(0, -suffix.length);
+        break;
+      }
+    }
+    // Remove trailing slashes
+    url = url.replace(/\/+$/, "");
+    return url;
+  };
+
   // Save LMS credentials
   const saveLms = async () => {
     if (!lmsUrl.trim()) {
@@ -298,12 +315,13 @@ export default function OnboardingPage() {
       setError("Please enter your LMS username and password.");
       return;
     }
+    const cleanedUrl = cleanLmsUrl(lmsUrl);
     setSaving(true);
     setError("");
     try {
       await authedFetch("/api/auth/lms-credentials", {
         lms_type: lmsType,
-        lms_url: lmsUrl.trim(),
+        lms_url: cleanedUrl,
         username: lmsUsername.trim(),
         password: lmsPassword,
       });
@@ -316,7 +334,7 @@ export default function OnboardingPage() {
     try {
       await authedFetch("/api/profile/onboarding", {
         step: "lms",
-        answers: { lms_type: lmsType, lms_url: lmsUrl.trim() },
+        answers: { lms_type: lmsType, lms_url: cleanedUrl },
       });
       goNext();
     } catch (e) {
