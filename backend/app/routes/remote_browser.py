@@ -2,12 +2,13 @@
 # Students drive a real Playwright browser to log into their LMS (e.g. Google SSO),
 # and we capture the session cookies for later replay.
 
+from __future__ import annotations
+
 import asyncio
 import base64
 import json
 import logging
 import uuid
-from __future__ import annotations
 from typing import Dict, Optional
 
 from cryptography.fernet import Fernet
