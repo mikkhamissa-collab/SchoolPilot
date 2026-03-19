@@ -245,12 +245,11 @@ export default function OnboardingPage() {
           timezone,
         },
       });
-      goNext();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save. Please try again.");
-    } finally {
-      setSaving(false);
+    } catch {
+      // Backend save failed — continue anyway so user isn't stuck
     }
+    setSaving(false);
+    goNext();
   };
 
   // Save personality step
@@ -262,12 +261,11 @@ export default function OnboardingPage() {
         step: "personality",
         answers: { preset: personality },
       });
-      goNext();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save.");
-    } finally {
-      setSaving(false);
+    } catch {
+      // Continue even if backend fails
     }
+    setSaving(false);
+    goNext();
   };
 
   // Save goals step
@@ -283,12 +281,11 @@ export default function OnboardingPage() {
         step: "goals",
         answers: { goals: allGoals },
       });
-      goNext();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save.");
-    } finally {
-      setSaving(false);
+    } catch {
+      // Continue even if backend fails
     }
+    setSaving(false);
+    goNext();
   };
 
   // Save LMS credentials
@@ -334,7 +331,7 @@ export default function OnboardingPage() {
     goNext();
   };
 
-  // Finalize onboarding
+  // Finalize onboarding — always sets metadata even if backend call fails
   const completeOnboarding = async () => {
     setSaving(true);
     setError("");
@@ -343,17 +340,26 @@ export default function OnboardingPage() {
         step: "confirm",
         answers: {},
       });
-      // Also mark in Supabase metadata
-      const supabase = createClient();
-      await supabase.auth.updateUser({
-        data: { onboarding_completed: true },
-      });
-      router.push("/today");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to complete onboarding.");
-    } finally {
-      setSaving(false);
+    } catch {
+      // Backend failed but we still mark onboarding complete so user isn't stuck
     }
+    // Always mark in Supabase metadata — this is what the middleware checks
+    const supabase = createClient();
+    await supabase.auth.updateUser({
+      data: { onboarding_completed: true },
+    });
+    setSaving(false);
+    router.push("/today");
+  };
+
+  // Skip onboarding entirely — mark complete and go to dashboard
+  const skipOnboarding = async () => {
+    setSaving(true);
+    const supabase = createClient();
+    await supabase.auth.updateUser({
+      data: { onboarding_completed: true },
+    });
+    router.push("/today");
   };
 
   // Toggle a goal chip
@@ -427,6 +433,13 @@ export default function OnboardingPage() {
               className="w-full py-4 rounded-xl bg-accent hover:bg-accent-hover text-white font-semibold text-lg transition-colors cursor-pointer"
             >
               Let&apos;s go
+            </button>
+            <button
+              onClick={skipOnboarding}
+              disabled={saving}
+              className="w-full text-center text-text-muted text-sm hover:text-text-secondary transition-colors cursor-pointer disabled:opacity-50"
+            >
+              Skip setup &mdash; I&apos;ll do this later
             </button>
           </div>
         )}
