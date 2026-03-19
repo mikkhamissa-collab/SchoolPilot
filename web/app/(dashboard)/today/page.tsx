@@ -89,10 +89,13 @@ export default function TodayPage() {
       ]);
 
       if (assignRes.status === "fulfilled" && assignRes.value.ok) {
-        setAssignments(await assignRes.value.json());
+        const json = await assignRes.value.json();
+        // Backend returns paginated {data: [...], total, limit, offset}
+        setAssignments(Array.isArray(json) ? json : json.data || []);
       }
       if (gradeRes.status === "fulfilled" && gradeRes.value.ok) {
-        setGrades(await gradeRes.value.json());
+        const json = await gradeRes.value.json();
+        setGrades(Array.isArray(json) ? json : json.data || []);
       }
       if (syncRes.status === "fulfilled" && syncRes.value.ok) {
         const data = await syncRes.value.json();
@@ -102,11 +105,6 @@ export default function TodayPage() {
       if (profileRes.status === "fulfilled" && profileRes.value.ok) {
         const data = await profileRes.value.json();
         setProfile(data);
-        // Redirect to onboarding if not complete
-        if (!data.onboarding_complete) {
-          router.push("/onboarding");
-          return;
-        }
       }
     } catch {
       setError("Failed to load data. Is the backend running?");

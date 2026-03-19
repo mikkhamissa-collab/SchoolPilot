@@ -65,11 +65,30 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Redirect authenticated users from login/landing to Today page
-  if (user && (pathname === "/" || pathname === "/auth/login")) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/today";
-    return NextResponse.redirect(url);
+  if (user) {
+    const onboardingDone = user.user_metadata?.onboarding_completed === true;
+
+    // Authenticated but hasn't finished onboarding → force to /onboarding
+    // (but don't intercept /auth/callback — it handles its own redirect)
+    if (!onboardingDone && pathname !== "/onboarding" && !pathname.startsWith("/auth/")) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/onboarding";
+      return NextResponse.redirect(url);
+    }
+
+    // Finished onboarding but visiting /onboarding again → go to /today
+    if (onboardingDone && pathname === "/onboarding") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/today";
+      return NextResponse.redirect(url);
+    }
+
+    // Authenticated on login/landing → go to /today
+    if (onboardingDone && (pathname === "/" || pathname === "/auth/login")) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/today";
+      return NextResponse.redirect(url);
+    }
   }
 
   return supabaseResponse;

@@ -172,7 +172,8 @@ export default function PlanPage() {
         throw new Error(`Failed to fetch assignments (${res.status})`);
       }
 
-      const data: Assignment[] = await res.json();
+      const json = await res.json();
+      const data: Assignment[] = Array.isArray(json) ? json : json.data || [];
       setAssignments(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load assignments");

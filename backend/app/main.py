@@ -99,16 +99,20 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(AuditLogMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 
-settings = get_settings()
-cors_kwargs = {
-    "allow_origins": settings.cors_origins,
-    "allow_credentials": True,
-    "allow_methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
-}
-if settings.cors_origin_regex:
-    cors_kwargs["allow_origin_regex"] = settings.cors_origin_regex
-app.add_middleware(CORSMiddleware, **cors_kwargs)
+def _setup_cors(app: FastAPI):
+    """Configure CORS with explicit origins + optional regex for Vercel previews."""
+    s = get_settings()
+    cors_kwargs = {
+        "allow_origins": s.cors_origins,
+        "allow_credentials": True,
+        "allow_methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
+    }
+    if s.cors_origin_regex:
+        cors_kwargs["allow_origin_regex"] = s.cors_origin_regex
+    app.add_middleware(CORSMiddleware, **cors_kwargs)
+
+_setup_cors(app)
 
 # Routes
 app.include_router(auth_routes.router, prefix="/api/auth", tags=["auth"])
