@@ -20,7 +20,7 @@ class SyncRequest(BaseModel):
 
 
 @router.post("/sync")
-@limiter.limit("2/hour")
+@limiter.limit("5/hour")
 async def start_sync(
     request: Request,
     body: SyncRequest,
@@ -139,7 +139,7 @@ async def sync_status(user_id: str = Depends(get_current_user)):
     """Get overall sync status: when was the last sync, is one running, etc."""
     db = get_db()
 
-    # Last completed sync
+    # Last completed sync (successful)
     last = (
         db.table("agent_jobs")
         .select("id, status, completed_at, data_extracted, error_message")
@@ -150,12 +150,22 @@ async def sync_status(user_id: str = Depends(get_current_user)):
         .execute()
     )
 
+    # Most recent job (any status) — so frontend can detect failures
+    latest = (
+        db.table("agent_jobs")
+        .select("id, status, completed_at, data_extracted, error_message, created_at")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+
     # Currently running?
     running = (
         db.table("agent_jobs")
         .select("id, started_at")
         .eq("user_id", user_id)
-        .eq("status", "running")
+        .in_("status", ["running", "pending"])
         .execute()
     )
 
@@ -168,7 +178,7 @@ async def sync_status(user_id: str = Depends(get_current_user)):
     )
 
     return {
-        "last_sync": last.data[0] if last.data else None,
+        "last_sync": latest.data[0] if latest.data else (last.data[0] if last.data else None),
         "is_syncing": bool(running.data),
         "running_job_id": running.data[0]["id"] if running.data else None,
         "credentials": creds.data or [],

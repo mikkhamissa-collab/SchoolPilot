@@ -150,7 +150,12 @@ export default function TodayPage() {
             pollRef.current = null;
             safetyRef.current = null;
             setSyncing(false);
-            fetchData();
+            // Check if the latest completed job actually failed
+            if (data.last_sync?.status === "failed") {
+              setError(data.last_sync.error_message || "Sync failed. Check your LMS credentials in Settings.");
+            } else {
+              fetchData();
+            }
           }
         }
       }, 3000);
@@ -238,10 +243,16 @@ export default function TodayPage() {
         <button
           onClick={handleSync}
           disabled={syncing || !syncStatus?.credentials?.length}
-          className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors cursor-pointer disabled:cursor-not-allowed"
+          className={`flex items-center gap-2 px-4 py-2 text-white rounded-lg text-sm font-medium transition-all cursor-pointer disabled:cursor-not-allowed ${
+            syncing
+              ? "bg-accent/80 sync-glow"
+              : "bg-accent hover:bg-accent-hover disabled:opacity-50"
+          }`}
           aria-label="Sync with LMS"
         >
-          <span className={syncing ? "animate-spin" : ""}>🔄</span>
+          <svg className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182M21.015 4.356v4.992" />
+          </svg>
           {syncing ? "Syncing..." : "Sync LMS"}
         </button>
       </div>

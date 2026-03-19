@@ -372,12 +372,24 @@ class BrowserAgent:
         if not self.page:
             raise RuntimeError("Browser not started — call start() first")
 
-        logger.info("Navigating to LMS login: %s", lms_url)
+        # Strip hash fragments and post-login paths — navigate to the base login page
+        from urllib.parse import urlparse, urlunparse
+        parsed = urlparse(lms_url)
+        # Remove /dash/# or similar post-login paths
+        clean_path = parsed.path
+        for suffix in ["/dash/", "/dash", "/dashboard", "/home"]:
+            if clean_path.endswith(suffix):
+                clean_path = clean_path[: -len(suffix)] or "/"
+                break
+        clean_url = urlunparse(parsed._replace(path=clean_path, fragment=""))
+        logger.info("Navigating to LMS login: %s (original: %s)", clean_url, lms_url)
+
         try:
-            await self.page.goto(lms_url, wait_until="domcontentloaded", timeout=30000)
+            await self.page.goto(clean_url, wait_until="domcontentloaded", timeout=30000)
         except PlaywrightTimeout:
             logger.warning("Initial navigation timed out — continuing anyway")
         await asyncio.sleep(2)
+        logger.info("After initial navigation, landed on: %s", self.page.url)
 
         for step in range(1, self.max_login_steps + 1):
             screenshot_b64 = await self.screenshot()
@@ -393,7 +405,7 @@ class BrowserAgent:
                 ),
             )
 
-            logger.info("Login step %d: %s", step, action.get("action"))
+            logger.info("Login step %d: action=%s, url=%s", step, action.get("action"), self.page.url)
             self.history.append({"phase": "login", "step": step, "url": self.page.url, "action": action})
 
             act = action.get("action")

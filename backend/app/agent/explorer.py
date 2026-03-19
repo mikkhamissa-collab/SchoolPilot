@@ -86,6 +86,8 @@ class LMSExplorer:
 
         try:
             await agent.start()
+            # Give more steps for LMS login flows that involve redirects/SSO
+            agent.max_login_steps = 12
 
             # 3. Decrypt credentials
             try:
@@ -98,7 +100,10 @@ class LMSExplorer:
                 return {"status": "decrypt_error", "message": str(exc)}
 
             # 4. Login
-            logger.info("Attempting LMS login for user %s at %s", self.user_id, lms_url)
+            logger.info(
+                "Attempting LMS login for user %s at %s (type=%s, username_len=%d)",
+                self.user_id, lms_url, cred.get("lms_type", "unknown"), len(username),
+            )
             login_ok = await agent.login(lms_url, username, password)
 
             if not login_ok:
