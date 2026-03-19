@@ -175,9 +175,37 @@ function LoginContent() {
           </div>
           <h1 className="text-3xl font-bold text-white mb-1">SchoolPilot</h1>
           <p className="text-text-secondary text-sm">
-            {mode === "login" ? "Sign in to your account" : mode === "signup" ? "Create your account" : "Reset your password"}
+            {mode === "forgot" ? "Reset your password" : "Your AI study assistant"}
           </p>
         </div>
+
+        {/* Login / Sign Up tabs */}
+        {mode !== "forgot" && (
+          <div className="flex mb-6 bg-bg-card rounded-xl p-1 border border-border">
+            <button
+              type="button"
+              onClick={() => { setMode("login"); setError(""); setSuccess(""); }}
+              className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
+                mode === "login"
+                  ? "bg-accent text-white"
+                  : "text-text-muted hover:text-white"
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMode("signup"); setError(""); setSuccess(""); }}
+              className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
+                mode === "signup"
+                  ? "bg-accent text-white"
+                  : "text-text-muted hover:text-white"
+              }`}
+            >
+              Sign Up
+            </button>
+          </div>
+        )}
 
         {/* Success message */}
         {success && (
@@ -302,45 +330,25 @@ function LoginContent() {
           </button>
         </form>
 
-        {/* Divider */}
-        <div className="my-6 flex items-center gap-3">
-          <div className="flex-1 h-px bg-border" />
-          <span className="text-text-muted text-xs">or</span>
-          <div className="flex-1 h-px bg-border" />
-        </div>
-
-        {/* Toggle mode */}
-        <p className="text-center text-text-secondary text-sm">
-          {mode === "login" ? (
-            <>
-              Don&apos;t have an account?{" "}
+        {/* Back to sign in (forgot mode only) */}
+        {mode === "forgot" && (
+          <>
+            <div className="my-6 flex items-center gap-3">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-text-muted text-xs">or</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+            <p className="text-center text-text-secondary text-sm">
+              Remember your password?{" "}
               <button
-                onClick={() => {
-                  setMode("signup");
-                  setError("");
-                  setSuccess("");
-                }}
-                className="text-accent hover:underline cursor-pointer font-medium"
-              >
-                Sign up
-              </button>
-            </>
-          ) : (
-            <>
-              {mode === "forgot" ? "Remember your password?" : "Already have an account?"}{" "}
-              <button
-                onClick={() => {
-                  setMode("login");
-                  setError("");
-                  setSuccess("");
-                }}
+                onClick={() => { setMode("login"); setError(""); setSuccess(""); }}
                 className="text-accent hover:underline cursor-pointer font-medium"
               >
                 Sign in
               </button>
-            </>
-          )}
-        </p>
+            </p>
+          </>
+        )}
 
         {/* Footer */}
         <p className="mt-8 text-center text-text-muted text-xs">
