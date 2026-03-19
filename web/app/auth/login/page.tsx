@@ -17,7 +17,7 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const urlError = searchParams.get("error");
 
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [mode, setMode] = useState<"login" | "signup" | "forgot">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -131,6 +131,38 @@ function LoginContent() {
     }
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+
+    if (!email.trim()) {
+      setError("Please enter your email address.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const supabase = createClient();
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+        email.trim(),
+        { redirectTo: `${window.location.origin}/auth/callback?type=recovery` }
+      );
+
+      if (resetError) {
+        setError(resetError.message);
+        return;
+      }
+
+      setSuccess("Check your email for a password reset link.");
+      setMode("login");
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-bg-dark p-6">
       <div className="w-full max-w-sm">
@@ -143,7 +175,7 @@ function LoginContent() {
           </div>
           <h1 className="text-3xl font-bold text-white mb-1">SchoolPilot</h1>
           <p className="text-text-secondary text-sm">
-            {mode === "login" ? "Sign in to your account" : "Create your account"}
+            {mode === "login" ? "Sign in to your account" : mode === "signup" ? "Create your account" : "Reset your password"}
           </p>
         </div>
 
@@ -162,7 +194,7 @@ function LoginContent() {
         )}
 
         {/* Form */}
-        <form onSubmit={mode === "login" ? handleLogin : handleSignup} className="space-y-4">
+        <form onSubmit={mode === "login" ? handleLogin : mode === "signup" ? handleSignup : handleForgotPassword} className="space-y-4">
           {/* Name field (signup only) */}
           {mode === "signup" && (
             <div>
@@ -199,21 +231,38 @@ function LoginContent() {
             />
           </div>
 
-          {/* Password */}
-          <div>
-            <label htmlFor="auth-password" className="block text-text-secondary text-sm mb-1.5">
-              Password
-            </label>
-            <input
-              id="auth-password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={mode === "signup" ? "At least 8 characters" : "Your password"}
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
-              className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors"
-            />
-          </div>
+          {/* Password (hidden in forgot mode) */}
+          {mode !== "forgot" && (
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label htmlFor="auth-password" className="text-text-secondary text-sm">
+                  Password
+                </label>
+                {mode === "login" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode("forgot");
+                      setError("");
+                      setSuccess("");
+                    }}
+                    className="text-accent hover:underline cursor-pointer text-xs font-medium"
+                  >
+                    Forgot password?
+                  </button>
+                )}
+              </div>
+              <input
+                id="auth-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={mode === "signup" ? "At least 8 characters" : "Your password"}
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors"
+              />
+            </div>
+          )}
 
           {/* Confirm Password (signup only) */}
           {mode === "signup" && (
@@ -240,12 +289,16 @@ function LoginContent() {
             className="w-full py-3 rounded-xl bg-accent hover:bg-accent-hover text-white font-semibold text-base transition-colors cursor-pointer disabled:opacity-50"
           >
             {loading
-              ? mode === "login"
-                ? "Signing in..."
-                : "Creating account..."
-              : mode === "login"
-                ? "Sign In"
-                : "Create Account"}
+              ? mode === "forgot"
+                ? "Sending link..."
+                : mode === "login"
+                  ? "Signing in..."
+                  : "Creating account..."
+              : mode === "forgot"
+                ? "Send Reset Link"
+                : mode === "login"
+                  ? "Sign In"
+                  : "Create Account"}
           </button>
         </form>
 
@@ -274,7 +327,7 @@ function LoginContent() {
             </>
           ) : (
             <>
-              Already have an account?{" "}
+              {mode === "forgot" ? "Remember your password?" : "Already have an account?"}{" "}
               <button
                 onClick={() => {
                   setMode("login");
