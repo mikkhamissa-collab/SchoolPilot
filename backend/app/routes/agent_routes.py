@@ -1,12 +1,16 @@
 # agent_routes.py — Browser agent control endpoints.
+from __future__ import annotations
+import json
 import logging
 from datetime import datetime, timezone
+from cryptography.fernet import Fernet
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from app.auth import get_current_user
+from app.config import get_settings
 from app.db import get_db
 from app.agent.explorer import LMSExplorer
 
@@ -132,6 +136,47 @@ async def list_lms_grades(user_id: str = Depends(get_current_user)):
     db = get_db()
     result = db.table("lms_grades").select("*").eq("user_id", user_id).execute()
     return result.data or []
+
+
+class CookieSaveRequest(BaseModel):
+    cookies: list
+    lms_url: str
+
+
+@router.post("/sync/cookies")
+async def save_cookies(
+    body: CookieSaveRequest,
+    user_id: str = Depends(get_current_user),
+):
+    """Standalone cookie save endpoint (backup for WebSocket flow)."""
+    settings = get_settings()
+    fernet = Fernet(settings.credential_encryption_key.encode("utf-8"))
+    encrypted_cookies = fernet.encrypt(
+        json.dumps(body.cookies).encode("utf-8")
+    ).decode("utf-8")
+
+    # Clean URL
+    lms_url = body.lms_url.split("#")[0].rstrip("/")
+    for suffix in ["/dash", "/dashboard", "/home"]:
+        if lms_url.endswith(suffix):
+            lms_url = lms_url[:-len(suffix)]
+            break
+
+    db = get_db()
+    db.table("lms_credentials").upsert(
+        {
+            "user_id": user_id,
+            "lms_type": "teamie",
+            "lms_url": lms_url,
+            "encrypted_cookies": encrypted_cookies,
+            "last_login_success": True,
+            "last_login_at": datetime.now(timezone.utc).isoformat(),
+            "sync_enabled": True,
+        },
+        on_conflict="user_id,lms_type",
+    ).execute()
+
+    return {"status": "ok", "message": "Cookies saved successfully"}
 
 
 @router.get("/sync-status")

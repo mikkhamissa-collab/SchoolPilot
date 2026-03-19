@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase-client";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import RemoteBrowser from "@/components/RemoteBrowser";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -50,6 +51,8 @@ export default function TodayPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const [showReconnect, setShowReconnect] = useState(false);
   const [token, setToken] = useState("");
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const safetyRef = useRef<NodeJS.Timeout | null>(null);
@@ -152,7 +155,13 @@ export default function TodayPage() {
             setSyncing(false);
             // Check if the latest completed job actually failed
             if (data.last_sync?.status === "failed") {
-              setError(data.last_sync.error_message || "Sync failed. Check your LMS credentials in Settings.");
+              const errMsg = data.last_sync.error_message || "";
+              if (errMsg.includes("session_expired") || errMsg.toLowerCase().includes("session expired")) {
+                setSessionExpired(true);
+                setError("");
+              } else {
+                setError(errMsg || "Sync failed. Check your LMS credentials in Settings.");
+              }
             } else {
               fetchData();
             }
@@ -257,7 +266,45 @@ export default function TodayPage() {
         </button>
       </div>
 
-      {error && (
+      {sessionExpired && !showReconnect && (
+        <div className="bg-warning/10 border border-warning/20 rounded-xl p-4 flex items-center justify-between">
+          <div>
+            <p className="text-warning font-medium text-sm">Your LMS session has expired</p>
+            <p className="text-text-muted text-xs mt-1">Log in again to resume automatic syncing.</p>
+          </div>
+          <button
+            onClick={() => setShowReconnect(true)}
+            className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors cursor-pointer shrink-0 ml-4"
+          >
+            Reconnect
+          </button>
+        </div>
+      )}
+
+      {showReconnect && (
+        <div className="bg-bg-card border border-border rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-white">Reconnect to your LMS</h3>
+            <button
+              onClick={() => setShowReconnect(false)}
+              className="text-text-muted hover:text-white text-sm cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+          <RemoteBrowser
+            onComplete={() => {
+              setShowReconnect(false);
+              setSessionExpired(false);
+              setError("");
+              fetchData();
+            }}
+            onError={(msg) => setError(msg)}
+          />
+        </div>
+      )}
+
+      {error && !sessionExpired && (
         <div className="bg-error/10 border border-error/20 text-error rounded-xl p-4 text-sm">{error}</div>
       )}
 

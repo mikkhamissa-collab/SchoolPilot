@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase-client";
 import { backendFetch } from "@/lib/api";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import RemoteBrowser from "@/components/RemoteBrowser";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -70,6 +71,9 @@ export default function SettingsPage() {
   const [editBriefing, setEditBriefing] = useState(false);
   const [editGoals, setEditGoals] = useState<string[]>([]);
   const [newGoal, setNewGoal] = useState("");
+
+  // Remote browser for LMS reconnection
+  const [showRemoteBrowser, setShowRemoteBrowser] = useState(false);
 
   // Export
   const [exporting, setExporting] = useState(false);
@@ -441,20 +445,30 @@ export default function SettingsPage() {
       {/* ====== LMS Connections ====== */}
       <section className="bg-bg-card border border-border rounded-xl p-5 space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">LMS Connections</h3>
-          <button
-            onClick={() => setShowAddLMS(!showAddLMS)}
-            className="text-accent text-sm font-medium hover:underline cursor-pointer"
-          >
-            {showAddLMS ? "Cancel" : "+ Add LMS"}
-          </button>
+          <h3 className="text-lg font-semibold text-white">LMS Connection</h3>
+          {!showRemoteBrowser && (
+            <button
+              onClick={() => setShowRemoteBrowser(true)}
+              className="text-accent text-sm font-medium hover:underline cursor-pointer"
+            >
+              {credentials.length > 0 ? "Reconnect" : "Connect LMS"}
+            </button>
+          )}
+          {showRemoteBrowser && (
+            <button
+              onClick={() => setShowRemoteBrowser(false)}
+              className="text-text-muted text-sm font-medium hover:text-white cursor-pointer"
+            >
+              Cancel
+            </button>
+          )}
         </div>
 
-        {credentials.length === 0 && !showAddLMS && (
+        {credentials.length === 0 && !showRemoteBrowser && (
           <div className="text-center py-6">
             <p className="text-text-muted text-sm">No LMS connected yet.</p>
             <button
-              onClick={() => setShowAddLMS(true)}
+              onClick={() => setShowRemoteBrowser(true)}
               className="mt-2 text-accent text-sm hover:underline cursor-pointer"
             >
               Connect your LMS
@@ -482,6 +496,12 @@ export default function SettingsPage() {
                 cred.last_login_success === false ? "bg-error" : "bg-text-muted"
               }`} />
               <button
+                onClick={() => setShowRemoteBrowser(true)}
+                className="px-3 py-1.5 rounded-lg bg-accent/10 text-accent text-xs font-medium hover:bg-accent/20 transition-colors cursor-pointer"
+              >
+                Reconnect
+              </button>
+              <button
                 onClick={() => deleteLMSCredential(cred.id)}
                 className="p-1.5 rounded-lg hover:bg-error/10 text-text-muted hover:text-error transition-colors cursor-pointer"
                 aria-label="Delete credential"
@@ -494,76 +514,27 @@ export default function SettingsPage() {
           </div>
         ))}
 
-        {showAddLMS && (
-          <div className="space-y-3 p-4 bg-bg-dark rounded-lg">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="lms-type" className="block text-text-secondary text-sm mb-1.5">LMS Type</label>
-                <select
-                  id="lms-type"
-                  value={lmsType}
-                  onChange={(e) => setLmsType(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-lg bg-bg-card border border-border text-white text-sm focus:outline-none focus:border-accent"
-                >
-                  <option value="teamie">Teamie</option>
-                  <option value="canvas">Canvas</option>
-                  <option value="blackboard">Blackboard</option>
-                  <option value="google_classroom">Google Classroom</option>
-                  <option value="schoology">Schoology</option>
-                  <option value="moodle">Moodle</option>
-                </select>
-              </div>
-              <div>
-                <label htmlFor="lms-url" className="block text-text-secondary text-sm mb-1.5">LMS URL</label>
-                <input
-                  id="lms-url"
-                  type="url"
-                  value={lmsUrl}
-                  onChange={(e) => setLmsUrl(e.target.value)}
-                  placeholder="https://lms.school.edu"
-                  className="w-full px-3 py-2.5 rounded-lg bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent text-sm"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="lms-user" className="block text-text-secondary text-sm mb-1.5">Username</label>
-                <input
-                  id="lms-user"
-                  type="text"
-                  value={lmsUser}
-                  onChange={(e) => setLmsUser(e.target.value)}
-                  placeholder="Your LMS username"
-                  autoComplete="username"
-                  className="w-full px-3 py-2.5 rounded-lg bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent text-sm"
-                />
-              </div>
-              <div>
-                <label htmlFor="lms-pass" className="block text-text-secondary text-sm mb-1.5">Password</label>
-                <input
-                  id="lms-pass"
-                  type="password"
-                  value={lmsPass}
-                  onChange={(e) => setLmsPass(e.target.value)}
-                  placeholder="Your LMS password"
-                  autoComplete="current-password"
-                  className="w-full px-3 py-2.5 rounded-lg bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent text-sm"
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-2 text-text-muted text-xs">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-              Credentials are encrypted and stored securely.
-            </div>
-            <button
-              onClick={saveLMSCredential}
-              disabled={lmsSaving || !lmsUrl.trim() || !lmsUser.trim() || !lmsPass}
-              className="w-full py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors cursor-pointer disabled:opacity-50"
-            >
-              {lmsSaving ? "Saving..." : "Save Credentials"}
-            </button>
+        {showRemoteBrowser && (
+          <div className="p-4 bg-bg-dark rounded-lg">
+            <RemoteBrowser
+              onComplete={() => {
+                setShowRemoteBrowser(false);
+                showMsg("success", "LMS connected successfully! You can now sync.");
+                // Refresh credentials
+                const supabase = createClient();
+                supabase.auth.getSession().then(({ data: { session } }) => {
+                  if (session?.access_token) {
+                    fetch(`${API_URL}/api/auth/lms-credentials`, {
+                      headers: { Authorization: `Bearer ${session.access_token}` },
+                    })
+                      .then((r) => r.json())
+                      .then(setCredentials)
+                      .catch(() => {});
+                  }
+                });
+              }}
+              onError={(msg) => showMsg("error", msg)}
+            />
           </div>
         )}
       </section>

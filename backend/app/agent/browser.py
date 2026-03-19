@@ -1,6 +1,7 @@
 # browser.py — Vision-based browser agent that explores LMS websites using
 # Playwright screenshots and Claude for decision-making.  The core loop is:
 # observe (screenshot) → decide (Claude) → act (Playwright) → repeat.
+from __future__ import annotations
 
 import asyncio
 import base64
@@ -161,6 +162,10 @@ class BrowserAgent:
         self._pw = await async_playwright().start()
         self.browser = await self._pw.chromium.launch(
             headless=self.settings.playwright_headless,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+            ],
         )
         self.context = await self.browser.new_context(
             viewport={"width": 1280, "height": 900},
@@ -176,6 +181,10 @@ class BrowserAgent:
         await self.context.route(
             "**/{google-analytics,googletagmanager,hotjar,segment,mixpanel}**",
             lambda route: route.abort(),
+        )
+        # Remove webdriver indicator for anti-detection
+        await self.context.add_init_script(
+            "Object.defineProperty(navigator, 'webdriver', { get: () => undefined });"
         )
         self.page = await self.context.new_page()
         logger.info("Browser started for user %s (headless=%s)", self.user_id, self.settings.playwright_headless)
@@ -439,6 +448,23 @@ class BrowserAgent:
 
         logger.error("Login did not complete within %d steps", self.max_login_steps)
         return False
+
+    # ── Cookie injection ─────────────────────────────────────────────
+
+    async def inject_cookies_and_verify(self, cookies: list, dashboard_url: str) -> bool:
+        """Inject saved cookies and navigate to dashboard. Returns True if authenticated."""
+        if not self.context or not self.page:
+            raise RuntimeError("Browser not started")
+        await self.context.add_cookies(cookies)
+        await self.page.goto(dashboard_url, wait_until="domcontentloaded", timeout=30000)
+        await asyncio.sleep(3)
+        current_url = self.page.url
+        # If redirected to login page, cookies are expired
+        if "/login" in current_url.lower() or (
+            "/dash" not in current_url.lower() and "classroom" not in current_url.lower()
+        ):
+            return False
+        return True
 
     # ── Exploration loop ──────────────────────────────────────────────
 

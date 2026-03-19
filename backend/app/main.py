@@ -12,7 +12,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from app.config import get_settings
 from app.middleware.audit import AuditLogMiddleware
-from app.routes import auth_routes, chat_routes, agent_routes, grades_routes, profile_routes, plan_routes, study_routes, focus_routes, buddy_routes, email_routes
+from app.routes import auth_routes, chat_routes, agent_routes, grades_routes, profile_routes, plan_routes, study_routes, focus_routes, buddy_routes, email_routes, remote_browser
 from app.scheduler import start_scheduler, stop_scheduler
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -37,7 +37,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com; "
             "img-src 'self' data: https:; "
-            "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com;"
+            "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com wss://*.onrender.com;"
         )
         return response
 
@@ -125,6 +125,7 @@ app.include_router(study_routes.router, prefix="/api/study", tags=["study"])
 app.include_router(focus_routes.router, prefix="/api/focus", tags=["focus"])
 app.include_router(buddy_routes.router, prefix="/api/buddy", tags=["buddy"])
 app.include_router(email_routes.router, prefix="/api/email", tags=["email"])
+app.include_router(remote_browser.router, prefix="/api/agent", tags=["remote-browser"])
 
 
 @app.get("/health")

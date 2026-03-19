@@ -59,6 +59,12 @@ class LMSExplorer:
     async def run(self) -> dict[str, Any]:
         """Execute the full sync: login, explore, extract, store.
 
+        Auth strategy (cookie-first):
+        1. If encrypted_cookies exist → inject and verify
+        2. If cookies expired → fail with "session_expired"
+        3. Else if username/password exist → try credential login (fallback)
+        4. Else → fail with no credentials
+
         Returns a summary dict with at least a ``status`` key.
         """
         # 1. Fetch LMS credentials for this user
@@ -86,35 +92,69 @@ class LMSExplorer:
 
         try:
             await agent.start()
-            # Give more steps for LMS login flows that involve redirects/SSO
             agent.max_login_steps = 12
 
-            # 3. Decrypt credentials
-            try:
-                username = self._decrypt(cred["encrypted_username"])
-                password = self._decrypt(cred["encrypted_password"])
-            except (ValueError, KeyError) as exc:
-                logger.error("Credential decryption failed for user %s: %s", self.user_id, exc)
-                self._update_job("failed", error="Could not decrypt LMS credentials")
-                self._update_cred_status(cred_id, success=False, error="Decryption failed")
-                return {"status": "decrypt_error", "message": str(exc)}
+            authenticated = False
+            has_cookies = bool(cred.get("encrypted_cookies"))
+            has_creds = bool(cred.get("encrypted_username") and cred.get("encrypted_password"))
 
-            # 4. Login
-            logger.info(
-                "Attempting LMS login for user %s at %s (type=%s, username_len=%d)",
-                self.user_id, lms_url, cred.get("lms_type", "unknown"), len(username),
-            )
-            login_ok = await agent.login(lms_url, username, password)
+            # ── Strategy 1: Cookie replay ──────────────────────────
+            if has_cookies:
+                logger.info("Attempting cookie replay for user %s at %s", self.user_id, lms_url)
+                try:
+                    import json as _json
+                    cookies_json = self._decrypt(cred["encrypted_cookies"])
+                    cookies = _json.loads(cookies_json)
+                    dashboard_url = lms_url.rstrip("/") + "/dash/#/"
+                    authenticated = await agent.inject_cookies_and_verify(cookies, dashboard_url)
+                except (ValueError, KeyError) as exc:
+                    logger.warning("Cookie decryption failed for user %s: %s", self.user_id, exc)
+                    authenticated = False
 
-            if not login_ok:
-                msg = "Login failed — credentials may be wrong or a CAPTCHA was detected"
-                logger.warning("Login failed for user %s", self.user_id)
+                if not authenticated:
+                    logger.warning("Cookie replay failed (session expired) for user %s", self.user_id)
+                    self._update_job("failed", error="session_expired")
+                    self._update_cred_status(cred_id, success=False, error="Session expired")
+                    return {
+                        "status": "session_expired",
+                        "message": "Your LMS session has expired. Please reconnect.",
+                    }
+                else:
+                    logger.info("Cookie replay succeeded for user %s", self.user_id)
+                    self._update_cred_status(cred_id, success=True)
+
+            # ── Strategy 2: Username/password login (fallback) ─────
+            elif has_creds:
+                try:
+                    username = self._decrypt(cred["encrypted_username"])
+                    password = self._decrypt(cred["encrypted_password"])
+                except (ValueError, KeyError) as exc:
+                    logger.error("Credential decryption failed for user %s: %s", self.user_id, exc)
+                    self._update_job("failed", error="Could not decrypt LMS credentials")
+                    self._update_cred_status(cred_id, success=False, error="Decryption failed")
+                    return {"status": "decrypt_error", "message": str(exc)}
+
+                logger.info(
+                    "Attempting LMS login for user %s at %s (type=%s)",
+                    self.user_id, lms_url, cred.get("lms_type", "unknown"),
+                )
+                authenticated = await agent.login(lms_url, username, password)
+
+                if not authenticated:
+                    msg = "Login failed — credentials may be wrong or a CAPTCHA was detected"
+                    logger.warning("Login failed for user %s", self.user_id)
+                    self._update_job("failed", error=msg)
+                    self._update_cred_status(cred_id, success=False, error=msg)
+                    return {"status": "login_failed", "message": msg}
+
+                logger.info("Login succeeded for user %s", self.user_id)
+                self._update_cred_status(cred_id, success=True)
+
+            # ── Strategy 3: No auth method available ───────────────
+            else:
+                msg = "No LMS credentials configured. Please connect your LMS."
                 self._update_job("failed", error=msg)
-                self._update_cred_status(cred_id, success=False, error=msg)
-                return {"status": "login_failed", "message": msg}
-
-            logger.info("Login succeeded for user %s", self.user_id)
-            self._update_cred_status(cred_id, success=True)
+                return {"status": "no_credentials", "message": msg}
 
             # 5. Explore & extract
             extracted = await agent.explore()
