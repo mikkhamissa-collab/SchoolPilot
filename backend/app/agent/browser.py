@@ -70,6 +70,25 @@ You are a browser automation agent exploring a Learning Management System
 GOAL: find and extract ALL useful academic data — courses, assignments,
 grades, due dates, syllabi, teacher info, announcements, calendar events.
 
+IMPORTANT: This is likely Teamie LMS (lms.asl.org). Teamie's interface:
+- The dashboard is at /dash/#/ and shows a feed of recent activity.
+- The LEFT SIDEBAR has a "Classrooms" section listing all the student's
+  courses/classes. Click each classroom name to enter it.
+- Inside each classroom, look for tabs like "Materials", "Assignments",
+  "Gradebook", "Discussions", or similar.
+- Grades may be under a "Gradebook" or "Progress" tab inside each classroom.
+- Assignments show due dates, submission status, and sometimes scores.
+- The top navigation may have "Calendar", "Messages", or "Notifications".
+- If you see a feed/timeline, scroll down to find more posts with assignments.
+
+DO NOT return "done" until you have:
+1. Identified and extracted at least the list of courses/classrooms
+2. Clicked into at least 2-3 classrooms to look for assignments and grades
+3. Checked for any upcoming due dates
+
+If you haven't extracted ANY data yet, you MUST keep exploring — click on
+sidebar items, classrooms, tabs, or navigation elements to find content.
+
 Return **exactly one** JSON action per turn — no markdown, no prose.
 
 Available actions
@@ -107,17 +126,19 @@ Available actions
   Pause for content to load.
 
 {"action":"done","summary":"short summary of what was collected"}
-  Call this when you have thoroughly explored the LMS.
+  Call this ONLY when you have thoroughly explored the LMS and extracted data.
 
 Strategy
 ────────
-1. Identify the main navigation first (sidebar, top nav, tabs).
-2. Visit each course page → extract assignments, grades, teacher info.
-3. Check calendars and announcement boards.
-4. Scroll lists to make sure you see everything.
-5. Don't revisit pages you already fully explored.
-6. Extract data the moment you see it; don't batch.
-7. Be thorough but efficient.  Aim for quality over quantity of steps.
+1. First, look at the sidebar/navigation to identify all courses/classrooms.
+2. Extract each course name you can see (use the "course" schema).
+3. Click into each course → look for assignments, grades, materials tabs.
+4. Extract every assignment and grade you find.
+5. Check calendars and announcement boards.
+6. Scroll lists to make sure you see everything.
+7. Don't revisit pages you already fully explored.
+8. Extract data the moment you see it; don't batch.
+9. Be thorough — explore at least 3-5 classrooms before considering "done".
 """
 
 
@@ -455,15 +476,28 @@ class BrowserAgent:
         """Inject saved cookies and navigate to dashboard. Returns True if authenticated."""
         if not self.context or not self.page:
             raise RuntimeError("Browser not started")
+        logger.info(
+            "Injecting %d cookies for user %s, navigating to %s",
+            len(cookies), self.user_id, dashboard_url,
+        )
         await self.context.add_cookies(cookies)
         await self.page.goto(dashboard_url, wait_until="domcontentloaded", timeout=30000)
         await asyncio.sleep(3)
         current_url = self.page.url
+        logger.info(
+            "After cookie injection, landed on: %s (expected dashboard at %s)",
+            current_url, dashboard_url,
+        )
         # If redirected to login page, cookies are expired
-        if "/login" in current_url.lower() or (
-            "/dash" not in current_url.lower() and "classroom" not in current_url.lower()
-        ):
+        is_login = "/login" in current_url.lower()
+        is_dashboard = "/dash" in current_url.lower() or "classroom" in current_url.lower()
+        if is_login or not is_dashboard:
+            logger.warning(
+                "Cookie verification FAILED: is_login=%s, is_dashboard=%s, url=%s",
+                is_login, is_dashboard, current_url,
+            )
             return False
+        logger.info("Cookie verification PASSED — user is authenticated")
         return True
 
     # ── Exploration loop ──────────────────────────────────────────────
@@ -494,6 +528,16 @@ class BrowserAgent:
                 h["url"] for h in self.history if h.get("phase") == "explore"
             ))[-15:]  # last 15 unique URLs
 
+            # Build nudge text if we haven't extracted anything yet
+            nudge = ""
+            if len(self.extracted) == 0 and step > 1:
+                nudge = (
+                    "\n\nIMPORTANT: You haven't extracted any data yet! "
+                    "Do NOT return 'done'. Look for courses, assignments, "
+                    "grades in the sidebar, navigation, or page content. "
+                    "Click on classroom/course links to explore them."
+                )
+
             action = await self._ask_claude(
                 system=_EXPLORER_SYSTEM_PROMPT,
                 screenshot_b64=screenshot_b64,
@@ -504,16 +548,33 @@ class BrowserAgent:
                     f"Pages visited: {json.dumps(visited_urls)}\n"
                     f"Data extracted so far: {extracted_summary}\n\n"
                     "What should I do next?"
+                    f"{nudge}"
                 ),
                 max_tokens=2048,
             )
 
             act = action.get("action")
-            logger.info("Explore step %d: %s (url: %s)", step, act, self.page.url)
+            logger.info(
+                "Explore step %d: action=%s, full_action=%s, url=%s",
+                step, act, json.dumps(action)[:500], self.page.url,
+            )
             self.history.append({"phase": "explore", "step": step, "url": self.page.url, "action": action})
 
             # ── Handle terminal / meta actions ────────────────────────
             if act == "done":
+                # Guard: don't accept "done" too early if nothing was extracted
+                if step < 8 and len(self.extracted) == 0:
+                    logger.warning(
+                        "Claude returned 'done' at step %d with 0 items extracted — "
+                        "overriding to continue exploration",
+                        step,
+                    )
+                    # Force Claude to keep looking by continuing with a nudge
+                    # on the next iteration (the user_text already says "nothing yet")
+                    consecutive_errors = 0
+                    await asyncio.sleep(1)
+                    continue
+
                 summary = action.get("summary", "")
                 logger.info(
                     "Exploration complete at step %d (%d items). %s",

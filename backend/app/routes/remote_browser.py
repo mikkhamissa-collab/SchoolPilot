@@ -97,7 +97,7 @@ async def remote_browser_ws(websocket: WebSocket, session_id: str):
         if not page:
             return
         try:
-            raw = await page.screenshot(type="jpeg", quality=70, full_page=False)
+            raw = await page.screenshot(type="jpeg", quality=50, full_page=False)
             b64 = base64.b64encode(raw).decode("ascii")
             await send_json({
                 "type": "screenshot",
@@ -118,10 +118,12 @@ async def remote_browser_ws(websocket: WebSocket, session_id: str):
                 "--disable-blink-features=AutomationControlled",
                 "--no-sandbox",
                 "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--disable-software-rasterizer",
             ],
         )
         context = await browser.new_context(
-            viewport={"width": 1280, "height": 900},
+            viewport={"width": 1024, "height": 768},
             user_agent=(
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -173,7 +175,7 @@ async def remote_browser_ws(websocket: WebSocket, session_id: str):
 
         async def heartbeat():
             while heartbeat_active:
-                await asyncio.sleep(2)
+                await asyncio.sleep(1.5)
                 if heartbeat_active and page:
                     await send_screenshot()
 
@@ -211,7 +213,7 @@ async def remote_browser_ws(websocket: WebSocket, session_id: str):
                 y = int(msg.get("y", 0))
                 try:
                     await page.mouse.click(x, y)
-                    await asyncio.sleep(1.5)
+                    await asyncio.sleep(0.8)
                     await send_screenshot()
                 except Exception as e:
                     logger.warning("Click failed: %s", e)

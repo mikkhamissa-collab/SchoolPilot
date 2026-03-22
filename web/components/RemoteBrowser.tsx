@@ -28,9 +28,9 @@ export default function RemoteBrowser({ onComplete, onError }: RemoteBrowserProp
   const imgRef = useRef<HTMLImageElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Viewport dimensions matching Playwright
-  const VIEWPORT_W = 1280;
-  const VIEWPORT_H = 900;
+  // Viewport dimensions matching Playwright (must match backend)
+  const VIEWPORT_W = 1024;
+  const VIEWPORT_H = 768;
 
   const cleanup = useCallback(() => {
     if (wsRef.current) {
@@ -247,7 +247,7 @@ export default function RemoteBrowser({ onComplete, onError }: RemoteBrowserProp
           <div
             ref={containerRef}
             className={`relative bg-bg-dark border border-border overflow-hidden ${currentUrl ? "rounded-b-xl" : "rounded-xl"}`}
-            style={{ aspectRatio: `${VIEWPORT_W} / ${VIEWPORT_H}` }}
+            style={{ maxWidth: `${VIEWPORT_W}px`, width: "100%", aspectRatio: `${VIEWPORT_W} / ${VIEWPORT_H}` }}
           >
             {screenshot ? (
               <img
@@ -255,6 +255,7 @@ export default function RemoteBrowser({ onComplete, onError }: RemoteBrowserProp
                 src={screenshot}
                 alt="Remote browser view"
                 className="w-full h-full object-contain cursor-crosshair"
+                style={{ imageRendering: "auto" }}
                 onClick={handleClick}
                 draggable={false}
               />
