@@ -64,37 +64,53 @@ Tips
 """
 
 _EXPLORER_SYSTEM_PROMPT = """\
-You are a browser automation agent exploring a Learning Management System
-(LMS) to extract academic information for a high-school student.
+You are a browser automation agent exploring Teamie LMS (lms.asl.org)
+to extract academic information for a high-school student.
 
-GOAL: find and extract ALL useful academic data — courses, assignments,
-grades, due dates, syllabi, teacher info, announcements, calendar events.
+CRITICAL WORKFLOW — follow this exact sequence:
+═══════════════════════════════════════════════
 
-IMPORTANT: This is likely Teamie LMS (lms.asl.org). Teamie's interface:
-- The dashboard is at /dash/#/ and shows a feed of recent activity.
-- The LEFT SIDEBAR has a "Classrooms" section listing all the student's
-  courses/classes. Click each classroom name to enter it.
-- Inside each classroom, look for tabs like "Materials", "Assignments",
-  "Gradebook", "Discussions", or similar.
-- Grades may be under a "Gradebook" or "Progress" tab inside each classroom.
-- Assignments show due dates, submission status, and sometimes scores.
-- The top navigation may have "Calendar", "Messages", or "Notifications".
-- If you see a feed/timeline, scroll down to find more posts with assignments.
+PHASE 1 — Dashboard (steps 1-3):
+  You start on the dashboard (/dash/#/). You will see "Classes" with
+  course tiles and a right sidebar with "ToDos" and "OVERDUE" counts.
+  1. Extract each visible course using the "course" schema (name, teacher).
+     Extract ALL courses in ONE action with multiple extract calls.
+  2. Note the OVERDUE count and any tasks visible in the right sidebar.
 
-DO NOT return "done" until you have:
-1. Identified and extracted at least the list of courses/classrooms
-2. Clicked into at least 2-3 classrooms to look for assignments and grades
-3. Checked for any upcoming due dates
+PHASE 2 — Explore each classroom (steps 4-40):
+  For EACH course (at least 3-4 courses), do this:
+  1. CLICK the course name/tile to enter the classroom page.
+  2. Inside the classroom, look for tabs or sections:
+     - "Newsfeed" / "Timeline" — shows assignments as posts with due dates
+     - "Materials" — has files and resources
+     - "Assessments" / "Gradebook" — shows grades
+     - Look for posts marked as "Task" — these are assignments
+  3. SCROLL DOWN in the classroom feed to find assignment posts.
+  4. Extract each assignment you see (title, course, due_date, description).
+  5. If you see grades or scores, extract them as "grade" type.
+  6. Click "Back" or navigate back to dashboard, then enter the next course.
 
-If you haven't extracted ANY data yet, you MUST keep exploring — click on
-sidebar items, classrooms, tabs, or navigation elements to find content.
+PHASE 3 — Check overdue/calendar (steps 41-50):
+  1. Click "ToDos" or "OVERDUE" in the right sidebar to see all tasks.
+  2. Extract any remaining assignments from the overdue/upcoming list.
+  3. NOW you may return "done".
+
+RULES:
+- Extract each item ONLY ONCE. Check "Data extracted so far" before extracting.
+- If you already extracted 6+ courses, STOP extracting courses and START
+  clicking into classrooms to find assignments.
+- ASSIGNMENTS are the priority. Courses alone are not enough.
+- Each step should make PROGRESS — don't repeat the same action.
+- DO NOT return "done" until you have extracted at least some assignments.
 
 Return **exactly one** JSON action per turn — no markdown, no prose.
+Return ONLY the JSON object, nothing else.
 
 Available actions
 ─────────────────
 {"action":"click","selector":"<css_or_text>"}
-  Click a link, button, tab, or element.
+  Click a link, button, tab, or element. For Teamie, use the visible
+  text of the element (e.g. "AP Psychology P5 MM [25-26]").
 
 {"action":"navigate","url":"<full_url>"}
   Go to a specific URL directly.
@@ -103,42 +119,29 @@ Available actions
   Record structured data you can see on screen RIGHT NOW.
   Schemas:
     assignment → {"type":"assignment","title":"…","course":"…",
-                  "due_date":"…","description":"…","points":…,
+                  "due_date":"…","description":"…","points":null,
                   "assignment_type":"homework|test|quiz|lab|essay|project",
-                  "submitted":false,"graded":false,"score":null,"url":"…"}
+                  "submitted":false,"graded":false,"score":null}
     grade      → {"type":"grade","course":"…","overall_grade":"…",
-                  "overall_percentage":…,"categories":{…}}
+                  "overall_percentage":null,"categories":{}}
     course     → {"type":"course","name":"…","teacher":"…",
-                  "period":"…","room":"…"}
+                  "period":"…","room":null}
     announcement → {"type":"announcement","title":"…","course":"…",
                     "content":"…","date":"…"}
     calendar   → {"type":"calendar","title":"…","date":"…",
                   "course":"…","details":"…"}
-  You may include extra fields.  Omit fields you cannot see (don't guess).
 
 {"action":"scroll","direction":"down|up","amount":500}
   Scroll the viewport.
 
 {"action":"back"}
-  Navigate back.
+  Navigate back to the previous page.
 
 {"action":"wait","seconds":2}
   Pause for content to load.
 
 {"action":"done","summary":"short summary of what was collected"}
-  Call this ONLY when you have thoroughly explored the LMS and extracted data.
-
-Strategy
-────────
-1. First, look at the sidebar/navigation to identify all courses/classrooms.
-2. Extract each course name you can see (use the "course" schema).
-3. Click into each course → look for assignments, grades, materials tabs.
-4. Extract every assignment and grade you find.
-5. Check calendars and announcement boards.
-6. Scroll lists to make sure you see everything.
-7. Don't revisit pages you already fully explored.
-8. Extract data the moment you see it; don't batch.
-9. Be thorough — explore at least 3-5 classrooms before considering "done".
+  ONLY after extracting assignments from multiple classrooms.
 """
 
 
@@ -594,14 +597,23 @@ class BrowserAgent:
                 h["url"] for h in self.history if h.get("phase") == "explore"
             ))[-15:]  # last 15 unique URLs
 
-            # Build nudge text if we haven't extracted anything yet
+            # Build nudge text based on extraction progress
             nudge = ""
+            assignment_count = sum(1 for item in self.extracted if item.get("type") == "assignment")
+            course_count = sum(1 for item in self.extracted if item.get("type") == "course")
+
             if len(self.extracted) == 0 and step > 1:
                 nudge = (
                     "\n\nIMPORTANT: You haven't extracted any data yet! "
-                    "Do NOT return 'done'. Look for courses, assignments, "
-                    "grades in the sidebar, navigation, or page content. "
-                    "Click on classroom/course links to explore them."
+                    "Look at the page and extract the course names you see. "
+                    "Then click into a classroom to find assignments."
+                )
+            elif course_count > 0 and assignment_count == 0:
+                nudge = (
+                    f"\n\nYou have {course_count} courses but 0 assignments. "
+                    "STOP extracting courses. Click INTO a classroom name to "
+                    "enter it, then look for assignment posts (marked as 'Task'), "
+                    "scroll down in the feed, and extract each assignment."
                 )
 
             action = await self._ask_claude(
@@ -628,27 +640,34 @@ class BrowserAgent:
 
             # ── Handle terminal / meta actions ────────────────────────
             if act == "done":
-                # Guard: don't accept "done" too early if nothing was extracted
-                if step < 10 and len(self.extracted) == 0:
+                # Guard: don't accept "done" if we haven't done real work
+                has_assignments = any(
+                    item.get("type") == "assignment" for item in self.extracted
+                )
+                should_override = (
+                    (step < 10 and len(self.extracted) == 0)
+                    or (step < 40 and not has_assignments and len(self.extracted) > 0)
+                )
+                if should_override:
                     logger.warning(
-                        "Claude returned 'done' at step %d with 0 items extracted — "
-                        "overriding: will click first classroom in sidebar",
-                        step,
+                        "Claude returned 'done' at step %d (items=%d, assignments=%s) — "
+                        "overriding to continue",
+                        step, len(self.extracted), has_assignments,
                     )
-                    # Instead of just continuing (Claude sees same page),
-                    # proactively try to click something useful
+                    # Proactively try to click into a classroom
                     assert self.page is not None
                     clicked = False
-                    # Try clicking classroom links in the sidebar
                     for text_to_try in [
-                        "View all",
-                        "Classrooms",
                         "AP Psychology",
                         "AP Statistics",
                         "Calculus",
                         "Literature",
                         "Global Issues",
                         "Journalism",
+                        "View all",
+                        "Classrooms",
+                        "ToDos",
+                        "OVERDUE",
                     ]:
                         try:
                             loc = self.page.get_by_text(text_to_try, exact=False).first
@@ -661,7 +680,6 @@ class BrowserAgent:
                         except Exception:
                             continue
                     if not clicked:
-                        # Fallback: try scrolling to reveal content
                         await self.page.evaluate("window.scrollBy(0, 400)")
                         await asyncio.sleep(2)
                         logger.info("Override: scrolled down to reveal content")
