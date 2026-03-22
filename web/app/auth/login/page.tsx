@@ -106,6 +106,7 @@ function LoginContent() {
             full_name: displayName.trim(),
             display_name: displayName.trim(),
           },
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/auth/callback`,
         },
       });
 
@@ -146,7 +147,7 @@ function LoginContent() {
       const supabase = createClient();
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(
         email.trim(),
-        { redirectTo: `${window.location.origin}/auth/callback?type=recovery` }
+        { redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/auth/callback?type=recovery` }
       );
 
       if (resetError) {
