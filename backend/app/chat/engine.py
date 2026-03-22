@@ -132,6 +132,94 @@ CHAT_TOOLS = [
             "required": ["focus"],
         },
     },
+    {
+        "name": "get_assignments",
+        "description": (
+            "Fetch assignments for the student. Use when they ask about "
+            "what's due, upcoming work, or overdue items. Can filter by course."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "course_name": {
+                    "type": "string",
+                    "description": "Filter by course name (optional)",
+                },
+                "filter": {
+                    "type": "string",
+                    "enum": ["all", "overdue", "upcoming", "due_soon"],
+                    "description": "Filter type: all, overdue, upcoming (future), due_soon (next 48h)",
+                },
+            },
+        },
+    },
+    {
+        "name": "get_grades",
+        "description": (
+            "Fetch all grades for the student across all courses."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "calculate_grade",
+        "description": (
+            "Run a what-if grade calculation. Use when the student asks "
+            "'what if I get X on the test?' or 'what do I need to get an A?'"
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "course_name": {"type": "string"},
+                "scenario": {
+                    "type": "string",
+                    "enum": ["what_if", "required_score"],
+                    "description": "what_if: project grade with hypothetical score. required_score: score needed for target.",
+                },
+                "hypothetical_score": {
+                    "type": "number",
+                    "description": "For what_if: the hypothetical score (0-100)",
+                },
+                "hypothetical_total": {
+                    "type": "number",
+                    "description": "For what_if: total points possible",
+                },
+                "target_grade": {
+                    "type": "number",
+                    "description": "For required_score: target grade percentage (e.g., 90 for an A)",
+                },
+            },
+            "required": ["course_name", "scenario"],
+        },
+    },
+    {
+        "name": "generate_study_guide",
+        "description": (
+            "Generate a study guide for a specific topic. Use when the student "
+            "wants help studying for a test or understanding a topic."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "course": {"type": "string", "description": "Course name"},
+                "topic": {"type": "string", "description": "Topic to study"},
+            },
+            "required": ["course", "topic"],
+        },
+    },
+    {
+        "name": "get_due_soon",
+        "description": (
+            "Get assignments due in the next 48 hours. Use for urgency checks "
+            "or when the student asks 'what do I need to do tonight?'"
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+        },
+    },
 ]
 
 
@@ -493,6 +581,11 @@ Today is {today}. Current time: {time_now}.
             "update_class_context": self._tool_update_class,
             "get_grade_analysis": self._tool_grade_analysis,
             "create_study_plan": self._tool_study_plan,
+            "get_assignments": self._tool_get_assignments,
+            "get_grades": self._tool_get_grades,
+            "calculate_grade": self._tool_calculate_grade,
+            "generate_study_guide": self._tool_generate_study_guide,
+            "get_due_soon": self._tool_get_due_soon,
         }
         handler = handlers.get(tool_name)
         if handler is None:
@@ -739,6 +832,168 @@ Today is {today}. Current time: {time_now}.
             "class_context": class_info if class_info else None,
             "focus": focus,
             "duration": duration or None,
+        }
+
+    # ── New tool handlers ─────────────────────────────────────────────────
+
+    async def _tool_get_assignments(self, tool_input: dict) -> dict:
+        """Fetch assignments with optional filtering."""
+        filter_type = tool_input.get("filter", "all")
+        course_filter = tool_input.get("course_name", "").strip()
+
+        all_assignments = await self.memory.get_all_assignments(limit=50)
+
+        now = datetime.now(timezone.utc)
+        filtered = all_assignments
+
+        if filter_type == "overdue":
+            filtered = [
+                a for a in all_assignments
+                if a.get("due_date") and datetime.fromisoformat(a["due_date"].replace("Z", "+00:00")) < now
+            ]
+        elif filter_type == "upcoming":
+            filtered = [
+                a for a in all_assignments
+                if a.get("due_date") and datetime.fromisoformat(a["due_date"].replace("Z", "+00:00")) >= now
+            ]
+        elif filter_type == "due_soon":
+            from datetime import timedelta
+            cutoff = now + timedelta(hours=48)
+            filtered = [
+                a for a in all_assignments
+                if a.get("due_date")
+                and now <= datetime.fromisoformat(a["due_date"].replace("Z", "+00:00")) <= cutoff
+            ]
+
+        if course_filter:
+            filtered = [
+                a for a in filtered
+                if course_filter.lower() in (a.get("course_name") or "").lower()
+            ]
+
+        return {
+            "assignments": [
+                {
+                    "title": a.get("title"),
+                    "course": a.get("course_name"),
+                    "due_date": a.get("due_date"),
+                    "type": a.get("assignment_type"),
+                    "submitted": a.get("is_submitted", False),
+                    "graded": a.get("is_graded", False),
+                    "points": a.get("points_possible"),
+                    "score": a.get("points_earned"),
+                }
+                for a in filtered[:20]
+            ],
+            "total": len(filtered),
+            "filter": filter_type,
+        }
+
+    async def _tool_get_grades(self, tool_input: dict) -> dict:
+        """Fetch all grades."""
+        grades = await self.memory.get_all_grades()
+        return {
+            "grades": [
+                {
+                    "course": g.get("course_name"),
+                    "grade": g.get("overall_grade"),
+                    "percentage": g.get("overall_percentage"),
+                    "breakdown": g.get("category_breakdown", {}),
+                }
+                for g in grades
+            ],
+            "total": len(grades),
+        }
+
+    async def _tool_calculate_grade(self, tool_input: dict) -> dict:
+        """Run grade calculations."""
+        course_name = tool_input.get("course_name", "").strip()
+        scenario = tool_input.get("scenario", "what_if")
+
+        if not course_name:
+            return {"error": "Course name is required."}
+
+        grades = await self.memory.get_all_grades()
+        course_grade = None
+        for g in grades:
+            if course_name.lower() in (g.get("course_name") or "").lower():
+                course_grade = g
+                break
+
+        if not course_grade:
+            return {"error": f"No grade data for '{course_name}'."}
+
+        current_pct = course_grade.get("overall_percentage")
+        if current_pct is None:
+            return {"error": f"No percentage grade available for '{course_name}'."}
+
+        if scenario == "what_if":
+            score = tool_input.get("hypothetical_score", 85)
+            total = tool_input.get("hypothetical_total", 100)
+            # Simple weighted average estimate
+            new_pct = (current_pct + (score / total * 100)) / 2
+            return {
+                "course": course_name,
+                "current_grade": current_pct,
+                "hypothetical_score": f"{score}/{total}",
+                "projected_grade": round(new_pct, 1),
+                "note": "This is an estimate. Actual grade depends on category weights.",
+            }
+        elif scenario == "required_score":
+            target = tool_input.get("target_grade", 90)
+            # Estimate: what score on a 100-point assignment gets you to target
+            needed = 2 * target - current_pct
+            return {
+                "course": course_name,
+                "current_grade": current_pct,
+                "target_grade": target,
+                "needed_score": max(0, min(100, round(needed, 1))),
+                "note": "Estimated score needed on a 100-point assignment. Actual depends on weights.",
+            }
+
+        return {"error": f"Unknown scenario: {scenario}"}
+
+    async def _tool_generate_study_guide(self, tool_input: dict) -> dict:
+        """Trigger study guide generation (returns a brief guide)."""
+        course = tool_input.get("course", "").strip()
+        topic = tool_input.get("topic", "").strip()
+
+        if not course or not topic:
+            return {"error": "Both course and topic are required."}
+
+        return {
+            "status": "ready",
+            "course": course,
+            "topic": topic,
+            "message": f"I'll create a study guide for {topic} in {course}. You can also visit the Study page for more detailed guides, flashcards, and practice quizzes.",
+        }
+
+    async def _tool_get_due_soon(self, tool_input: dict) -> dict:
+        """Get assignments due in the next 48 hours."""
+        from datetime import timedelta
+        all_assignments = await self.memory.get_all_assignments(limit=50)
+        now = datetime.now(timezone.utc)
+        cutoff = now + timedelta(hours=48)
+
+        due_soon = []
+        for a in all_assignments:
+            if a.get("due_date"):
+                try:
+                    due = datetime.fromisoformat(a["due_date"].replace("Z", "+00:00"))
+                    if now <= due <= cutoff:
+                        due_soon.append({
+                            "title": a.get("title"),
+                            "course": a.get("course_name"),
+                            "due_date": a.get("due_date"),
+                            "type": a.get("assignment_type"),
+                            "submitted": a.get("is_submitted", False),
+                        })
+                except (ValueError, TypeError):
+                    continue
+
+        return {
+            "due_in_48h": due_soon,
+            "count": len(due_soon),
         }
 
     # ── Summarization ────────────────────────────────────────────────────

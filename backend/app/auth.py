@@ -113,3 +113,50 @@ async def get_current_user(request: Request) -> str:
             raise HTTPException(status_code=401, detail="Authentication failed. Please sign in again.")
 
     raise HTTPException(status_code=401, detail="Authentication failed. Please sign in again.")
+
+
+async def verify_jwt(token: str) -> str:
+    """Standalone JWT verification — returns user_id or raises ValueError.
+
+    Same logic as get_current_user but doesn't require a FastAPI Request object.
+    Used for WebSocket auth where we get the token from query params.
+    """
+    settings = get_settings()
+
+    # Attempt 1: JWKS-based verification
+    jwks = _fetch_jwks(settings.supabase_url)
+    signing_key = _get_signing_key(token, jwks)
+
+    if signing_key:
+        try:
+            alg = signing_key.get("alg", "ES256")
+            payload = jwt.decode(
+                token,
+                signing_key,
+                algorithms=[alg],
+                audience="authenticated",
+            )
+            user_id = payload.get("sub")
+            if not user_id:
+                raise ValueError("Token missing subject claim")
+            return user_id
+        except JWTError:
+            pass
+
+    # Attempt 2: Legacy HS256
+    if settings.supabase_jwt_secret:
+        try:
+            payload = jwt.decode(
+                token,
+                settings.supabase_jwt_secret,
+                algorithms=["HS256"],
+                audience="authenticated",
+            )
+            user_id = payload.get("sub")
+            if not user_id:
+                raise ValueError("Token missing subject claim")
+            return user_id
+        except JWTError:
+            pass
+
+    raise ValueError("Invalid token")

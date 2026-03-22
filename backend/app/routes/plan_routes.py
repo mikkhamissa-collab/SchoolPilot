@@ -73,7 +73,7 @@ async def get_today_plan(user_id: str = Depends(get_current_user)):
 
 
 @router.post("/generate")
-@limiter.limit("5/minute")
+@limiter.limit("10/hour")
 async def regenerate_plan(request: Request, body: PlanRequest, user_id: str = Depends(get_current_user)):
     return await get_today_plan(user_id=user_id)
 

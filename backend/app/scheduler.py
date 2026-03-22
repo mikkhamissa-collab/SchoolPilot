@@ -145,13 +145,13 @@ async def send_daily_briefings_job():
         return
 
     import anthropic as anthropic_sdk
-    import resend
+    import json
 
-    resend.api_key = settings.resend_api_key
     client = anthropic_sdk.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
     from app.memory.store import MemoryStore
     from app.prompts.personalities import get_personality
+    from app.services.email import render_briefing_html, send_briefing_email
 
     for profile in profiles.data:
         try:
@@ -162,44 +162,68 @@ async def send_daily_briefings_job():
             personality = get_personality(profile.get("personality_preset", "coach"))
             today = datetime.now(timezone.utc).strftime("%A, %B %d, %Y")
 
+            # Ask Claude to generate structured data (NOT raw HTML)
             response = await client.messages.create(
                 model=settings.claude_model,
                 max_tokens=1024,
                 system=f"""{personality['system_prompt']}
 
-Create a concise daily briefing email for this student. Include:
-1. What's due today and tomorrow (URGENT items first)
-2. A quick priority list for the day
-3. One encouraging note
+You are generating a daily briefing for a student. Return ONLY valid JSON with this structure:
+{{
+  "grades": [{{"course": "...", "grade": "A (93%)", "at_risk": false}}],
+  "priorities": [{{"text": "...", "urgency": "overdue|today|this_week"}}],
+  "quick_wins": [{{"text": "..."}}],
+  "streak": 0,
+  "motivation": "One short motivational line that fits the student's personality"
+}}
 
-Keep it short — this is a morning email, not an essay. Use HTML formatting (bold, bullet points, headers).
+Rules:
+- grades: list courses with grade info. Mark at_risk=true if grade is below 75% or near a grade boundary
+- priorities: sort by urgency (overdue first, then today, then this week). Max 5 items
+- quick_wins: assignments under 30 min. Max 3 items
+- motivation: match the personality style, NOT cheesy
+- Return ONLY the JSON, no markdown fences, no explanation
 """,
                 messages=[{
                     "role": "user",
-                    "content": f"Today is {today}.\n\n{context}\n\nWrite the daily briefing email.",
+                    "content": f"Today is {today}.\n\n{context}\n\nGenerate the briefing JSON.",
                 }],
             )
 
-            import html as html_mod
-            briefing_html = html_mod.escape(response.content[0].text).replace("\n", "<br>")
+            # Parse structured data
+            raw = response.content[0].text.strip()
+            try:
+                briefing_data = json.loads(raw)
+            except json.JSONDecodeError:
+                # Try to extract JSON from response
+                start = raw.find("{")
+                end = raw.rfind("}") + 1
+                if start >= 0 and end > start:
+                    try:
+                        briefing_data = json.loads(raw[start:end])
+                    except json.JSONDecodeError:
+                        logger.warning("Could not parse briefing JSON for user %s", user_id)
+                        continue
+                else:
+                    logger.warning("No JSON found in briefing response for user %s", user_id)
+                    continue
+
+            # Render to HTML
+            student_name = profile.get("display_name")
+            briefing_html = render_briefing_html(briefing_data, today, student_name)
 
             # Get user email from Supabase auth
             user_data = db.auth.admin.get_user_by_id(user_id)
             user_email = user_data.user.email if user_data and user_data.user else None
 
             if user_email:
-                resend.Emails.send({
-                    "from": "SchoolPilot <briefing@schoolpilot.co>",
-                    "to": user_email,
-                    "subject": f"SchoolPilot — Your Plan for {today}",
-                    "html": f"<div style='font-family: sans-serif; max-width: 600px; margin: 0 auto;'>{briefing_html}</div>",
-                })
-                logger.info(f"Briefing sent to {user_email}")
+                send_briefing_email(user_email, briefing_html, today)
+                logger.info("Briefing sent to %s", user_email)
             else:
-                logger.warning(f"No email found for user {user_id}")
+                logger.warning("No email found for user %s", user_id)
 
         except Exception as e:
-            logger.exception(f"Failed to send briefing for user {profile['user_id']}: {e}")
+            logger.exception("Failed to send briefing for user %s: %s", profile['user_id'], e)
 
     logger.info("Daily briefing job complete.")
 

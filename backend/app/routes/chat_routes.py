@@ -5,7 +5,7 @@ from typing import AsyncGenerator, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -20,12 +20,12 @@ limiter = Limiter(key_func=get_remote_address)
 
 class ChatRequest(BaseModel):
     conversation_id: Optional[str] = None
-    message: str
-    personality: str = "coach"
+    message: str = Field(..., max_length=2000, min_length=1)
+    personality: str = Field(default="coach", pattern=r"^(coach|friend|mentor|drill_sergeant)$")
 
 
 class ConversationCreate(BaseModel):
-    title: Optional[str] = None
+    title: Optional[str] = Field(default=None, max_length=200)
 
 
 async def _safe_stream(generator: AsyncGenerator[str, None]) -> AsyncGenerator[str, None]:

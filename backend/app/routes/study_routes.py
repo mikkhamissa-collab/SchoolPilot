@@ -95,7 +95,7 @@ def _save_cache(user_id: str, content_type: str, course: str, topic: str, conten
 
 
 @router.post("/guide")
-@limiter.limit("20/minute")
+@limiter.limit("5/hour")
 async def generate_study_guide(request: Request, body: StudyRequest, user_id: str = Depends(get_current_user)):
     cached = _get_cached(user_id, "guide", body.course, body.topic)
     if cached:
@@ -108,7 +108,7 @@ async def generate_study_guide(request: Request, body: StudyRequest, user_id: st
 
 
 @router.post("/flashcards")
-@limiter.limit("20/minute")
+@limiter.limit("5/hour")
 async def generate_flashcards(request: Request, body: StudyRequest, user_id: str = Depends(get_current_user)):
     cached = _get_cached(user_id, "flashcards", body.course, body.topic)
     if cached:
@@ -124,7 +124,7 @@ async def generate_flashcards(request: Request, body: StudyRequest, user_id: str
 
 
 @router.post("/quiz")
-@limiter.limit("20/minute")
+@limiter.limit("5/hour")
 async def generate_quiz(request: Request, body: StudyRequest, user_id: str = Depends(get_current_user)):
     cached = _get_cached(user_id, "quiz", body.course, body.topic)
     if cached:
@@ -140,7 +140,7 @@ async def generate_quiz(request: Request, body: StudyRequest, user_id: str = Dep
 
 
 @router.post("/explain")
-@limiter.limit("20/minute")
+@limiter.limit("5/hour")
 async def explain_concept(request: Request, body: StudyRequest, user_id: str = Depends(get_current_user)):
     cached = _get_cached(user_id, "explain", body.course, body.topic)
     if cached:
@@ -153,7 +153,7 @@ async def explain_concept(request: Request, body: StudyRequest, user_id: str = D
 
 
 @router.post("/summary")
-@limiter.limit("20/minute")
+@limiter.limit("5/hour")
 async def generate_summary(request: Request, body: StudyRequest, user_id: str = Depends(get_current_user)):
     cached = _get_cached(user_id, "summary", body.course, body.topic)
     if cached:

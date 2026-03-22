@@ -75,8 +75,8 @@ export default function RemoteBrowser({ onComplete, onError }: RemoteBrowserProp
 
       const { session_id } = await res.json();
 
-      // Connect WebSocket
-      const wsUrl = API_URL.replace(/^http/, "ws") + `/api/agent/remote-browser/ws/${session_id}`;
+      // Connect WebSocket with JWT token for auth
+      const wsUrl = API_URL.replace(/^http/, "ws") + `/api/agent/remote-browser/ws/${session_id}?token=${encodeURIComponent(session.access_token)}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 

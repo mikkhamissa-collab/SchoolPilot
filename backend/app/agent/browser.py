@@ -594,27 +594,44 @@ class BrowserAgent:
         """Extract Teamie feed posts from the DOM.
 
         Teamie renders assignments/announcements as feed posts with specific
-        CSS classes. This method extracts them deterministically.
+        CSS classes. Uses aggressive selectors and multiple fallbacks since
+        Teamie is a proprietary SPA with unknown class names.
         """
         assert self.page is not None
         try:
             return await self.page.evaluate("""() => {
-                // Teamie feed posts typically have these selectors
+                // Teamie feed posts — try many selectors (proprietary SPA)
                 const selectors = [
                     '.activity-stream-entry',
                     '.feed-post',
                     '.post-item',
+                    '.newsfeed-post',
+                    '.wall-post',
+                    '.assessment-item',
+                    '.todo-item',
+                    '[data-post-id]',
+                    '[data-activity-id]',
+                    '.post-content',
+                    '.activity-content',
                     '[class*="post"]',
                     '[class*="activity"]',
+                    '[class*="assignment"]',
+                    '[class*="assessment"]',
+                    '[class*="task"]',
+                    '[class*="todo"]',
                     '.stream-item',
                 ];
                 let posts = [];
+                const seenTexts = new Set();
+
                 for (const sel of selectors) {
                     const elements = document.querySelectorAll(sel);
                     if (elements.length > 0) {
                         elements.forEach(el => {
                             const text = el.innerText?.trim() || '';
-                            if (text.length > 20) {
+                            const shortText = text.substring(0, 100);
+                            if (text.length > 20 && !seenTexts.has(shortText)) {
+                                seenTexts.add(shortText);
                                 posts.push({
                                     text: text.substring(0, 800),
                                     html_class: el.className?.substring(0, 100) || '',
@@ -622,18 +639,20 @@ class BrowserAgent:
                                 });
                             }
                         });
-                        break;  // Use first matching selector
+                        // Don't break — collect from ALL matching selectors
                     }
                 }
 
-                // Fallback: grab large content blocks if no feed posts found
+                // Fallback 1: grab large content blocks
                 if (posts.length === 0) {
                     const blocks = document.querySelectorAll(
                         'article, .card, [class*="card"], [class*="item"], .content-block'
                     );
                     blocks.forEach(el => {
                         const text = el.innerText?.trim() || '';
-                        if (text.length > 30 && text.length < 2000) {
+                        const shortText = text.substring(0, 100);
+                        if (text.length > 30 && text.length < 2000 && !seenTexts.has(shortText)) {
+                            seenTexts.add(shortText);
                             posts.push({
                                 text: text.substring(0, 800),
                                 html_class: el.className?.substring(0, 100) || '',
@@ -643,7 +662,42 @@ class BrowserAgent:
                     });
                 }
 
-                return posts.slice(0, 30);
+                // Fallback 2: grab ALL divs with >50 chars that are 3+ levels deep
+                if (posts.length === 0) {
+                    const allDivs = document.querySelectorAll('div');
+                    allDivs.forEach(el => {
+                        let depth = 0;
+                        let parent = el.parentElement;
+                        while (parent && depth < 5) { depth++; parent = parent.parentElement; }
+                        if (depth >= 3) {
+                            const text = el.innerText?.trim() || '';
+                            const shortText = text.substring(0, 100);
+                            if (text.length > 50 && text.length < 2000 && !seenTexts.has(shortText)) {
+                                seenTexts.add(shortText);
+                                posts.push({
+                                    text: text.substring(0, 800),
+                                    html_class: el.className?.substring(0, 100) || '',
+                                    tag: el.tagName,
+                                });
+                            }
+                        }
+                    });
+                }
+
+                // Fallback 3: split body text by double newlines
+                if (posts.length === 0) {
+                    const bodyText = document.body?.innerText || '';
+                    const chunks = bodyText.split(/\\n\\s*\\n/).filter(c => c.trim().length > 50);
+                    chunks.forEach(chunk => {
+                        posts.push({
+                            text: chunk.trim().substring(0, 800),
+                            html_class: '_body_text_chunk',
+                            tag: 'BODY',
+                        });
+                    });
+                }
+
+                return posts.slice(0, 50);
             }""")
         except Exception as e:
             logger.warning("get_feed_posts failed: %s", e)
@@ -664,19 +718,22 @@ class BrowserAgent:
         if not self.page:
             raise RuntimeError("Browser not started — call start() first")
 
+        import time as _time
+        _explore_start = _time.time()
         logger.info("Starting HYBRID exploration (goal: %s)", goal)
 
-        # Wait for SPA to fully render
+        # Wait for SPA to fully render (reduced from 5s to 3s)
         logger.info("Waiting for SPA to render before exploration...")
-        await asyncio.sleep(5)
+        await asyncio.sleep(3)
         try:
             await self.page.wait_for_load_state("networkidle", timeout=8000)
         except (PlaywrightTimeout, Exception):
             pass
-        logger.info("SPA wait complete, current URL: %s", self.page.url)
+        logger.info("SPA wait complete (%.1fs), current URL: %s", _time.time() - _explore_start, self.page.url)
 
         try:
             # ── Phase 1: Dashboard — extract courses ──────────────────
+            _phase1_start = _time.time()
             logger.info("Phase 1: Extracting courses from dashboard")
             page_data = await self.get_page_data()
             dashboard_text = page_data.get("text", "")
@@ -697,11 +754,12 @@ class BrowserAgent:
                     if isinstance(course, dict) and course.get("name"):
                         course["type"] = "course"
                         self._add_extracted(course)
-                logger.info("Phase 1: Extracted %d courses", len(courses))
+                logger.info("Phase 1: Extracted %d courses (%.1fs)", len(courses), _time.time() - _phase1_start)
             else:
-                logger.warning("Phase 1: Claude returned non-list for courses: %s", type(courses))
+                logger.warning("Phase 1: Claude returned non-list for courses: %s (%.1fs)", type(courses), _time.time() - _phase1_start)
 
             # ── Phase 2: Find classroom links ─────────────────────────
+            _phase2_start = _time.time()
             # Look for links that point to classroom pages
             classroom_links = []
             for link in dashboard_links:
@@ -749,15 +807,17 @@ class BrowserAgent:
             classroom_links = unique_classroom_links[:10]  # Cap at 10 classrooms
 
             logger.info(
-                "Phase 2: Found %d unique classroom links: %s",
-                len(classroom_links),
+                "Phase 2: Found %d unique classroom links (%.1fs): %s",
+                len(classroom_links), _time.time() - _phase2_start,
                 [l.get("text", "?")[:40] for l in classroom_links],
             )
 
             # ── Phase 3: Visit each classroom ─────────────────────────
+            _phase3_start = _time.time()
             for i, link in enumerate(classroom_links):
                 href = link.get("href", "")
                 link_text = link.get("text", f"Classroom {i+1}")
+                _classroom_start = _time.time()
                 logger.info(
                     "Phase 3: Entering classroom %d/%d: %s",
                     i + 1, len(classroom_links), link_text[:50],
@@ -768,10 +828,10 @@ class BrowserAgent:
                     await self.page.goto(href, wait_until="domcontentloaded", timeout=15000)
                     await self._wait_for_stable()
 
-                    # Scroll down to load more content (Teamie lazy-loads feed)
+                    # Scroll down to load more content (reduced pauses from 1.5s to 1s)
                     for scroll_round in range(3):
                         await self.page.evaluate("window.scrollBy(0, 600)")
-                        await asyncio.sleep(1.5)
+                        await asyncio.sleep(1.0)
 
                     # Get feed posts from DOM
                     posts = await self.get_feed_posts()
@@ -780,10 +840,12 @@ class BrowserAgent:
 
                     # Use Claude to interpret the feed content
                     if posts:
-                        posts_text = "\n---POST---\n".join(p.get("text", "") for p in posts[:15])
+                        posts_text = "\n---POST---\n".join(p.get("text", "") for p in posts[:20])
                         content_to_parse = posts_text
                     else:
-                        content_to_parse = page_text[:5000]
+                        content_to_parse = page_text[:6000]
+
+                    course_name = link_text.split("[")[0].strip()
 
                     if content_to_parse.strip():
                         items = await self._claude_extract_from_text(
@@ -792,7 +854,7 @@ class BrowserAgent:
                                 f"This is content from the classroom '{link_text}' on Teamie LMS. "
                                 "Extract ALL assignments and graded items visible. "
                                 "Return a JSON array of objects. Each object should have:\n"
-                                '{"type":"assignment","title":"...","course":"' + link_text.split("[")[0].strip() + '",'
+                                '{"type":"assignment","title":"...","course":"' + course_name + '",'
                                 '"due_date":"YYYY-MM-DD or null","description":"brief description",'
                                 '"assignment_type":"homework|test|quiz|lab|essay|project|task",'
                                 '"submitted":false,"graded":false,"score":null}\n\n'
@@ -811,14 +873,44 @@ class BrowserAgent:
                                     self._add_extracted(item)
                                     new_count += 1
                             logger.info(
-                                "Classroom '%s': extracted %d items",
-                                link_text[:30], new_count,
+                                "Classroom '%s': extracted %d items (%.1fs)",
+                                link_text[:30], new_count, _time.time() - _classroom_start,
                             )
                         else:
                             logger.warning(
                                 "Claude returned non-list for classroom '%s'",
                                 link_text[:30],
                             )
+
+                    # ── Check for Materials tab ──────────────────────────
+                    try:
+                        for tab_text in ["Materials", "Resources", "Files", "Library"]:
+                            loc = self.page.get_by_text(tab_text, exact=False).first
+                            if await loc.is_visible(timeout=1500):
+                                await loc.click(timeout=3000)
+                                await asyncio.sleep(2)
+                                materials_data = await self.get_page_data()
+                                materials_text = materials_data.get("text", "")
+                                if materials_text.strip():
+                                    mat_items = await self._claude_extract_from_text(
+                                        page_text=materials_text,
+                                        instruction=(
+                                            f"This is the Materials/Resources tab for '{course_name}' on Teamie LMS. "
+                                            "Extract any assignments, resources, or materials visible. "
+                                            "Return a JSON array of objects with:\n"
+                                            '{"type":"assignment","title":"...","course":"' + course_name + '",'
+                                            '"due_date":"YYYY-MM-DD or null","description":"...","assignment_type":"task"}\n'
+                                            "Return ONLY the JSON array. If nothing found, return []."
+                                        ),
+                                    )
+                                    if isinstance(mat_items, list):
+                                        for item in mat_items:
+                                            if isinstance(item, dict) and item.get("title"):
+                                                self._add_extracted(item)
+                                logger.info("Checked Materials tab for '%s'", course_name[:30])
+                                break
+                    except Exception:
+                        pass  # Materials tab is optional
 
                 except Exception as e:
                     logger.warning(
@@ -827,7 +919,10 @@ class BrowserAgent:
                     )
                     continue
 
-            # ── Phase 4: Check overdue/todos ──────────────────────────
+            logger.info("Phase 3 complete: visited %d classrooms (%.1fs)", len(classroom_links), _time.time() - _phase3_start)
+
+            # ── Phase 4: Check overdue/todos (richest data source) ─────
+            _phase4_start = _time.time()
             logger.info("Phase 4: Checking overdue/todos")
             try:
                 # Navigate back to dashboard
@@ -836,7 +931,7 @@ class BrowserAgent:
                 await self._wait_for_stable()
 
                 # Try to click "ToDos" or "OVERDUE"
-                for text_to_try in ["OVERDUE", "ToDos", "To Do", "Upcoming"]:
+                for text_to_try in ["OVERDUE", "ToDos", "To Do", "Upcoming", "Due", "Pending"]:
                     try:
                         loc = self.page.get_by_text(text_to_try, exact=False).first
                         if await loc.is_visible(timeout=2000):
@@ -844,24 +939,45 @@ class BrowserAgent:
                             await self._wait_for_stable()
                             logger.info("Clicked '%s' for overdue items", text_to_try)
 
-                            # Scroll to load content
-                            for _ in range(2):
-                                await self.page.evaluate("window.scrollBy(0, 500)")
-                                await asyncio.sleep(1)
+                            # Scroll MORE (5 times instead of 2) — this is the richest data source
+                            for scroll_i in range(5):
+                                await self.page.evaluate("window.scrollBy(0, 600)")
+                                await asyncio.sleep(1.0)
+                                logger.debug("Overdue scroll %d/5", scroll_i + 1)
 
+                            # Get all content — use feed posts first, then page text
+                            posts = await self.get_feed_posts()
                             page_data = await self.get_page_data()
                             overdue_text = page_data.get("text", "")
 
-                            if overdue_text.strip():
+                            # Batch extraction — send more content for this critical section
+                            content_to_parse = ""
+                            if posts:
+                                content_to_parse = "\n---ITEM---\n".join(
+                                    p.get("text", "") for p in posts[:30]
+                                )
+                            if not content_to_parse.strip():
+                                content_to_parse = overdue_text
+
+                            if content_to_parse.strip():
                                 overdue_items = await self._claude_extract_from_text(
-                                    page_text=overdue_text[:5000],
+                                    page_text=content_to_parse,
                                     instruction=(
                                         "This is the overdue/todo list from Teamie LMS. "
+                                        "This is the MOST IMPORTANT data source — extract EVERYTHING. "
                                         "Extract ALL assignments/tasks visible. "
                                         "Return a JSON array of objects, each with:\n"
                                         '{"type":"assignment","title":"...","course":"...",'
                                         '"due_date":"YYYY-MM-DD or null","description":"...",'
                                         '"assignment_type":"task"}\n\n'
+                                        "IMPORTANT date parsing rules:\n"
+                                        "- 'Mar 15' or 'March 15' → '2026-03-15'\n"
+                                        "- '3/15/26' → '2026-03-15'\n"
+                                        "- '15 March 2026' → '2026-03-15'\n"
+                                        "- 'yesterday' → calculate from today (2026-03-22)\n"
+                                        "- '2 days ago' → calculate from today\n"
+                                        "- 'Due: Mar 20' → '2026-03-20'\n"
+                                        "- Today is 2026-03-22.\n\n"
                                         "Return ONLY the JSON array. If nothing found, return []."
                                     ),
                                 )
@@ -871,12 +987,12 @@ class BrowserAgent:
                                         if isinstance(item, dict) and item.get("title"):
                                             self._add_extracted(item)
                                             new_count += 1
-                                    logger.info("Overdue/todos: extracted %d items", new_count)
+                                    logger.info("Overdue/todos: extracted %d items (%.1fs)", new_count, _time.time() - _phase4_start)
                             break
                     except Exception:
                         continue
             except Exception as e:
-                logger.warning("Phase 4 (overdue check) failed: %s", str(e)[:200])
+                logger.warning("Phase 4 (overdue check) failed: %s (%.1fs)", str(e)[:200], _time.time() - _phase4_start)
 
         except Exception as e:
             logger.error(
@@ -887,15 +1003,17 @@ class BrowserAgent:
             return await self.explore_vision_only(goal)
 
         # Log results
+        _total_time = _time.time() - _explore_start
         extracted_types = {}
         for item in self.extracted:
             t = item.get("type", "other")
             extracted_types[t] = extracted_types.get(t, 0) + 1
 
         logger.info(
-            "Hybrid exploration finished: %d items extracted (%s)",
+            "Hybrid exploration finished: %d items extracted (%s) in %.1fs",
             len(self.extracted),
             json.dumps(extracted_types),
+            _total_time,
         )
 
         # If we got very few results, try vision-only as supplement
@@ -941,16 +1059,69 @@ class BrowserAgent:
         )
         return True
 
+    @staticmethod
+    def _clean_page_text(text: str) -> str:
+        """Pre-clean raw page text before sending to Claude for extraction.
+
+        Strips navigation noise, repeated whitespace, and common UI chrome.
+        """
+        import re as _re
+
+        # Strip common navigation/UI text
+        nav_patterns = [
+            r"^(Home|Dashboard|Settings|Profile|Logout|Notifications|"
+            r"Sign Out|Sign In|Search|Menu|Navigation|Skip to content|"
+            r"Copyright|All rights reserved|Terms|Privacy Policy|"
+            r"Loading\.\.\.|Please wait)\s*$",
+        ]
+        lines = text.split("\n")
+        cleaned_lines = []
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            skip = False
+            for pattern in nav_patterns:
+                if _re.match(pattern, stripped, _re.IGNORECASE):
+                    skip = True
+                    break
+            if not skip:
+                cleaned_lines.append(stripped)
+
+        result = "\n".join(cleaned_lines)
+        # Collapse multiple blank lines
+        result = _re.sub(r"\n{3,}", "\n\n", result)
+        # Collapse repeated whitespace
+        result = _re.sub(r"[ \t]{3,}", "  ", result)
+        return result.strip()
+
     async def _claude_extract_from_text(
         self,
         *,
         page_text: str,
         instruction: str,
+        use_haiku: bool = True,
     ) -> list:
-        """Send page text (no screenshot) to Claude and parse the JSON array response."""
+        """Send page text (no screenshot) to Claude and parse the JSON array response.
+
+        Uses Haiku by default for extraction tasks (faster, cheaper).
+        Set use_haiku=False for complex interpretation.
+        """
+        # Pre-clean the text
+        cleaned_text = self._clean_page_text(page_text)
+        # Truncate to 6000 chars
+        cleaned_text = cleaned_text[:6000]
+
+        if not cleaned_text.strip():
+            logger.debug("Empty text after cleaning, skipping extraction")
+            return []
+
+        # Use Haiku for extraction (10x faster, cheaper), Sonnet for complex tasks
+        model = "claude-haiku-4-5-20251001" if use_haiku else self.settings.claude_model
+
         try:
             response = await self.client.messages.create(
-                model=self.settings.claude_model,
+                model=model,
                 max_tokens=4096,
                 system=(
                     "You are a data extraction assistant. You extract structured data "
@@ -960,7 +1131,7 @@ class BrowserAgent:
                 messages=[
                     {
                         "role": "user",
-                        "content": f"{instruction}\n\n---PAGE CONTENT---\n{page_text}",
+                        "content": f"{instruction}\n\n---PAGE CONTENT---\n{cleaned_text}",
                     }
                 ],
             )

@@ -5,6 +5,7 @@
 import asyncio
 import hashlib
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -204,6 +205,14 @@ class LMSExplorer:
         for item in extracted:
             item_type = item.get("type")
             try:
+                # If assignment has no due_date, try to parse one from description
+                if item_type == "assignment" and not item.get("due_date"):
+                    parsed_date = self._parse_date_from_text(
+                        item.get("description", "") + " " + item.get("title", "")
+                    )
+                    if parsed_date:
+                        item["due_date"] = parsed_date
+
                 if item_type == "assignment":
                     self._upsert_assignment(item)
                     counts["assignments"] += 1
@@ -360,6 +369,68 @@ class LMSExplorer:
             },
             on_conflict="user_id,lms_id",
         ).execute()
+
+    # ── Date parsing helper ───────────────────────────────────────
+
+    @staticmethod
+    def _parse_date_from_text(text: str) -> Optional[str]:
+        """Try to extract a date from text using regex patterns.
+
+        Returns ISO date string (YYYY-MM-DD) or None.
+        """
+        if not text:
+            return None
+
+        month_map = {
+            "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+            "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+            "january": 1, "february": 2, "march": 3, "april": 4,
+            "june": 6, "july": 7, "august": 8, "september": 9,
+            "october": 10, "november": 11, "december": 12,
+        }
+
+        # Pattern: "Mar 15", "March 15", "Mar 15, 2026"
+        m = re.search(
+            r"(?:due|by|on|before)?\s*(\w+)\s+(\d{1,2})(?:\s*,?\s*(\d{4}))?",
+            text, re.IGNORECASE,
+        )
+        if m:
+            month_str = m.group(1).lower()
+            if month_str in month_map:
+                month = month_map[month_str]
+                day = int(m.group(2))
+                year = int(m.group(3)) if m.group(3) else datetime.now(timezone.utc).year
+                if 1 <= day <= 31:
+                    try:
+                        return datetime(year, month, day).strftime("%Y-%m-%d")
+                    except ValueError:
+                        pass
+
+        # Pattern: "3/15/26", "03/15/2026", "3-15-26"
+        m = re.search(r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", text)
+        if m:
+            month, day, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            if year < 100:
+                year += 2000
+            if 1 <= month <= 12 and 1 <= day <= 31:
+                try:
+                    return datetime(year, month, day).strftime("%Y-%m-%d")
+                except ValueError:
+                    pass
+
+        # Pattern: "15 March 2026"
+        m = re.search(r"(\d{1,2})\s+(\w+)\s+(\d{4})", text)
+        if m:
+            day = int(m.group(1))
+            month_str = m.group(2).lower()
+            year = int(m.group(3))
+            if month_str in month_map and 1 <= day <= 31:
+                try:
+                    return datetime(year, month_map[month_str], day).strftime("%Y-%m-%d")
+                except ValueError:
+                    pass
+
+        return None
 
     # ── Job / credential status updates ───────────────────────────────
 

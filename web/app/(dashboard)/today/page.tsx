@@ -28,7 +28,7 @@ interface LMSGrade {
 }
 
 interface SyncStatus {
-  last_sync: { completed_at: string; data_extracted: Record<string, number> } | null;
+  last_sync: { completed_at: string; data_extracted: Record<string, number>; status?: string; error_message?: string } | null;
   is_syncing: boolean;
   running_job_id: string | null;
   credentials: { lms_type: string; last_login_success: boolean; sync_enabled: boolean }[];
@@ -48,6 +48,26 @@ interface StudentProfile {
   daily_briefing_enabled: boolean;
 }
 
+interface StreakData {
+  current_streak: number;
+  longest_streak: number;
+  total_active_days: number;
+}
+
+interface DailyPlan {
+  plan: string;
+  generated_at: string;
+}
+
+// Toast system
+interface Toast {
+  id: number;
+  message: string;
+  type: "success" | "error" | "info";
+}
+
+let toastId = 0;
+
 export default function TodayPage() {
   const router = useRouter();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -55,14 +75,26 @@ export default function TodayPage() {
   const [courses, setCourses] = useState<CourseContext[]>([]);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [profile, setProfile] = useState<StudentProfile | null>(null);
+  const [streak, setStreak] = useState<StreakData | null>(null);
+  const [dailyPlan, setDailyPlan] = useState<DailyPlan | null>(null);
+  const [planLoading, setPlanLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState("");
   const [error, setError] = useState("");
   const [sessionExpired, setSessionExpired] = useState(false);
   const [showReconnect, setShowReconnect] = useState(false);
   const [token, setToken] = useState("");
+  const [toasts, setToasts] = useState<Toast[]>([]);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const safetyRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Toast helpers
+  const addToast = useCallback((message: string, type: Toast["type"] = "info") => {
+    const id = ++toastId;
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+  }, []);
 
   // Cleanup poll/safety timers on unmount
   useEffect(() => {
@@ -82,6 +114,22 @@ export default function TodayPage() {
     });
   }, []);
 
+  // Stale-while-revalidate: load cached data immediately
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem("sp_today_cache");
+      if (cached) {
+        const data = JSON.parse(cached);
+        if (data.assignments) setAssignments(data.assignments);
+        if (data.grades) setGrades(data.grades);
+        if (data.courses) setCourses(data.courses);
+        if (data.streak) setStreak(data.streak);
+      }
+    } catch {
+      // ignore cache errors
+    }
+  }, []);
+
   // Fetch data once we have a token
   const fetchData = useCallback(async () => {
     if (!token) return;
@@ -89,21 +137,26 @@ export default function TodayPage() {
     setError("");
 
     const headers = { Authorization: `Bearer ${token}` };
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
 
     try {
-      const [assignRes, gradeRes, syncRes, profileRes, coursesRes] = await Promise.allSettled([
-        fetch(`${API_URL}/api/agent/assignments?upcoming_only=false&limit=50`, { headers }),
-        fetch(`${API_URL}/api/agent/grades`, { headers }),
-        fetch(`${API_URL}/api/agent/sync-status`, { headers }),
-        fetch(`${API_URL}/api/profile/me`, { headers }),
-        fetch(`${API_URL}/api/profile/classes`, { headers }),
+      const [assignRes, gradeRes, syncRes, profileRes, coursesRes, streakRes, planRes] = await Promise.allSettled([
+        fetch(`${API_URL}/api/agent/assignments?upcoming_only=false&limit=50`, { headers, signal: controller.signal }),
+        fetch(`${API_URL}/api/agent/grades`, { headers, signal: controller.signal }),
+        fetch(`${API_URL}/api/agent/sync-status`, { headers, signal: controller.signal }),
+        fetch(`${API_URL}/api/profile/me`, { headers, signal: controller.signal }),
+        fetch(`${API_URL}/api/profile/classes`, { headers, signal: controller.signal }),
+        fetch(`${API_URL}/api/focus/stats`, { headers, signal: controller.signal }),
+        fetch(`${API_URL}/api/plan/today`, { headers, signal: controller.signal }),
       ]);
+
+      const newAssignments: Assignment[] = [];
+      const newGrades: LMSGrade[] = [];
 
       if (assignRes.status === "fulfilled" && assignRes.value.ok) {
         const json = await assignRes.value.json();
-        // Backend returns paginated {data: [...], total, limit, offset}
         const all: Assignment[] = Array.isArray(json) ? json : json.data || [];
-        // Sort by due date: overdue first, then upcoming, then no-date
         all.sort((a, b) => {
           if (!a.due_date && !b.due_date) return 0;
           if (!a.due_date) return 1;
@@ -111,10 +164,13 @@ export default function TodayPage() {
           return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
         });
         setAssignments(all);
+        newAssignments.push(...all);
       }
       if (gradeRes.status === "fulfilled" && gradeRes.value.ok) {
         const json = await gradeRes.value.json();
-        setGrades(Array.isArray(json) ? json : json.data || []);
+        const g = Array.isArray(json) ? json : json.data || [];
+        setGrades(g);
+        newGrades.push(...g);
       }
       if (syncRes.status === "fulfilled" && syncRes.value.ok) {
         const data = await syncRes.value.json();
@@ -125,25 +181,70 @@ export default function TodayPage() {
         const data = await profileRes.value.json();
         setProfile(data);
       }
+      let newCourses: CourseContext[] = [];
       if (coursesRes.status === "fulfilled" && coursesRes.value.ok) {
         const data = await coursesRes.value.json();
-        setCourses(Array.isArray(data) ? data : []);
+        newCourses = Array.isArray(data) ? data : [];
+        setCourses(newCourses);
       }
+      let newStreak: StreakData | null = null;
+      if (streakRes.status === "fulfilled" && streakRes.value.ok) {
+        const data = await streakRes.value.json();
+        newStreak = { current_streak: data.current_streak || 0, longest_streak: data.longest_streak || 0, total_active_days: data.total_active_days || 0 };
+        setStreak(newStreak);
+      }
+      if (planRes.status === "fulfilled" && planRes.value.ok) {
+        const data = await planRes.value.json();
+        if (data.plan) setDailyPlan(data);
+      }
+
+      // Cache for stale-while-revalidate
+      try {
+        localStorage.setItem("sp_today_cache", JSON.stringify({
+          assignments: newAssignments, grades: newGrades, courses: newCourses, streak: newStreak,
+        }));
+      } catch { /* ignore */ }
     } catch {
       setError("Failed to load data. Is the backend running?");
     } finally {
+      clearTimeout(timeout);
       setLoading(false);
     }
-  }, [token, router]);
+  }, [token]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
+  // Generate daily plan
+  const generatePlan = async () => {
+    if (!token || planLoading) return;
+    setPlanLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/plan/generate`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setDailyPlan({ plan: data.plan || data.content || "Plan generated!", generated_at: new Date().toISOString() });
+        addToast("Daily plan generated!", "success");
+      } else {
+        addToast("Failed to generate plan", "error");
+      }
+    } catch {
+      addToast("Failed to generate plan", "error");
+    } finally {
+      setPlanLoading(false);
+    }
+  };
+
   // Trigger manual sync
   const handleSync = async () => {
     if (!token || syncing) return;
     setSyncing(true);
+    setSyncProgress("Connecting to LMS...");
     try {
       const res = await fetch(`${API_URL}/api/agent/sync`, {
         method: "POST",
@@ -154,51 +255,69 @@ export default function TodayPage() {
         const data = await res.json();
         setError(data.detail || "Sync failed");
         setSyncing(false);
+        setSyncProgress("");
         return;
       }
-      // Clear any existing poll
+
       if (pollRef.current) clearInterval(pollRef.current);
       if (safetyRef.current) clearTimeout(safetyRef.current);
 
-      // Poll for completion
+      let pollCount = 0;
       pollRef.current = setInterval(async () => {
-        const syncRes = await fetch(`${API_URL}/api/agent/sync-status`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (syncRes.ok) {
-          const data = await syncRes.json();
-          if (!data.is_syncing) {
-            if (pollRef.current) clearInterval(pollRef.current);
-            if (safetyRef.current) clearTimeout(safetyRef.current);
-            pollRef.current = null;
-            safetyRef.current = null;
-            setSyncing(false);
-            // Check if the latest completed job actually failed
-            if (data.last_sync?.status === "failed") {
-              const errMsg = data.last_sync.error_message || "";
-              if (errMsg.includes("session_expired") || errMsg.toLowerCase().includes("session expired")) {
-                setSessionExpired(true);
-                setError("");
+        pollCount++;
+        // Update progress message based on time elapsed
+        if (pollCount < 5) setSyncProgress("Connecting to LMS...");
+        else if (pollCount < 10) setSyncProgress(`Found ${courses.length} classes...`);
+        else if (pollCount < 20) setSyncProgress("Extracting assignments...");
+        else setSyncProgress("Still working...");
+
+        try {
+          const syncRes = await fetch(`${API_URL}/api/agent/sync-status`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (syncRes.ok) {
+            const data = await syncRes.json();
+            if (!data.is_syncing) {
+              if (pollRef.current) clearInterval(pollRef.current);
+              if (safetyRef.current) clearTimeout(safetyRef.current);
+              pollRef.current = null;
+              safetyRef.current = null;
+              setSyncing(false);
+              setSyncProgress("");
+
+              if (data.last_sync?.status === "failed") {
+                const errMsg = data.last_sync.error_message || "";
+                if (errMsg.includes("session_expired") || errMsg.toLowerCase().includes("session expired")) {
+                  setSessionExpired(true);
+                  setError("");
+                } else {
+                  setError(errMsg || "Sync failed. Check your LMS credentials in Settings.");
+                }
               } else {
-                setError(errMsg || "Sync failed. Check your LMS credentials in Settings.");
+                const extracted = data.last_sync?.data_extracted;
+                const total = extracted ? Object.values(extracted).reduce((a: number, b: unknown) => a + (b as number), 0) : 0;
+                addToast(`Sync complete! Found ${total} items.`, "success");
+                fetchData();
               }
-            } else {
-              fetchData();
             }
           }
+        } catch {
+          // ignore poll errors
         }
       }, 3000);
 
-      // Safety timeout
       safetyRef.current = setTimeout(() => {
         if (pollRef.current) clearInterval(pollRef.current);
         pollRef.current = null;
         safetyRef.current = null;
         setSyncing(false);
+        setSyncProgress("");
+        addToast("Sync timed out. Try again.", "error");
       }, 120000);
     } catch {
       setError("Failed to start sync");
       setSyncing(false);
+      setSyncProgress("");
     }
   };
 
@@ -228,27 +347,15 @@ export default function TodayPage() {
 
   const typeIcon = (type: string | null) => {
     switch (type?.toLowerCase()) {
-      case "test": case "exam": return "📝";
-      case "quiz": return "❓";
-      case "essay": case "paper": return "✍️";
-      case "lab": return "🔬";
-      case "project": return "📁";
-      case "homework": return "📚";
-      default: return "📋";
+      case "test": case "exam": return "\u{1F4DD}";
+      case "quiz": return "\u{2753}";
+      case "essay": case "paper": return "\u{270D}\u{FE0F}";
+      case "lab": return "\u{1F52C}";
+      case "project": return "\u{1F4C1}";
+      case "homework": return "\u{1F4DA}";
+      default: return "\u{1F4CB}";
     }
   };
-
-  if (loading) {
-    return (
-      <div className="max-w-4xl mx-auto animate-pulse space-y-6">
-        <div className="h-8 w-48 bg-bg-card rounded" />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[1, 2, 3].map(i => <div key={i} className="h-24 bg-bg-card rounded-xl" />)}
-        </div>
-        <div className="h-64 bg-bg-card rounded-xl" />
-      </div>
-    );
-  }
 
   const greeting = () => {
     const hour = new Date().getHours();
@@ -257,10 +364,42 @@ export default function TodayPage() {
     return "Good evening";
   };
 
+  if (loading && assignments.length === 0 && courses.length === 0) {
+    return (
+      <div className="max-w-4xl mx-auto animate-pulse space-y-6">
+        <div className="h-8 w-48 bg-bg-card rounded" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map(i => <div key={i} className="h-24 bg-bg-card rounded-xl" />)}
+        </div>
+        <div className="h-32 bg-bg-card rounded-xl" />
+        <div className="h-64 bg-bg-card rounded-xl" />
+      </div>
+    );
+  }
+
+  const hasLMS = (syncStatus?.credentials?.length ?? 0) > 0;
+  const hasSynced = !!syncStatus?.last_sync;
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* Toast notifications */}
+      <div className="fixed top-4 right-4 z-50 space-y-2">
+        {toasts.map(toast => (
+          <div
+            key={toast.id}
+            className={`px-4 py-3 rounded-lg text-sm font-medium shadow-lg transition-all animate-in fade-in slide-in-from-top-2 ${
+              toast.type === "success" ? "bg-success/90 text-white" :
+              toast.type === "error" ? "bg-error/90 text-white" :
+              "bg-bg-card border border-border text-white"
+            }`}
+          >
+            {toast.message}
+          </div>
+        ))}
+      </div>
+
+      {/* Header with sticky sync button on mobile */}
+      <div className="flex items-center justify-between sticky top-0 z-10 bg-bg-dark/80 backdrop-blur-sm py-3 -mx-4 px-4 md:static md:bg-transparent md:backdrop-blur-none md:py-0 md:mx-0 md:px-0">
         <div>
           <h1 className="text-2xl font-bold text-white">
             {greeting()}{profile?.display_name ? `, ${profile.display_name}` : ""}
@@ -271,7 +410,7 @@ export default function TodayPage() {
         </div>
         <button
           onClick={handleSync}
-          disabled={syncing || !syncStatus?.credentials?.length}
+          disabled={syncing || !hasLMS}
           className={`flex items-center gap-2 px-4 py-2 text-white rounded-lg text-sm font-medium transition-all cursor-pointer disabled:cursor-not-allowed ${
             syncing
               ? "bg-accent/80 sync-glow"
@@ -285,6 +424,14 @@ export default function TodayPage() {
           {syncing ? "Syncing..." : "Sync LMS"}
         </button>
       </div>
+
+      {/* Sync progress indicator */}
+      {syncing && syncProgress && (
+        <div className="bg-accent/10 border border-accent/20 rounded-xl p-4 flex items-center gap-3">
+          <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+          <p className="text-accent text-sm font-medium">{syncProgress}</p>
+        </div>
+      )}
 
       {sessionExpired && !showReconnect && (
         <div className="bg-warning/10 border border-warning/20 rounded-xl p-4 flex items-center justify-between">
@@ -328,10 +475,43 @@ export default function TodayPage() {
         <div className="bg-error/10 border border-error/20 text-error rounded-xl p-4 text-sm">{error}</div>
       )}
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Smart empty states */}
+      {!hasLMS && !loading && (
+        <div className="bg-bg-card border border-border rounded-xl p-8 text-center">
+          <div className="text-4xl mb-3">{"\u{1F517}"}</div>
+          <h2 className="text-lg font-semibold text-white mb-2">Connect your LMS to get started</h2>
+          <p className="text-text-secondary text-sm mb-4">
+            Link your Teamie account to automatically sync your classes, assignments, and grades.
+          </p>
+          <button
+            onClick={() => router.push("/settings")}
+            className="px-6 py-3 bg-accent hover:bg-accent-hover text-white rounded-lg font-medium transition-colors cursor-pointer"
+          >
+            Connect LMS
+          </button>
+        </div>
+      )}
+
+      {hasLMS && !hasSynced && !syncing && !loading && (
+        <div className="bg-bg-card border border-border rounded-xl p-8 text-center">
+          <div className="text-4xl mb-3">{"\u{2705}"}</div>
+          <h2 className="text-lg font-semibold text-white mb-2">Your LMS is connected!</h2>
+          <p className="text-text-secondary text-sm mb-4">
+            Hit Sync to pull in your classes, assignments, and grades.
+          </p>
+          <button
+            onClick={handleSync}
+            className="px-6 py-3 bg-accent hover:bg-accent-hover text-white rounded-lg font-medium transition-colors cursor-pointer"
+          >
+            Sync Now
+          </button>
+        </div>
+      )}
+
+      {/* Stats Cards — horizontal scroll on mobile */}
+      <div className="flex gap-4 overflow-x-auto pb-2 -mx-4 px-4 md:mx-0 md:px-0 md:grid md:grid-cols-4 md:overflow-visible">
         {/* Assignments count */}
-        <div className="bg-bg-card border border-border rounded-xl p-4">
+        <div className="bg-bg-card border border-border rounded-xl p-4 min-w-[140px] flex-shrink-0">
           <p className="text-text-muted text-xs uppercase tracking-wider mb-1">Assignments</p>
           <p className="text-3xl font-bold text-white">{assignments.length}</p>
           <p className="text-text-secondary text-sm">
@@ -343,14 +523,26 @@ export default function TodayPage() {
         </div>
 
         {/* Courses tracked */}
-        <div className="bg-bg-card border border-border rounded-xl p-4">
+        <div className="bg-bg-card border border-border rounded-xl p-4 min-w-[140px] flex-shrink-0">
           <p className="text-text-muted text-xs uppercase tracking-wider mb-1">Courses</p>
           <p className="text-3xl font-bold text-white">{courses.length}</p>
           <p className="text-text-secondary text-sm">classes tracked</p>
         </div>
 
+        {/* Streak counter */}
+        <div className="bg-bg-card border border-border rounded-xl p-4 min-w-[140px] flex-shrink-0">
+          <p className="text-text-muted text-xs uppercase tracking-wider mb-1">Streak</p>
+          <div className="flex items-baseline gap-1">
+            <span className="text-2xl">{"\u{1F525}"}</span>
+            <p className="text-3xl font-bold text-white">{streak?.current_streak ?? 0}</p>
+          </div>
+          <p className="text-text-secondary text-sm">
+            {streak?.longest_streak ? `Best: ${streak.longest_streak}` : "days active"}
+          </p>
+        </div>
+
         {/* Last sync */}
-        <div className="bg-bg-card border border-border rounded-xl p-4">
+        <div className="bg-bg-card border border-border rounded-xl p-4 min-w-[140px] flex-shrink-0">
           <p className="text-text-muted text-xs uppercase tracking-wider mb-1">Last Sync</p>
           <p className="text-lg font-bold text-white">
             {syncStatus?.last_sync?.completed_at
@@ -358,36 +550,102 @@ export default function TodayPage() {
               : "Never"}
           </p>
           <p className="text-text-secondary text-sm">
-            {!syncStatus?.credentials?.length
+            {!hasLMS
               ? "No LMS connected"
               : syncStatus?.last_sync
-                ? `${Object.values(syncStatus.last_sync.data_extracted || {}).reduce((a, b) => a + b, 0)} items extracted`
+                ? `${Object.values(syncStatus.last_sync.data_extracted || {}).reduce((a, b) => a + (b as number), 0)} items extracted`
                 : "Connect your LMS in settings"}
           </p>
         </div>
       </div>
 
-      {/* Grades Overview */}
-      {grades.length > 0 && (
+      {/* Today's Plan */}
+      <div className="bg-bg-card border border-border rounded-xl p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold text-white">Today&apos;s Plan</h2>
+          <button
+            onClick={generatePlan}
+            disabled={planLoading}
+            className="text-xs text-accent hover:text-accent-hover transition-colors cursor-pointer disabled:opacity-50"
+          >
+            {planLoading ? "Generating..." : dailyPlan ? "Regenerate" : "Generate Plan"}
+          </button>
+        </div>
+        {planLoading ? (
+          <div className="animate-pulse space-y-2">
+            <div className="h-4 bg-bg-dark rounded w-3/4" />
+            <div className="h-4 bg-bg-dark rounded w-1/2" />
+            <div className="h-4 bg-bg-dark rounded w-2/3" />
+          </div>
+        ) : dailyPlan?.plan ? (
+          <div className="text-sm text-text-secondary whitespace-pre-wrap leading-relaxed">
+            {dailyPlan.plan}
+          </div>
+        ) : (
+          <div className="text-center py-4">
+            <p className="text-text-muted text-sm mb-3">
+              {assignments.length > 0
+                ? "Get an AI-powered daily plan based on your assignments."
+                : "Sync your LMS first, then generate a personalized daily plan."}
+            </p>
+            {assignments.length > 0 && (
+              <button
+                onClick={generatePlan}
+                className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm font-medium transition-colors cursor-pointer"
+              >
+                Generate Plan
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Grade Overview — always show courses */}
+      {(courses.length > 0 || grades.length > 0) && (
         <div className="bg-bg-card border border-border rounded-xl p-5">
           <h2 className="text-lg font-semibold text-white mb-4">Grade Overview</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {grades.map((g) => {
-              const pct = g.overall_percentage;
+            {/* Show grades where available, otherwise show courses */}
+            {courses.map((c) => {
+              const grade = grades.find(g => g.course_name === c.class_name);
+              const pct = grade?.overall_percentage ?? null;
               const color = pct === null ? "text-text-muted"
                 : pct >= 90 ? "text-success"
                 : pct >= 80 ? "text-accent"
                 : pct >= 70 ? "text-warning"
                 : "text-error";
               return (
-                <div key={g.course_name} className="bg-bg-dark rounded-lg p-3">
-                  <p className="text-sm text-text-secondary truncate">{g.course_name}</p>
+                <div key={c.class_name} className="bg-bg-dark rounded-lg p-3">
+                  <p className="text-sm text-text-secondary truncate">{c.class_name}</p>
                   <p className={`text-xl font-bold ${color}`}>
-                    {g.overall_grade || (pct !== null ? `${pct}%` : "—")}
+                    {grade?.overall_grade || (pct !== null ? `${pct}%` : "No grade data")}
                   </p>
+                  {c.teacher_name && (
+                    <p className="text-xs text-text-muted truncate">{c.teacher_name}</p>
+                  )}
                 </div>
               );
             })}
+            {/* Show any grades for courses not in class_context */}
+            {grades
+              .filter(g => !courses.find(c => c.class_name === g.course_name))
+              .map(g => {
+                const pct = g.overall_percentage;
+                const color = pct === null ? "text-text-muted"
+                  : pct >= 90 ? "text-success"
+                  : pct >= 80 ? "text-accent"
+                  : pct >= 70 ? "text-warning"
+                  : "text-error";
+                return (
+                  <div key={g.course_name} className="bg-bg-dark rounded-lg p-3">
+                    <p className="text-sm text-text-secondary truncate">{g.course_name}</p>
+                    <p className={`text-xl font-bold ${color}`}>
+                      {g.overall_grade || (pct !== null ? `${pct}%` : "\u2014")}
+                    </p>
+                  </div>
+                );
+              })
+            }
           </div>
         </div>
       )}
@@ -397,13 +655,14 @@ export default function TodayPage() {
         <h2 className="text-lg font-semibold text-white mb-4">Assignments</h2>
         {assignments.length === 0 ? (
           <p className="text-text-muted text-sm">
-            {syncStatus?.credentials?.length
-              ? "No assignments found. Try syncing your LMS."
-              : "Connect your LMS in settings to see assignments here."}
+            {!hasLMS
+              ? "Connect your LMS to see assignments here."
+              : hasSynced
+                ? "We couldn't find assignments. Try syncing again or check your LMS connection in Settings."
+                : "Your LMS is connected! Hit Sync to pull in your classes."}
           </p>
         ) : (
           <div className="space-y-4">
-            {/* Overdue assignments */}
             {(() => {
               const now = new Date();
               const overdue = assignments.filter(a => a.due_date && new Date(a.due_date) < now);
@@ -421,22 +680,20 @@ export default function TodayPage() {
                         {overdue.map((a) => (
                           <div
                             key={a.id}
-                            className="flex items-center gap-3 p-3 bg-error/5 border border-error/10 rounded-lg"
+                            className="flex items-center gap-3 p-3 md:p-3 bg-error/5 border border-error/10 rounded-lg min-h-[56px]"
                           >
                             <span className="text-lg">{typeIcon(a.assignment_type)}</span>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-white truncate">{a.title}</p>
                               <p className="text-xs text-text-muted">
                                 {a.course_name}
-                                {a.points_possible ? ` · ${a.points_possible} pts` : ""}
-                                {a.assignment_type ? ` · ${a.assignment_type}` : ""}
+                                {a.points_possible ? ` \u00B7 ${a.points_possible} pts` : ""}
+                                {a.assignment_type ? ` \u00B7 ${a.assignment_type}` : ""}
                               </p>
                             </div>
-                            <div className="text-right">
+                            <div className="text-right shrink-0">
                               <p className="text-sm font-medium text-error">{formatDue(a.due_date)}</p>
-                              {a.is_submitted && (
-                                <span className="text-xs text-success">Submitted</span>
-                              )}
+                              {a.is_submitted && <span className="text-xs text-success">Submitted</span>}
                             </div>
                           </div>
                         ))}
@@ -453,24 +710,22 @@ export default function TodayPage() {
                         {upcoming.map((a) => (
                           <div
                             key={a.id}
-                            className="flex items-center gap-3 p-3 bg-bg-dark rounded-lg hover:bg-bg-hover transition-colors"
+                            className="flex items-center gap-3 p-3 bg-bg-dark rounded-lg hover:bg-bg-hover transition-colors min-h-[56px]"
                           >
                             <span className="text-lg">{typeIcon(a.assignment_type)}</span>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-white truncate">{a.title}</p>
                               <p className="text-xs text-text-muted">
                                 {a.course_name}
-                                {a.points_possible ? ` · ${a.points_possible} pts` : ""}
-                                {a.assignment_type ? ` · ${a.assignment_type}` : ""}
+                                {a.points_possible ? ` \u00B7 ${a.points_possible} pts` : ""}
+                                {a.assignment_type ? ` \u00B7 ${a.assignment_type}` : ""}
                               </p>
                             </div>
-                            <div className="text-right">
+                            <div className="text-right shrink-0">
                               <p className={`text-sm font-medium ${urgencyColor(a.due_date)}`}>
                                 {formatDue(a.due_date)}
                               </p>
-                              {a.is_submitted && (
-                                <span className="text-xs text-success">Submitted</span>
-                              )}
+                              {a.is_submitted && <span className="text-xs text-success">Submitted</span>}
                             </div>
                           </div>
                         ))}
@@ -487,18 +742,18 @@ export default function TodayPage() {
                         {noDate.map((a) => (
                           <div
                             key={a.id}
-                            className="flex items-center gap-3 p-3 bg-bg-dark rounded-lg hover:bg-bg-hover transition-colors"
+                            className="flex items-center gap-3 p-3 bg-bg-dark rounded-lg hover:bg-bg-hover transition-colors min-h-[56px]"
                           >
                             <span className="text-lg">{typeIcon(a.assignment_type)}</span>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-white truncate">{a.title}</p>
                               <p className="text-xs text-text-muted">
                                 {a.course_name}
-                                {a.points_possible ? ` · ${a.points_possible} pts` : ""}
-                                {a.assignment_type ? ` · ${a.assignment_type}` : ""}
+                                {a.points_possible ? ` \u00B7 ${a.points_possible} pts` : ""}
+                                {a.assignment_type ? ` \u00B7 ${a.assignment_type}` : ""}
                               </p>
                             </div>
-                            <div className="text-right">
+                            <div className="text-right shrink-0">
                               <p className="text-sm text-text-muted">No date</p>
                             </div>
                           </div>
@@ -513,20 +768,19 @@ export default function TodayPage() {
         )}
       </div>
 
-      {/* Quick Actions — prompts the chat sidebar */}
+      {/* Quick Actions */}
       <div className="bg-bg-card border border-border rounded-xl p-5">
         <h2 className="text-lg font-semibold text-white mb-3">Quick Actions</h2>
         <div className="flex flex-wrap gap-2">
           {[
-            { label: "What should I work on?", icon: "🎯" },
-            { label: "Help me study", icon: "📖" },
-            { label: "Create a study plan", icon: "📅" },
-            { label: "What's due this week?", icon: "📋" },
+            { label: "What should I work on?", icon: "\u{1F3AF}" },
+            { label: "Help me study", icon: "\u{1F4D6}" },
+            { label: "Create a study plan", icon: "\u{1F4C5}" },
+            { label: "What's due this week?", icon: "\u{1F4CB}" },
           ].map((action) => (
             <button
               key={action.label}
               onClick={() => {
-                // Dispatch event to open chat sidebar with this message
                 window.dispatchEvent(new CustomEvent("open-chat", { detail: { message: action.label } }));
               }}
               className="flex items-center gap-2 px-4 py-2 bg-bg-dark hover:bg-bg-hover border border-border rounded-lg text-sm text-text-secondary hover:text-white transition-colors cursor-pointer"

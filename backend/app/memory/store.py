@@ -345,8 +345,39 @@ class MemoryStore:
         """
         profile = await self.get_profile()
         classes = await self.get_all_classes()
-        assignments = await self.get_upcoming_assignments(limit=15)
+        upcoming_assignments = await self.get_upcoming_assignments(limit=15)
+        all_assignments = await self.get_all_assignments(limit=30)
         grades = await self.get_all_grades()
+
+        # Fetch streak data
+        streak_data = None
+        try:
+            streak_result = (
+                self.db.table("streaks")
+                .select("*")
+                .eq("user_id", self.user_id)
+                .execute()
+            )
+            if streak_result.data:
+                streak_data = streak_result.data[0]
+        except Exception:
+            pass
+
+        # Fetch recent focus sessions
+        focus_sessions = []
+        try:
+            focus_result = (
+                self.db.table("study_sessions")
+                .select("*")
+                .eq("user_id", self.user_id)
+                .order("completed_at", desc=True)
+                .limit(5)
+                .execute()
+            )
+            if focus_result.data:
+                focus_sessions = focus_result.data
+        except Exception:
+            pass
 
         parts: list[str] = []
 
@@ -408,18 +439,66 @@ class MemoryStore:
                     line += f" ({g['overall_percentage']}%)"
                 parts.append(line)
 
-        # ── Upcoming assignments
-        if assignments:
-            parts.append("\n## Upcoming Assignments")
-            for a in assignments:
-                line = f"- [{a.get('course_name', 'Unknown')}] {a.get('title', 'Untitled')}"
-                if a.get("due_date"):
-                    line += f" -- due {a['due_date']}"
-                if a.get("assignment_type"):
-                    line += f" ({a['assignment_type']})"
-                if a.get("points_possible") is not None:
-                    line += f" [{a['points_possible']} pts]"
-                parts.append(line)
+        # ── All assignments (overdue + upcoming)
+        if all_assignments:
+            # Split into overdue and upcoming
+            from datetime import datetime as _dt, timezone as _tz
+            _now = _dt.now(_tz.utc)
+            overdue = []
+            upcoming = []
+            no_date = []
+            for a in all_assignments:
+                due = a.get("due_date")
+                if not due:
+                    no_date.append(a)
+                else:
+                    try:
+                        due_dt = _dt.fromisoformat(due.replace("Z", "+00:00"))
+                        if due_dt < _now:
+                            overdue.append(a)
+                        else:
+                            upcoming.append(a)
+                    except (ValueError, TypeError):
+                        no_date.append(a)
+
+            if overdue:
+                parts.append(f"\n## Overdue Assignments ({len(overdue)})")
+                for a in overdue[:10]:
+                    line = f"- [{a.get('course_name', 'Unknown')}] {a.get('title', 'Untitled')}"
+                    if a.get("due_date"):
+                        line += f" -- was due {a['due_date']}"
+                    if a.get("assignment_type"):
+                        line += f" ({a['assignment_type']})"
+                    parts.append(line)
+
+            if upcoming:
+                parts.append(f"\n## Upcoming Assignments ({len(upcoming)})")
+                for a in upcoming[:15]:
+                    line = f"- [{a.get('course_name', 'Unknown')}] {a.get('title', 'Untitled')}"
+                    if a.get("due_date"):
+                        line += f" -- due {a['due_date']}"
+                    if a.get("assignment_type"):
+                        line += f" ({a['assignment_type']})"
+                    if a.get("points_possible") is not None:
+                        line += f" [{a['points_possible']} pts]"
+                    parts.append(line)
+
+            if no_date:
+                parts.append(f"\n## Assignments (No Due Date) ({len(no_date)})")
+                for a in no_date[:5]:
+                    parts.append(f"- [{a.get('course_name', 'Unknown')}] {a.get('title', 'Untitled')}")
+
+        # ── Streak & activity
+        if streak_data:
+            parts.append(f"\n## Activity")
+            parts.append(f"Current streak: {streak_data.get('current_streak', 0)} days")
+            parts.append(f"Longest streak: {streak_data.get('longest_streak', 0)} days")
+            parts.append(f"Total active days: {streak_data.get('total_active_days', 0)}")
+
+        if focus_sessions:
+            parts.append("\n## Recent Focus Sessions")
+            for s in focus_sessions[:3]:
+                parts.append(f"- {s.get('duration_minutes', 0)} min ({s.get('focus_type', 'study')}) on {s.get('completed_at', 'unknown')[:10]}")
 
         # ── Conversation summary (if we're inside a conversation)
         if conversation_id:

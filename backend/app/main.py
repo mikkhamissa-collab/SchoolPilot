@@ -70,6 +70,21 @@ async def lifespan(app: FastAPI):
     logger.info("SchoolPilot Agent backend starting...")
     logger.info(f"Claude model: {settings.claude_model}")
 
+    # Validate Fernet encryption key
+    try:
+        from cryptography.fernet import Fernet
+        key = settings.credential_encryption_key
+        if isinstance(key, str):
+            key = key.encode("utf-8")
+        Fernet(key)  # Validates key format (must be 32 url-safe base64-encoded bytes)
+        logger.info("Encryption key validated successfully")
+    except Exception as e:
+        raise RuntimeError(
+            f"Invalid CREDENTIAL_ENCRYPTION_KEY: {e}. "
+            "Must be a valid Fernet key (32 url-safe base64-encoded bytes). "
+            "Generate one with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
+        )
+
     # Start background scheduler (daily syncs, reminders)
     start_scheduler()
     logger.info("Background scheduler started")

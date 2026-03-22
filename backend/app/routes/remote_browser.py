@@ -58,6 +58,32 @@ async def start_remote_browser(user_id: str = Depends(get_current_user)):
     return StartSessionResponse(session_id=session_id)
 
 
+# Allowed URL domains for remote browser navigation
+_ALLOWED_DOMAINS = {
+    "asl.org",
+    "lms.asl.org",
+    "google.com",
+    "accounts.google.com",
+    "googleapis.com",
+    "gstatic.com",
+}
+
+
+def _is_url_allowed(url: str) -> bool:
+    """Check if a URL is allowed for remote browser navigation."""
+    from urllib.parse import urlparse
+    try:
+        parsed = urlparse(url)
+        hostname = (parsed.hostname or "").lower()
+        # Check against allowed domains (including subdomains)
+        for allowed in _ALLOWED_DOMAINS:
+            if hostname == allowed or hostname.endswith("." + allowed):
+                return True
+        return False
+    except Exception:
+        return False
+
+
 @router.websocket("/remote-browser/ws/{session_id}")
 async def remote_browser_ws(websocket: WebSocket, session_id: str):
     """WebSocket endpoint for driving a remote Playwright browser.
@@ -72,11 +98,30 @@ async def remote_browser_ws(websocket: WebSocket, session_id: str):
     - Server sends: {"type": "status", "message": str}
     - Server sends: {"type": "done", "success": bool}
     - Server sends: {"type": "error", "message": str}
+
+    Security: Requires valid JWT token as ?token= query param.
+    Navigation restricted to allowed domains only.
     """
     # Validate session
     session = _sessions.get(session_id)
     if not session:
         await websocket.close(code=4001, reason="Invalid or expired session")
+        return
+
+    # Validate JWT token from query param
+    token = websocket.query_params.get("token")
+    if not token:
+        await websocket.close(code=4003, reason="Missing authentication token")
+        return
+
+    try:
+        from app.auth import verify_jwt
+        jwt_user_id = await verify_jwt(token)
+        if jwt_user_id != session["user_id"]:
+            await websocket.close(code=4003, reason="Token does not match session")
+            return
+    except Exception:
+        await websocket.close(code=4003, reason="Invalid authentication token")
         return
 
     user_id = session["user_id"]
@@ -139,6 +184,17 @@ async def remote_browser_ws(websocket: WebSocket, session_id: str):
         """)
 
         page = await context.new_page()
+
+        # Block navigation to non-allowed domains
+        async def _handle_route(route):
+            url = route.request.url
+            if _is_url_allowed(url):
+                await route.continue_()
+            else:
+                logger.warning("Blocked navigation to disallowed URL: %s", url[:200])
+                await route.abort("blockedbyclient")
+
+        await context.route("**/*", _handle_route)
 
         # Get the user's LMS URL from credentials, or default to lms.asl.org
         db = get_db()
