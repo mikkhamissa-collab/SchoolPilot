@@ -586,6 +586,15 @@ class BrowserAgent:
         for step in range(1, self.max_explore_steps + 1):
             screenshot_b64 = await self.screenshot()
 
+            # Also get page text for better extraction
+            page_text = ""
+            try:
+                page_text = await self.page.evaluate(
+                    "document.body?.innerText?.substring(0, 2000) || ''"
+                )
+            except Exception:
+                pass
+
             # Build a concise summary of what we've collected so far.
             extracted_types = {}
             for item in self.extracted:
@@ -613,7 +622,10 @@ class BrowserAgent:
                     f"\n\nYou have {course_count} courses but 0 assignments. "
                     "STOP extracting courses. Click INTO a classroom name to "
                     "enter it, then look for assignment posts (marked as 'Task'), "
-                    "scroll down in the feed, and extract each assignment."
+                    "scroll down in the feed, and extract each assignment. "
+                    "In Teamie, assignments appear as posts in the classroom feed "
+                    "with due dates. Look for text like 'Task', 'Due', dates, "
+                    "or teacher instructions."
                 )
 
             action = await self._ask_claude(
@@ -625,6 +637,7 @@ class BrowserAgent:
                     f"Step: {step}/{self.max_explore_steps}\n"
                     f"Pages visited: {json.dumps(visited_urls)}\n"
                     f"Data extracted so far: {extracted_summary}\n\n"
+                    f"Page text content:\n{page_text[:1500]}\n\n"
                     "What should I do next?"
                     f"{nudge}"
                 ),
