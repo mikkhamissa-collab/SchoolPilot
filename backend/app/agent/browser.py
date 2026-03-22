@@ -285,20 +285,54 @@ class BrowserAgent:
         )
 
         raw_text: str = response.content[0].text.strip()
+        logger.debug("Claude raw response (%.300s)", raw_text)
 
-        # Claude sometimes wraps JSON in ```json … ```  — strip that.
-        if raw_text.startswith("```"):
-            lines = raw_text.split("\n", 1)
-            if len(lines) > 1:
-                raw_text = lines[1].rsplit("```", 1)[0].strip()
-            else:
-                raw_text = raw_text.strip("`").strip()
-
+        # Strategy: try multiple approaches to extract JSON from Claude's response
+        # 1. Direct parse (clean JSON response)
         try:
             return json.loads(raw_text)
         except json.JSONDecodeError:
-            logger.warning("Claude returned unparseable response: %.200s", raw_text)
-            return {"action": "_parse_error", "raw": raw_text}
+            pass
+
+        # 2. Strip markdown code fences
+        cleaned = raw_text
+        if cleaned.startswith("```"):
+            lines = cleaned.split("\n", 1)
+            if len(lines) > 1:
+                cleaned = lines[1].rsplit("```", 1)[0].strip()
+            else:
+                cleaned = cleaned.strip("`").strip()
+            try:
+                return json.loads(cleaned)
+            except json.JSONDecodeError:
+                pass
+
+        # 3. Extract first JSON object using brace matching
+        import re
+        json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', raw_text)
+        if json_match:
+            try:
+                return json.loads(json_match.group())
+            except json.JSONDecodeError:
+                pass
+
+        # 4. Try to find JSON with nested braces (deeper)
+        brace_start = raw_text.find("{")
+        if brace_start >= 0:
+            depth = 0
+            for i in range(brace_start, len(raw_text)):
+                if raw_text[i] == "{":
+                    depth += 1
+                elif raw_text[i] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            return json.loads(raw_text[brace_start : i + 1])
+                        except json.JSONDecodeError:
+                            break
+
+        logger.warning("Claude returned unparseable response: %.500s", raw_text)
+        return {"action": "_parse_error", "raw": raw_text}
 
     # ── Action executor ───────────────────────────────────────────────
 
@@ -595,16 +629,43 @@ class BrowserAgent:
             # ── Handle terminal / meta actions ────────────────────────
             if act == "done":
                 # Guard: don't accept "done" too early if nothing was extracted
-                if step < 8 and len(self.extracted) == 0:
+                if step < 10 and len(self.extracted) == 0:
                     logger.warning(
                         "Claude returned 'done' at step %d with 0 items extracted — "
-                        "overriding to continue exploration",
+                        "overriding: will click first classroom in sidebar",
                         step,
                     )
-                    # Force Claude to keep looking by continuing with a nudge
-                    # on the next iteration (the user_text already says "nothing yet")
+                    # Instead of just continuing (Claude sees same page),
+                    # proactively try to click something useful
+                    assert self.page is not None
+                    clicked = False
+                    # Try clicking classroom links in the sidebar
+                    for text_to_try in [
+                        "View all",
+                        "Classrooms",
+                        "AP Psychology",
+                        "AP Statistics",
+                        "Calculus",
+                        "Literature",
+                        "Global Issues",
+                        "Journalism",
+                    ]:
+                        try:
+                            loc = self.page.get_by_text(text_to_try, exact=False).first
+                            if await loc.is_visible(timeout=1000):
+                                await loc.click(timeout=3000)
+                                await self._wait_for_stable()
+                                logger.info("Override: clicked '%s'", text_to_try)
+                                clicked = True
+                                break
+                        except Exception:
+                            continue
+                    if not clicked:
+                        # Fallback: try scrolling to reveal content
+                        await self.page.evaluate("window.scrollBy(0, 400)")
+                        await asyncio.sleep(2)
+                        logger.info("Override: scrolled down to reveal content")
                     consecutive_errors = 0
-                    await asyncio.sleep(1)
                     continue
 
                 summary = action.get("summary", "")
@@ -616,7 +677,11 @@ class BrowserAgent:
 
             if act == "_parse_error":
                 consecutive_errors += 1
-                if consecutive_errors >= 3:
+                logger.warning(
+                    "Parse error %d/5 at step %d. Raw: %.300s",
+                    consecutive_errors, step, action.get("raw", ""),
+                )
+                if consecutive_errors >= 5:
                     logger.error("Too many consecutive parse errors — aborting exploration")
                     break
                 await asyncio.sleep(1)
