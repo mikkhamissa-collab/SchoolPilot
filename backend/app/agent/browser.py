@@ -595,12 +595,22 @@ class BrowserAgent:
             except Exception:
                 pass
 
-            # Build a concise summary of what we've collected so far.
+            # Build a detailed summary of what we've collected so far.
             extracted_types = {}
             for item in self.extracted:
                 t = item.get("type", "other")
                 extracted_types[t] = extracted_types.get(t, 0) + 1
             extracted_summary = json.dumps(extracted_types) if extracted_types else "nothing yet"
+
+            # Build list of already-extracted titles to prevent re-extraction
+            already_extracted = []
+            seen_titles = set()
+            for item in self.extracted:
+                title = item.get("title") or item.get("name") or ""
+                if title and title not in seen_titles:
+                    seen_titles.add(title)
+                    already_extracted.append(f"- [{item.get('type')}] {title}")
+            already_str = "\n".join(already_extracted[-20:]) if already_extracted else "none"
 
             visited_urls = list(dict.fromkeys(
                 h["url"] for h in self.history if h.get("phase") == "explore"
@@ -636,7 +646,8 @@ class BrowserAgent:
                     f"Current URL: {self.page.url}\n"
                     f"Step: {step}/{self.max_explore_steps}\n"
                     f"Pages visited: {json.dumps(visited_urls)}\n"
-                    f"Data extracted so far: {extracted_summary}\n\n"
+                    f"Data extracted so far: {extracted_summary}\n"
+                    f"Already extracted items (DO NOT re-extract these):\n{already_str}\n\n"
                     f"Page text content:\n{page_text[:1500]}\n\n"
                     "What should I do next?"
                     f"{nudge}"
@@ -723,12 +734,33 @@ class BrowserAgent:
             if act == "extract":
                 data = action.get("data")
                 if isinstance(data, dict) and data:
-                    self.extracted.append(data)
-                    logger.info(
-                        "Extracted %s: %s",
-                        data.get("type", "unknown"),
-                        data.get("title", data.get("course", ""))[:60],
+                    # Deduplicate: check if we already have this exact item
+                    item_key = (
+                        data.get("type", ""),
+                        data.get("title", data.get("name", "")),
+                        data.get("course", ""),
                     )
+                    already_have = any(
+                        (
+                            existing.get("type", ""),
+                            existing.get("title", existing.get("name", "")),
+                            existing.get("course", ""),
+                        ) == item_key
+                        for existing in self.extracted
+                    )
+                    if already_have:
+                        logger.info(
+                            "Skipping duplicate %s: %s",
+                            data.get("type", "unknown"),
+                            data.get("title", data.get("name", ""))[:60],
+                        )
+                    else:
+                        self.extracted.append(data)
+                        logger.info(
+                            "Extracted %s: %s",
+                            data.get("type", "unknown"),
+                            data.get("title", data.get("name", ""))[:60],
+                        )
                 else:
                     logger.warning("Step %d: extract action had empty/invalid data", step)
                 # No need to interact with the browser — continue to next step
