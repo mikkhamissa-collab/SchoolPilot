@@ -312,20 +312,39 @@ class BrowserAgent:
 
         if act == "click":
             selector: str = action.get("selector", "")
-            try:
-                await self.page.click(selector, timeout=5000)
-                await self._wait_for_stable()
-                return f"clicked '{selector}'"
-            except PlaywrightTimeout:
-                # Fallback: try clicking by visible text
+            # Detect if selector looks like CSS or like plain text
+            import re
+            is_css = bool(re.search(r'[.#\[\]>+~:=]', selector))
+
+            if not is_css and selector.strip():
+                # Looks like plain text — try text-based click FIRST
                 try:
                     await self.page.get_by_text(selector, exact=False).first.click(timeout=5000)
                     await self._wait_for_stable()
                     return f"clicked by text '{selector}'"
-                except Exception as inner:
-                    return f"click failed for '{selector}': {inner}"
-            except Exception as e:
-                return f"click error: {e}"
+                except Exception:
+                    # Fallback to CSS selector
+                    try:
+                        await self.page.click(selector, timeout=5000)
+                        await self._wait_for_stable()
+                        return f"clicked as css '{selector}'"
+                    except Exception as e2:
+                        return f"click failed for '{selector}': {e2}"
+            else:
+                # CSS selector — try CSS first, text fallback
+                try:
+                    await self.page.click(selector, timeout=5000)
+                    await self._wait_for_stable()
+                    return f"clicked '{selector}'"
+                except PlaywrightTimeout:
+                    try:
+                        await self.page.get_by_text(selector, exact=False).first.click(timeout=5000)
+                        await self._wait_for_stable()
+                        return f"clicked by text '{selector}'"
+                    except Exception as inner:
+                        return f"click failed for '{selector}': {inner}"
+                except Exception as e:
+                    return f"click error: {e}"
 
         if act == "type":
             selector = action.get("selector", "")
@@ -384,8 +403,12 @@ class BrowserAgent:
             await self.page.wait_for_load_state("domcontentloaded", timeout=timeout_ms)
         except PlaywrightTimeout:
             pass
+        try:
+            await self.page.wait_for_load_state("networkidle", timeout=5000)
+        except PlaywrightTimeout:
+            pass
         # Extra settle time for JS-heavy SPAs
-        await asyncio.sleep(1.0)
+        await asyncio.sleep(2.0)
 
     # ── Login flow ────────────────────────────────────────────────────
 
@@ -512,6 +535,15 @@ class BrowserAgent:
 
         logger.info("Starting exploration (goal: %s, max_steps: %d)", goal, self.max_explore_steps)
 
+        # Wait for SPA to fully render before starting exploration
+        logger.info("Waiting for SPA to render before exploration...")
+        await asyncio.sleep(5)
+        try:
+            await self.page.wait_for_load_state("networkidle", timeout=8000)
+        except (PlaywrightTimeout, Exception):
+            pass
+        logger.info("SPA wait complete, current URL: %s", self.page.url)
+
         consecutive_errors = 0  # circuit-breaker for repeated parse errors
 
         for step in range(1, self.max_explore_steps + 1):
@@ -611,8 +643,8 @@ class BrowserAgent:
             result = await self._execute_action(action)
             logger.debug("Explore step %d result: %s", step, result)
 
-            # Brief pause between browser interactions
-            await asyncio.sleep(1.5)
+            # Brief pause between browser interactions (longer for SPAs)
+            await asyncio.sleep(2.5)
 
         logger.info(
             "Exploration finished: %d steps, %d items extracted",

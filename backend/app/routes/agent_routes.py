@@ -179,6 +179,70 @@ async def save_cookies(
     return {"status": "ok", "message": "Cookies saved successfully"}
 
 
+@router.get("/sync/debug-screenshot")
+async def debug_screenshot(user_id: str = Depends(get_current_user)):
+    """Inject cookies, navigate to dashboard, return screenshot of what the agent sees."""
+    import asyncio as _asyncio
+    import json as _json
+
+    from app.agent.browser import BrowserAgent
+
+    db = get_db()
+    creds = (
+        db.table("lms_credentials")
+        .select("*")
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    if not creds.data:
+        raise HTTPException(404, "No credentials found")
+
+    cred = creds.data[0]
+    if not cred.get("encrypted_cookies"):
+        raise HTTPException(400, "No cookies saved — connect your LMS first")
+
+    settings = get_settings()
+    fernet = Fernet(settings.credential_encryption_key.encode("utf-8"))
+    cookies = _json.loads(
+        fernet.decrypt(cred["encrypted_cookies"].encode()).decode()
+    )
+    lms_url = cred["lms_url"].rstrip("/") + "/dash/#/"
+
+    agent = BrowserAgent(user_id)
+    try:
+        await agent.start()
+        authenticated = await agent.inject_cookies_and_verify(cookies, lms_url)
+
+        # Wait extra time for SPA to fully render
+        await _asyncio.sleep(5)
+        try:
+            assert agent.page is not None
+            await agent.page.wait_for_load_state("networkidle", timeout=8000)
+        except Exception:
+            pass
+
+        screenshot_b64 = await agent.screenshot()
+        current_url = agent.page.url if agent.page else "unknown"
+
+        # Also get page text content for diagnosis
+        page_text = ""
+        if agent.page:
+            page_text = await agent.page.evaluate(
+                "document.body?.innerText?.substring(0, 3000) || 'empty'"
+            )
+
+        return {
+            "authenticated": authenticated,
+            "current_url": current_url,
+            "screenshot_b64": screenshot_b64,
+            "page_text_preview": page_text[:2000],
+            "cookies_injected": len(cookies),
+        }
+    finally:
+        await agent.stop()
+
+
 @router.get("/sync-status")
 async def sync_status(user_id: str = Depends(get_current_user)):
     """Get overall sync status: when was the last sync, is one running, etc."""
