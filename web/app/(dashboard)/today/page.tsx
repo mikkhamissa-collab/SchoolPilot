@@ -34,6 +34,12 @@ interface SyncStatus {
   credentials: { lms_type: string; last_login_success: boolean; sync_enabled: boolean }[];
 }
 
+interface CourseContext {
+  class_name: string;
+  teacher_name: string | null;
+  period: string | null;
+}
+
 interface StudentProfile {
   display_name: string | null;
   personality_preset: string;
@@ -46,6 +52,7 @@ export default function TodayPage() {
   const router = useRouter();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [grades, setGrades] = useState<LMSGrade[]>([]);
+  const [courses, setCourses] = useState<CourseContext[]>([]);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,17 +91,26 @@ export default function TodayPage() {
     const headers = { Authorization: `Bearer ${token}` };
 
     try {
-      const [assignRes, gradeRes, syncRes, profileRes] = await Promise.allSettled([
-        fetch(`${API_URL}/api/agent/assignments?upcoming_only=true`, { headers }),
+      const [assignRes, gradeRes, syncRes, profileRes, coursesRes] = await Promise.allSettled([
+        fetch(`${API_URL}/api/agent/assignments?upcoming_only=false&limit=50`, { headers }),
         fetch(`${API_URL}/api/agent/grades`, { headers }),
         fetch(`${API_URL}/api/agent/sync-status`, { headers }),
         fetch(`${API_URL}/api/profile/me`, { headers }),
+        fetch(`${API_URL}/api/profile/classes`, { headers }),
       ]);
 
       if (assignRes.status === "fulfilled" && assignRes.value.ok) {
         const json = await assignRes.value.json();
         // Backend returns paginated {data: [...], total, limit, offset}
-        setAssignments(Array.isArray(json) ? json : json.data || []);
+        const all: Assignment[] = Array.isArray(json) ? json : json.data || [];
+        // Sort by due date: overdue first, then upcoming, then no-date
+        all.sort((a, b) => {
+          if (!a.due_date && !b.due_date) return 0;
+          if (!a.due_date) return 1;
+          if (!b.due_date) return -1;
+          return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+        });
+        setAssignments(all);
       }
       if (gradeRes.status === "fulfilled" && gradeRes.value.ok) {
         const json = await gradeRes.value.json();
@@ -108,6 +124,10 @@ export default function TodayPage() {
       if (profileRes.status === "fulfilled" && profileRes.value.ok) {
         const data = await profileRes.value.json();
         setProfile(data);
+      }
+      if (coursesRes.status === "fulfilled" && coursesRes.value.ok) {
+        const data = await coursesRes.value.json();
+        setCourses(Array.isArray(data) ? data : []);
       }
     } catch {
       setError("Failed to load data. Is the backend running?");
@@ -310,17 +330,22 @@ export default function TodayPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Assignments due */}
+        {/* Assignments count */}
         <div className="bg-bg-card border border-border rounded-xl p-4">
-          <p className="text-text-muted text-xs uppercase tracking-wider mb-1">Due Soon</p>
+          <p className="text-text-muted text-xs uppercase tracking-wider mb-1">Assignments</p>
           <p className="text-3xl font-bold text-white">{assignments.length}</p>
-          <p className="text-text-secondary text-sm">upcoming assignments</p>
+          <p className="text-text-secondary text-sm">
+            {(() => {
+              const overdue = assignments.filter(a => a.due_date && new Date(a.due_date) < new Date()).length;
+              return overdue > 0 ? `${overdue} overdue` : "tracked";
+            })()}
+          </p>
         </div>
 
         {/* Courses tracked */}
         <div className="bg-bg-card border border-border rounded-xl p-4">
           <p className="text-text-muted text-xs uppercase tracking-wider mb-1">Courses</p>
-          <p className="text-3xl font-bold text-white">{grades.length}</p>
+          <p className="text-3xl font-bold text-white">{courses.length}</p>
           <p className="text-text-secondary text-sm">classes tracked</p>
         </div>
 
@@ -367,41 +392,123 @@ export default function TodayPage() {
         </div>
       )}
 
-      {/* Upcoming Assignments */}
+      {/* Assignments — split into overdue + upcoming */}
       <div className="bg-bg-card border border-border rounded-xl p-5">
-        <h2 className="text-lg font-semibold text-white mb-4">Upcoming Assignments</h2>
+        <h2 className="text-lg font-semibold text-white mb-4">Assignments</h2>
         {assignments.length === 0 ? (
           <p className="text-text-muted text-sm">
             {syncStatus?.credentials?.length
-              ? "No upcoming assignments found. Try syncing your LMS."
+              ? "No assignments found. Try syncing your LMS."
               : "Connect your LMS in settings to see assignments here."}
           </p>
         ) : (
-          <div className="space-y-2">
-            {assignments.map((a) => (
-              <div
-                key={a.id}
-                className="flex items-center gap-3 p-3 bg-bg-dark rounded-lg hover:bg-bg-hover transition-colors"
-              >
-                <span className="text-lg">{typeIcon(a.assignment_type)}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white truncate">{a.title}</p>
-                  <p className="text-xs text-text-muted">
-                    {a.course_name}
-                    {a.points_possible ? ` · ${a.points_possible} pts` : ""}
-                    {a.assignment_type ? ` · ${a.assignment_type}` : ""}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className={`text-sm font-medium ${urgencyColor(a.due_date)}`}>
-                    {formatDue(a.due_date)}
-                  </p>
-                  {a.is_submitted && (
-                    <span className="text-xs text-success">Submitted</span>
+          <div className="space-y-4">
+            {/* Overdue assignments */}
+            {(() => {
+              const now = new Date();
+              const overdue = assignments.filter(a => a.due_date && new Date(a.due_date) < now);
+              const upcoming = assignments.filter(a => a.due_date && new Date(a.due_date) >= now);
+              const noDate = assignments.filter(a => !a.due_date);
+
+              return (
+                <>
+                  {overdue.length > 0 && (
+                    <div>
+                      <p className="text-error text-xs font-semibold uppercase tracking-wider mb-2">
+                        Overdue ({overdue.length})
+                      </p>
+                      <div className="space-y-2">
+                        {overdue.map((a) => (
+                          <div
+                            key={a.id}
+                            className="flex items-center gap-3 p-3 bg-error/5 border border-error/10 rounded-lg"
+                          >
+                            <span className="text-lg">{typeIcon(a.assignment_type)}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-white truncate">{a.title}</p>
+                              <p className="text-xs text-text-muted">
+                                {a.course_name}
+                                {a.points_possible ? ` · ${a.points_possible} pts` : ""}
+                                {a.assignment_type ? ` · ${a.assignment_type}` : ""}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-medium text-error">{formatDue(a.due_date)}</p>
+                              {a.is_submitted && (
+                                <span className="text-xs text-success">Submitted</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
-                </div>
-              </div>
-            ))}
+
+                  {upcoming.length > 0 && (
+                    <div>
+                      <p className="text-text-secondary text-xs font-semibold uppercase tracking-wider mb-2">
+                        Upcoming ({upcoming.length})
+                      </p>
+                      <div className="space-y-2">
+                        {upcoming.map((a) => (
+                          <div
+                            key={a.id}
+                            className="flex items-center gap-3 p-3 bg-bg-dark rounded-lg hover:bg-bg-hover transition-colors"
+                          >
+                            <span className="text-lg">{typeIcon(a.assignment_type)}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-white truncate">{a.title}</p>
+                              <p className="text-xs text-text-muted">
+                                {a.course_name}
+                                {a.points_possible ? ` · ${a.points_possible} pts` : ""}
+                                {a.assignment_type ? ` · ${a.assignment_type}` : ""}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className={`text-sm font-medium ${urgencyColor(a.due_date)}`}>
+                                {formatDue(a.due_date)}
+                              </p>
+                              {a.is_submitted && (
+                                <span className="text-xs text-success">Submitted</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {noDate.length > 0 && (
+                    <div>
+                      <p className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-2">
+                        No Due Date ({noDate.length})
+                      </p>
+                      <div className="space-y-2">
+                        {noDate.map((a) => (
+                          <div
+                            key={a.id}
+                            className="flex items-center gap-3 p-3 bg-bg-dark rounded-lg hover:bg-bg-hover transition-colors"
+                          >
+                            <span className="text-lg">{typeIcon(a.assignment_type)}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-white truncate">{a.title}</p>
+                              <p className="text-xs text-text-muted">
+                                {a.course_name}
+                                {a.points_possible ? ` · ${a.points_possible} pts` : ""}
+                                {a.assignment_type ? ` · ${a.assignment_type}` : ""}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm text-text-muted">No date</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
       </div>
