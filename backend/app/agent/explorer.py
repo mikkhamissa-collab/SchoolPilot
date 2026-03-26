@@ -157,8 +157,20 @@ class LMSExplorer:
                 self._update_job("failed", error=msg)
                 return {"status": "no_credentials", "message": msg}
 
-            # 5. Explore & extract
-            extracted = await agent.explore()
+            # 5. Explore & extract (hard 90s timeout — kill browser if stuck)
+            try:
+                extracted = await asyncio.wait_for(agent.explore(), timeout=90)
+            except asyncio.TimeoutError:
+                logger.error(
+                    "Exploration timed out after 90s for user %s (%d items so far)",
+                    self.user_id, len(agent.extracted),
+                )
+                # Return whatever was extracted before timeout
+                extracted = agent.extracted
+                if not extracted:
+                    self._update_job("failed", error="Sync timed out after 90 seconds")
+                    return {"status": "timeout", "message": "Sync timed out — please try again"}
+
             logger.info(
                 "Exploration complete for user %s: %d items from %d steps",
                 self.user_id, len(extracted), len(agent.history),

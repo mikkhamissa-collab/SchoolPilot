@@ -7,6 +7,7 @@ import asyncio
 import base64
 import json
 import logging
+import re
 from typing import Optional
 
 from playwright.async_api import (
@@ -62,88 +63,6 @@ Tips
 * If the page is still loading (spinner, blank), return a wait action.
 * After submitting credentials, return wait then check the result.
 """
-
-_EXPLORER_SYSTEM_PROMPT = """\
-You are a browser automation agent exploring Teamie LMS (lms.asl.org)
-to extract academic information for a high-school student.
-
-CRITICAL WORKFLOW — follow this exact sequence:
-═══════════════════════════════════════════════
-
-PHASE 1 — Dashboard (steps 1-3):
-  You start on the dashboard (/dash/#/). You will see "Classes" with
-  course tiles and a right sidebar with "ToDos" and "OVERDUE" counts.
-  1. Extract each visible course using the "course" schema (name, teacher).
-     Extract ALL courses in ONE action with multiple extract calls.
-  2. Note the OVERDUE count and any tasks visible in the right sidebar.
-
-PHASE 2 — Explore each classroom (steps 4-40):
-  For EACH course (at least 3-4 courses), do this:
-  1. CLICK the course name/tile to enter the classroom page.
-  2. Inside the classroom, look for tabs or sections:
-     - "Newsfeed" / "Timeline" — shows assignments as posts with due dates
-     - "Materials" — has files and resources
-     - "Assessments" / "Gradebook" — shows grades
-     - Look for posts marked as "Task" — these are assignments
-  3. SCROLL DOWN in the classroom feed to find assignment posts.
-  4. Extract each assignment you see (title, course, due_date, description).
-  5. If you see grades or scores, extract them as "grade" type.
-  6. Click "Back" or navigate back to dashboard, then enter the next course.
-
-PHASE 3 — Check overdue/calendar (steps 41-50):
-  1. Click "ToDos" or "OVERDUE" in the right sidebar to see all tasks.
-  2. Extract any remaining assignments from the overdue/upcoming list.
-  3. NOW you may return "done".
-
-RULES:
-- Extract each item ONLY ONCE. Check "Data extracted so far" before extracting.
-- If you already extracted 6+ courses, STOP extracting courses and START
-  clicking into classrooms to find assignments.
-- ASSIGNMENTS are the priority. Courses alone are not enough.
-- Each step should make PROGRESS — don't repeat the same action.
-- DO NOT return "done" until you have extracted at least some assignments.
-
-Return **exactly one** JSON action per turn — no markdown, no prose.
-Return ONLY the JSON object, nothing else.
-
-Available actions
-─────────────────
-{"action":"click","selector":"<css_or_text>"}
-  Click a link, button, tab, or element. For Teamie, use the visible
-  text of the element (e.g. "AP Psychology P5 MM [25-26]").
-
-{"action":"navigate","url":"<full_url>"}
-  Go to a specific URL directly.
-
-{"action":"extract","data":{...}}
-  Record structured data you can see on screen RIGHT NOW.
-  Schemas:
-    assignment → {"type":"assignment","title":"…","course":"…",
-                  "due_date":"…","description":"…","points":null,
-                  "assignment_type":"homework|test|quiz|lab|essay|project",
-                  "submitted":false,"graded":false,"score":null}
-    grade      → {"type":"grade","course":"…","overall_grade":"…",
-                  "overall_percentage":null,"categories":{}}
-    course     → {"type":"course","name":"…","teacher":"…",
-                  "period":"…","room":null}
-    announcement → {"type":"announcement","title":"…","course":"…",
-                    "content":"…","date":"…"}
-    calendar   → {"type":"calendar","title":"…","date":"…",
-                  "course":"…","details":"…"}
-
-{"action":"scroll","direction":"down|up","amount":500}
-  Scroll the viewport.
-
-{"action":"back"}
-  Navigate back to the previous page.
-
-{"action":"wait","seconds":2}
-  Pause for content to load.
-
-{"action":"done","summary":"short summary of what was collected"}
-  ONLY after extracting assignments from multiple classrooms.
-"""
-
 
 class BrowserAgent:
     """Vision-based browser agent that explores LMS websites.
@@ -311,7 +230,6 @@ class BrowserAgent:
                 pass
 
         # 3. Extract first JSON object using brace matching
-        import re
         json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', raw_text)
         if json_match:
             try:
@@ -350,7 +268,6 @@ class BrowserAgent:
         if act == "click":
             selector: str = action.get("selector", "")
             # Detect if selector looks like CSS or like plain text
-            import re
             is_css = bool(re.search(r'[.#\[\]>+~:=]', selector))
 
             if not is_css and selector.strip():
@@ -433,19 +350,19 @@ class BrowserAgent:
 
         return f"unknown action '{act}'"
 
-    async def _wait_for_stable(self, timeout_ms: int = 8000) -> None:
-        """Wait for the page to reach a reasonably stable state."""
+    async def _wait_for_stable(self, sleep_s: float = 0.3) -> None:
+        """Wait for the page to reach a reasonably stable state.
+
+        Only waits for domcontentloaded (fast) + a short sleep for SPA rendering.
+        networkidle is intentionally omitted — SPAs never go network-idle,
+        so it always hits the timeout and wastes ~5s per call.
+        """
         assert self.page is not None
         try:
-            await self.page.wait_for_load_state("domcontentloaded", timeout=timeout_ms)
+            await self.page.wait_for_load_state("domcontentloaded", timeout=5000)
         except PlaywrightTimeout:
             pass
-        try:
-            await self.page.wait_for_load_state("networkidle", timeout=5000)
-        except PlaywrightTimeout:
-            pass
-        # Extra settle time for JS-heavy SPAs
-        await asyncio.sleep(2.0)
+        await asyncio.sleep(sleep_s)
 
     # ── Login flow ────────────────────────────────────────────────────
 
@@ -542,7 +459,7 @@ class BrowserAgent:
         )
         await self.context.add_cookies(cookies)
         await self.page.goto(dashboard_url, wait_until="domcontentloaded", timeout=30000)
-        await asyncio.sleep(3)
+        await asyncio.sleep(1.5)
         current_url = self.page.url
         logger.info(
             "After cookie injection, landed on: %s (expected dashboard at %s)",
@@ -581,7 +498,7 @@ class BrowserAgent:
                 return {
                     url: location.href,
                     title: document.title,
-                    text: document.body?.innerText?.substring(0, 4000) || '',
+                    text: document.body?.innerText?.substring(0, 6000) || '',
                     links: links,
                     headings: headings,
                 };
@@ -708,12 +625,9 @@ class BrowserAgent:
     async def explore(self, goal: str = "Extract all academic information") -> list[dict]:
         """Hybrid exploration: deterministic navigation + Claude for content parsing.
 
-        Instead of relying on Claude vision to decide WHERE to click,
-        this method navigates programmatically (click each classroom,
-        scroll through feeds) and uses Claude (text-only) to INTERPRET
-        the content it finds.
-
-        Falls back to explore_vision_only() if the hybrid approach fails.
+        Navigates programmatically (click each classroom, scroll through
+        feeds) and uses Claude (text-only, Haiku) to INTERPRET the content.
+        Claude extraction calls run in parallel across classrooms.
         """
         if not self.page:
             raise RuntimeError("Browser not started — call start() first")
@@ -722,14 +636,9 @@ class BrowserAgent:
         _explore_start = _time.time()
         logger.info("Starting HYBRID exploration (goal: %s)", goal)
 
-        # Wait for SPA to fully render (reduced from 5s to 3s)
-        logger.info("Waiting for SPA to render before exploration...")
-        await asyncio.sleep(3)
-        try:
-            await self.page.wait_for_load_state("networkidle", timeout=8000)
-        except (PlaywrightTimeout, Exception):
-            pass
-        logger.info("SPA wait complete (%.1fs), current URL: %s", _time.time() - _explore_start, self.page.url)
+        # Brief SPA settle — domcontentloaded already fired, just let JS render
+        await asyncio.sleep(1.5)
+        logger.info("SPA settle done (%.1fs), URL: %s", _time.time() - _explore_start, self.page.url)
 
         try:
             # ── Phase 1: Dashboard — extract courses ──────────────────
@@ -812,114 +721,84 @@ class BrowserAgent:
                 [l.get("text", "?")[:40] for l in classroom_links],
             )
 
-            # ── Phase 3: Visit each classroom ─────────────────────────
+            # ── Phase 3: Visit each classroom, collect text, then parallel Claude ─
             _phase3_start = _time.time()
+            classroom_payloads: list[tuple[str, str, str]] = []  # (link_text, course_name, content)
+
             for i, link in enumerate(classroom_links):
                 href = link.get("href", "")
                 link_text = link.get("text", f"Classroom {i+1}")
-                _classroom_start = _time.time()
                 logger.info(
-                    "Phase 3: Entering classroom %d/%d: %s",
+                    "Phase 3: Visiting classroom %d/%d: %s",
                     i + 1, len(classroom_links), link_text[:50],
                 )
 
                 try:
-                    # Navigate to the classroom
                     await self.page.goto(href, wait_until="domcontentloaded", timeout=15000)
                     await self._wait_for_stable()
 
-                    # Scroll down to load more content (reduced pauses from 1.5s to 1s)
-                    for scroll_round in range(3):
+                    # 2 scroll rounds with short pauses (was 3 rounds × 1.0s)
+                    for _ in range(2):
                         await self.page.evaluate("window.scrollBy(0, 600)")
-                        await asyncio.sleep(1.0)
+                        await asyncio.sleep(0.3)
 
-                    # Get feed posts from DOM
                     posts = await self.get_feed_posts()
                     page_data = await self.get_page_data()
                     page_text = page_data.get("text", "")
 
-                    # Use Claude to interpret the feed content
                     if posts:
-                        posts_text = "\n---POST---\n".join(p.get("text", "") for p in posts[:20])
-                        content_to_parse = posts_text
+                        content = "\n---POST---\n".join(p.get("text", "") for p in posts[:20])
                     else:
-                        content_to_parse = page_text[:6000]
+                        content = page_text[:6000]
 
                     course_name = link_text.split("[")[0].strip()
-
-                    if content_to_parse.strip():
-                        items = await self._claude_extract_from_text(
-                            page_text=content_to_parse,
-                            instruction=(
-                                f"This is content from the classroom '{link_text}' on Teamie LMS. "
-                                "Extract ALL assignments and graded items visible. "
-                                "Return a JSON array of objects. Each object should have:\n"
-                                '{"type":"assignment","title":"...","course":"' + course_name + '",'
-                                '"due_date":"YYYY-MM-DD or null","description":"brief description",'
-                                '"assignment_type":"homework|test|quiz|lab|essay|project|task",'
-                                '"submitted":false,"graded":false,"score":null}\n\n'
-                                "Also extract any grades you see as:\n"
-                                '{"type":"grade","course":"...","overall_grade":"A/B/C/etc",'
-                                '"overall_percentage":null}\n\n'
-                                "Return ONLY the JSON array, nothing else. If nothing found, return [].\n"
-                                "Look for: due dates, 'Task' labels, 'Assessment', point values, "
-                                "submission status, overdue markers."
-                            ),
-                        )
-                        if isinstance(items, list):
-                            new_count = 0
-                            for item in items:
-                                if isinstance(item, dict) and item.get("title"):
-                                    self._add_extracted(item)
-                                    new_count += 1
-                            logger.info(
-                                "Classroom '%s': extracted %d items (%.1fs)",
-                                link_text[:30], new_count, _time.time() - _classroom_start,
-                            )
-                        else:
-                            logger.warning(
-                                "Claude returned non-list for classroom '%s'",
-                                link_text[:30],
-                            )
-
-                    # ── Check for Materials tab ──────────────────────────
-                    try:
-                        for tab_text in ["Materials", "Resources", "Files", "Library"]:
-                            loc = self.page.get_by_text(tab_text, exact=False).first
-                            if await loc.is_visible(timeout=1500):
-                                await loc.click(timeout=3000)
-                                await asyncio.sleep(2)
-                                materials_data = await self.get_page_data()
-                                materials_text = materials_data.get("text", "")
-                                if materials_text.strip():
-                                    mat_items = await self._claude_extract_from_text(
-                                        page_text=materials_text,
-                                        instruction=(
-                                            f"This is the Materials/Resources tab for '{course_name}' on Teamie LMS. "
-                                            "Extract any assignments, resources, or materials visible. "
-                                            "Return a JSON array of objects with:\n"
-                                            '{"type":"assignment","title":"...","course":"' + course_name + '",'
-                                            '"due_date":"YYYY-MM-DD or null","description":"...","assignment_type":"task"}\n'
-                                            "Return ONLY the JSON array. If nothing found, return []."
-                                        ),
-                                    )
-                                    if isinstance(mat_items, list):
-                                        for item in mat_items:
-                                            if isinstance(item, dict) and item.get("title"):
-                                                self._add_extracted(item)
-                                logger.info("Checked Materials tab for '%s'", course_name[:30])
-                                break
-                    except Exception:
-                        pass  # Materials tab is optional
+                    if content.strip():
+                        classroom_payloads.append((link_text, course_name, content))
 
                 except Exception as e:
-                    logger.warning(
-                        "Failed to explore classroom '%s': %s",
-                        link_text[:30], str(e)[:200],
-                    )
+                    logger.warning("Failed to visit classroom '%s': %s", link_text[:30], str(e)[:200])
                     continue
 
-            logger.info("Phase 3 complete: visited %d classrooms (%.1fs)", len(classroom_links), _time.time() - _phase3_start)
+            # ── Parallel Claude extraction for all classrooms ──────────
+            if classroom_payloads:
+                async def _extract_classroom(lt: str, cn: str, ct: str) -> tuple[str, list]:
+                    items = await self._claude_extract_from_text(
+                        page_text=ct,
+                        instruction=(
+                            f"This is content from the classroom '{lt}' on Teamie LMS. "
+                            "Extract ALL assignments and graded items visible. "
+                            "Return a JSON array of objects. Each object should have:\n"
+                            '{"type":"assignment","title":"...","course":"' + cn + '",'
+                            '"due_date":"YYYY-MM-DD or null","description":"brief description",'
+                            '"assignment_type":"homework|test|quiz|lab|essay|project|task",'
+                            '"submitted":false,"graded":false,"score":null}\n\n'
+                            "Also extract any grades you see as:\n"
+                            '{"type":"grade","course":"...","overall_grade":"A/B/C/etc",'
+                            '"overall_percentage":null}\n\n'
+                            "Return ONLY the JSON array, nothing else. If nothing found, return [].\n"
+                            "Look for: due dates, 'Task' labels, 'Assessment', point values, "
+                            "submission status, overdue markers."
+                        ),
+                    )
+                    return (lt, items if isinstance(items, list) else [])
+
+                results = await asyncio.gather(
+                    *[_extract_classroom(lt, cn, ct) for lt, cn, ct in classroom_payloads],
+                    return_exceptions=True,
+                )
+                for result in results:
+                    if isinstance(result, Exception):
+                        logger.warning("Classroom extraction failed: %s", result)
+                        continue
+                    lt, items = result
+                    count = 0
+                    for item in items:
+                        if isinstance(item, dict) and item.get("title"):
+                            self._add_extracted(item)
+                            count += 1
+                    logger.info("Classroom '%s': extracted %d items", lt[:30], count)
+
+            logger.info("Phase 3 complete: %d classrooms (%.1fs)", len(classroom_links), _time.time() - _phase3_start)
 
             # ── Phase 4: Check overdue/todos (richest data source) ─────
             _phase4_start = _time.time()
@@ -928,7 +807,7 @@ class BrowserAgent:
                 # Navigate back to dashboard
                 dashboard_url = self.page.url.split("#")[0] + "#/"
                 await self.page.goto(dashboard_url, wait_until="domcontentloaded", timeout=15000)
-                await self._wait_for_stable()
+                await self._wait_for_stable(sleep_s=1.0)  # dashboard needs a bit more time
 
                 # Try to click "ToDos" or "OVERDUE"
                 for text_to_try in ["OVERDUE", "ToDos", "To Do", "Upcoming", "Due", "Pending"]:
@@ -936,14 +815,13 @@ class BrowserAgent:
                         loc = self.page.get_by_text(text_to_try, exact=False).first
                         if await loc.is_visible(timeout=2000):
                             await loc.click(timeout=3000)
-                            await self._wait_for_stable()
+                            await self._wait_for_stable(sleep_s=0.5)
                             logger.info("Clicked '%s' for overdue items", text_to_try)
 
-                            # Scroll MORE (5 times instead of 2) — this is the richest data source
-                            for scroll_i in range(5):
+                            # Scroll to load overdue items (3 rounds, short pauses)
+                            for scroll_i in range(3):
                                 await self.page.evaluate("window.scrollBy(0, 600)")
-                                await asyncio.sleep(1.0)
-                                logger.debug("Overdue scroll %d/5", scroll_i + 1)
+                                await asyncio.sleep(0.3)
 
                             # Get all content — use feed posts first, then page text
                             posts = await self.get_feed_posts()
@@ -995,12 +873,8 @@ class BrowserAgent:
                 logger.warning("Phase 4 (overdue check) failed: %s (%.1fs)", str(e)[:200], _time.time() - _phase4_start)
 
         except Exception as e:
-            logger.error(
-                "Hybrid exploration failed, falling back to vision-only: %s",
-                str(e)[:300],
-            )
-            # Fall back to vision-only exploration
-            return await self.explore_vision_only(goal)
+            logger.error("Hybrid exploration failed: %s", str(e)[:300])
+            return self.extracted  # return whatever we got before the error
 
         # Log results
         _total_time = _time.time() - _explore_start
@@ -1015,16 +889,6 @@ class BrowserAgent:
             json.dumps(extracted_types),
             _total_time,
         )
-
-        # If we got very few results, try vision-only as supplement
-        assignment_count = sum(1 for item in self.extracted if item.get("type") == "assignment")
-        if assignment_count == 0 and len(self.extracted) < 3:
-            logger.warning(
-                "Hybrid exploration yielded few results (%d items, %d assignments), "
-                "supplementing with vision-only",
-                len(self.extracted), assignment_count,
-            )
-            return await self.explore_vision_only(goal)
 
         return self.extracted
 
@@ -1065,8 +929,6 @@ class BrowserAgent:
 
         Strips navigation noise, repeated whitespace, and common UI chrome.
         """
-        import re as _re
-
         # Strip common navigation/UI text
         nav_patterns = [
             r"^(Home|Dashboard|Settings|Profile|Logout|Notifications|"
@@ -1082,7 +944,7 @@ class BrowserAgent:
                 continue
             skip = False
             for pattern in nav_patterns:
-                if _re.match(pattern, stripped, _re.IGNORECASE):
+                if re.match(pattern, stripped, re.IGNORECASE):
                     skip = True
                     break
             if not skip:
@@ -1090,9 +952,9 @@ class BrowserAgent:
 
         result = "\n".join(cleaned_lines)
         # Collapse multiple blank lines
-        result = _re.sub(r"\n{3,}", "\n\n", result)
+        result = re.sub(r"\n{3,}", "\n\n", result)
         # Collapse repeated whitespace
-        result = _re.sub(r"[ \t]{3,}", "  ", result)
+        result = re.sub(r"[ \t]{3,}", "  ", result)
         return result.strip()
 
     async def _claude_extract_from_text(
@@ -1184,200 +1046,3 @@ class BrowserAgent:
             logger.error("Claude extraction failed: %s", str(e)[:200])
             return []
 
-    # ── Vision-only exploration (fallback) ─────────────────────────────
-
-    async def explore_vision_only(self, goal: str = "Extract all academic information") -> list[dict]:
-        """Run the vision-only exploration agent loop (original approach).
-
-        Uses screenshots + Claude vision to navigate and extract.
-        This is the fallback if the hybrid approach fails.
-
-        Returns the list of extracted data dicts.
-        """
-        if not self.page:
-            raise RuntimeError("Browser not started — call start() first")
-
-        logger.info("Starting VISION-ONLY exploration (goal: %s, max_steps: %d)", goal, self.max_explore_steps)
-
-        # Wait for SPA to fully render before starting exploration
-        logger.info("Waiting for SPA to render before exploration...")
-        await asyncio.sleep(5)
-        try:
-            await self.page.wait_for_load_state("networkidle", timeout=8000)
-        except (PlaywrightTimeout, Exception):
-            pass
-        logger.info("SPA wait complete, current URL: %s", self.page.url)
-
-        consecutive_errors = 0  # circuit-breaker for repeated parse errors
-
-        for step in range(1, self.max_explore_steps + 1):
-            screenshot_b64 = await self.screenshot()
-
-            # Also get page text for better extraction
-            page_text = ""
-            try:
-                page_text = await self.page.evaluate(
-                    "document.body?.innerText?.substring(0, 2000) || ''"
-                )
-            except Exception:
-                pass
-
-            # Build a detailed summary of what we've collected so far.
-            extracted_types = {}
-            for item in self.extracted:
-                t = item.get("type", "other")
-                extracted_types[t] = extracted_types.get(t, 0) + 1
-            extracted_summary = json.dumps(extracted_types) if extracted_types else "nothing yet"
-
-            # Build list of already-extracted titles to prevent re-extraction
-            already_extracted = []
-            seen_titles = set()
-            for item in self.extracted:
-                title = item.get("title") or item.get("name") or ""
-                if title and title not in seen_titles:
-                    seen_titles.add(title)
-                    already_extracted.append(f"- [{item.get('type')}] {title}")
-            already_str = "\n".join(already_extracted[-20:]) if already_extracted else "none"
-
-            visited_urls = list(dict.fromkeys(
-                h["url"] for h in self.history if h.get("phase") == "explore"
-            ))[-15:]  # last 15 unique URLs
-
-            # Build nudge text based on extraction progress
-            nudge = ""
-            assignment_count = sum(1 for item in self.extracted if item.get("type") == "assignment")
-            course_count = sum(1 for item in self.extracted if item.get("type") == "course")
-
-            if len(self.extracted) == 0 and step > 1:
-                nudge = (
-                    "\n\nIMPORTANT: You haven't extracted any data yet! "
-                    "Look at the page and extract the course names you see. "
-                    "Then click into a classroom to find assignments."
-                )
-            elif course_count > 0 and assignment_count == 0:
-                nudge = (
-                    f"\n\nYou have {course_count} courses but 0 assignments. "
-                    "STOP extracting courses. Click INTO a classroom name to "
-                    "enter it, then look for assignment posts (marked as 'Task'), "
-                    "scroll down in the feed, and extract each assignment. "
-                    "In Teamie, assignments appear as posts in the classroom feed "
-                    "with due dates. Look for text like 'Task', 'Due', dates, "
-                    "or teacher instructions."
-                )
-
-            action = await self._ask_claude(
-                system=_EXPLORER_SYSTEM_PROMPT,
-                screenshot_b64=screenshot_b64,
-                user_text=(
-                    f"Goal: {goal}\n"
-                    f"Current URL: {self.page.url}\n"
-                    f"Step: {step}/{self.max_explore_steps}\n"
-                    f"Pages visited: {json.dumps(visited_urls)}\n"
-                    f"Data extracted so far: {extracted_summary}\n"
-                    f"Already extracted items (DO NOT re-extract these):\n{already_str}\n\n"
-                    f"Page text content:\n{page_text[:1500]}\n\n"
-                    "What should I do next?"
-                    f"{nudge}"
-                ),
-                max_tokens=2048,
-            )
-
-            act = action.get("action")
-            logger.info(
-                "Explore step %d: action=%s, full_action=%s, url=%s",
-                step, act, json.dumps(action)[:500], self.page.url,
-            )
-            self.history.append({"phase": "explore", "step": step, "url": self.page.url, "action": action})
-
-            # ── Handle terminal / meta actions ────────────────────────
-            if act == "done":
-                # Guard: don't accept "done" if we haven't done real work
-                has_assignments = any(
-                    item.get("type") == "assignment" for item in self.extracted
-                )
-                should_override = (
-                    (step < 10 and len(self.extracted) == 0)
-                    or (step < 40 and not has_assignments and len(self.extracted) > 0)
-                )
-                if should_override:
-                    logger.warning(
-                        "Claude returned 'done' at step %d (items=%d, assignments=%s) — "
-                        "overriding to continue",
-                        step, len(self.extracted), has_assignments,
-                    )
-                    # Proactively try to click into a classroom
-                    assert self.page is not None
-                    clicked = False
-                    for text_to_try in [
-                        "AP Psychology",
-                        "AP Statistics",
-                        "Calculus",
-                        "Literature",
-                        "Global Issues",
-                        "Journalism",
-                        "View all",
-                        "Classrooms",
-                        "ToDos",
-                        "OVERDUE",
-                    ]:
-                        try:
-                            loc = self.page.get_by_text(text_to_try, exact=False).first
-                            if await loc.is_visible(timeout=1000):
-                                await loc.click(timeout=3000)
-                                await self._wait_for_stable()
-                                logger.info("Override: clicked '%s'", text_to_try)
-                                clicked = True
-                                break
-                        except Exception:
-                            continue
-                    if not clicked:
-                        await self.page.evaluate("window.scrollBy(0, 400)")
-                        await asyncio.sleep(2)
-                        logger.info("Override: scrolled down to reveal content")
-                    consecutive_errors = 0
-                    continue
-
-                summary = action.get("summary", "")
-                logger.info(
-                    "Exploration complete at step %d (%d items). %s",
-                    step, len(self.extracted), summary,
-                )
-                break
-
-            if act == "_parse_error":
-                consecutive_errors += 1
-                logger.warning(
-                    "Parse error %d/5 at step %d. Raw: %.300s",
-                    consecutive_errors, step, action.get("raw", ""),
-                )
-                if consecutive_errors >= 5:
-                    logger.error("Too many consecutive parse errors — aborting exploration")
-                    break
-                await asyncio.sleep(1)
-                continue
-
-            consecutive_errors = 0  # reset on any valid action
-
-            if act == "extract":
-                data = action.get("data")
-                if isinstance(data, dict) and data:
-                    self._add_extracted(data)
-                else:
-                    logger.warning("Step %d: extract action had empty/invalid data", step)
-                # No need to interact with the browser — continue to next step
-                # without the normal inter-step pause.
-                continue
-
-            # ── Execute browser action ────────────────────────────────
-            result = await self._execute_action(action)
-            logger.debug("Explore step %d result: %s", step, result)
-
-            # Brief pause between browser interactions (longer for SPAs)
-            await asyncio.sleep(2.5)
-
-        logger.info(
-            "Vision-only exploration finished: %d steps, %d items extracted",
-            len([h for h in self.history if h.get("phase") == "explore"]),
-            len(self.extracted),
-        )
-        return self.extracted
