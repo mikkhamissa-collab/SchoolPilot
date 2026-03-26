@@ -136,7 +136,7 @@ async def remote_browser_ws(websocket: WebSocket, session_id: str):
         try:
             await websocket.send_json(data)
         except Exception:
-            pass
+            logger.debug("WebSocket send failed (client may have disconnected)")
 
     async def send_screenshot():
         if not page:

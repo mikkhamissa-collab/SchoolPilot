@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase-client";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import RemoteBrowser from "@/components/RemoteBrowser";
+import { posthog } from "@/lib/posthog";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -245,6 +246,7 @@ export default function TodayPage() {
     if (!token || syncing) return;
     setSyncing(true);
     setSyncProgress("Connecting to LMS...");
+    posthog.capture("sync_triggered", { trigger: "manual" });
     try {
       const res = await fetch(`${API_URL}/api/agent/sync`, {
         method: "POST",
@@ -296,6 +298,7 @@ export default function TodayPage() {
               } else {
                 const extracted = data.last_sync?.data_extracted;
                 const total = extracted ? Object.values(extracted).reduce((a: number, b: unknown) => a + (b as number), 0) : 0;
+                posthog.capture("sync_completed", { items: total, assignments: extracted?.assignments || 0, grades: extracted?.grades || 0 });
                 addToast(`Sync complete! Found ${total} items.`, "success");
                 fetchData();
               }
@@ -312,8 +315,8 @@ export default function TodayPage() {
         safetyRef.current = null;
         setSyncing(false);
         setSyncProgress("");
-        addToast("Sync timed out. Try again.", "error");
-      }, 120000);
+        setError("Sync timed out after 3 minutes. The backend may be stuck — try again.");
+      }, 180000);
     } catch {
       setError("Failed to start sync");
       setSyncing(false);

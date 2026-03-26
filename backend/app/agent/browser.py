@@ -8,6 +8,7 @@ import base64
 import json
 import logging
 import re
+from datetime import datetime, timezone
 from typing import Optional
 
 from playwright.async_api import (
@@ -214,7 +215,7 @@ class BrowserAgent:
         try:
             return json.loads(raw_text)
         except json.JSONDecodeError:
-            pass
+            logger.debug("JSON parse attempt 1 (direct) failed")
 
         # 2. Strip markdown code fences
         cleaned = raw_text
@@ -227,7 +228,7 @@ class BrowserAgent:
             try:
                 return json.loads(cleaned)
             except json.JSONDecodeError:
-                pass
+                logger.debug("JSON parse attempt 2 (strip fences) failed")
 
         # 3. Extract first JSON object using brace matching
         json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', raw_text)
@@ -235,7 +236,7 @@ class BrowserAgent:
             try:
                 return json.loads(json_match.group())
             except json.JSONDecodeError:
-                pass
+                logger.debug("JSON parse attempt 3 (regex) failed")
 
         # 4. Try to find JSON with nested braces (deeper)
         brace_start = raw_text.find("{")
@@ -361,7 +362,7 @@ class BrowserAgent:
         try:
             await self.page.wait_for_load_state("domcontentloaded", timeout=5000)
         except PlaywrightTimeout:
-            pass
+            logger.debug("wait_for_stable timeout (expected for SPAs)")
         await asyncio.sleep(sleep_s)
 
     # ── Login flow ────────────────────────────────────────────────────
@@ -734,13 +735,12 @@ class BrowserAgent:
                 )
 
                 try:
-                    await self.page.goto(href, wait_until="domcontentloaded", timeout=15000)
+                    await self.page.goto(href, wait_until="domcontentloaded", timeout=8000)
                     await self._wait_for_stable()
 
-                    # 2 scroll rounds with short pauses (was 3 rounds × 1.0s)
-                    for _ in range(2):
-                        await self.page.evaluate("window.scrollBy(0, 600)")
-                        await asyncio.sleep(0.3)
+                    # 1 scroll round with bigger scroll and shorter pause
+                    await self.page.evaluate("window.scrollBy(0, 800)")
+                    await asyncio.sleep(0.2)
 
                     posts = await self.get_feed_posts()
                     page_data = await self.get_page_data()
@@ -852,10 +852,10 @@ class BrowserAgent:
                                         "- 'Mar 15' or 'March 15' → '2026-03-15'\n"
                                         "- '3/15/26' → '2026-03-15'\n"
                                         "- '15 March 2026' → '2026-03-15'\n"
-                                        "- 'yesterday' → calculate from today (2026-03-22)\n"
+                                        "- 'yesterday' → calculate from today\n"
                                         "- '2 days ago' → calculate from today\n"
-                                        "- 'Due: Mar 20' → '2026-03-20'\n"
-                                        "- Today is 2026-03-22.\n\n"
+                                        "- 'Due: Mar 20' → derive year from context\n"
+                                        f"- Today is {datetime.now(timezone.utc).strftime('%Y-%m-%d')}.\n\n"
                                         "Return ONLY the JSON array. If nothing found, return []."
                                     ),
                                 )
@@ -871,6 +871,49 @@ class BrowserAgent:
                         continue
             except Exception as e:
                 logger.warning("Phase 4 (overdue check) failed: %s (%.1fs)", str(e)[:200], _time.time() - _phase4_start)
+
+            # ── Phase 5: Check gradebook/marks section ─────────────
+            _phase5_start = _time.time()
+            logger.info("Phase 5: Checking gradebook/marks")
+            try:
+                dashboard_url = self.page.url.split("#")[0] + "#/"
+                await self.page.goto(dashboard_url, wait_until="domcontentloaded", timeout=15000)
+                await self._wait_for_stable(sleep_s=1.0)
+
+                for text_to_try in ["Marks", "Grades", "Gradebook", "Results", "Scores", "Report Card"]:
+                    try:
+                        loc = self.page.get_by_text(text_to_try, exact=False).first
+                        if await loc.is_visible(timeout=2000):
+                            await loc.click(timeout=3000)
+                            await self._wait_for_stable(sleep_s=1.0)
+
+                            page_data = await self.get_page_data()
+                            grade_text = page_data.get("text", "")
+
+                            if grade_text.strip():
+                                grade_items = await self._claude_extract_from_text(
+                                    page_text=grade_text,
+                                    instruction=(
+                                        "This is the gradebook/marks page from Teamie LMS. "
+                                        "Extract ALL grades visible. Return a JSON array:\n"
+                                        '{"type":"grade","course":"...","overall_grade":"A/B/C",'
+                                        '"overall_percentage":85.5,"categories":{}}\n\n'
+                                        "Return ONLY JSON. If nothing found, return []."
+                                    ),
+                                )
+                                if isinstance(grade_items, list):
+                                    grade_count = 0
+                                    for item in grade_items:
+                                        if isinstance(item, dict):
+                                            item["type"] = "grade"
+                                            self._add_extracted(item)
+                                            grade_count += 1
+                                    logger.info("Phase 5: extracted %d grades (%.1fs)", grade_count, _time.time() - _phase5_start)
+                            break
+                    except Exception:
+                        continue
+            except Exception as e:
+                logger.warning("Phase 5 (gradebook) failed: %s (%.1fs)", str(e)[:200], _time.time() - _phase5_start)
 
         except Exception as e:
             logger.error("Hybrid exploration failed: %s", str(e)[:300])
@@ -1009,7 +1052,7 @@ class BrowserAgent:
                 if isinstance(result, dict):
                     return [result]
             except json.JSONDecodeError:
-                pass
+                logger.debug("Extract JSON parse attempt 1 (direct) failed")
 
             # Strategy 2: strip markdown fences
             cleaned = raw
@@ -1021,7 +1064,7 @@ class BrowserAgent:
                     result = json.loads(cleaned)
                     return result if isinstance(result, list) else [result]
                 except json.JSONDecodeError:
-                    pass
+                    logger.debug("Extract JSON parse attempt 2 (strip fences) failed")
 
             # Strategy 3: find array brackets
             bracket_start = raw.find("[")

@@ -114,18 +114,22 @@ class LMSExplorer:
 
                 if not authenticated:
                     logger.warning("Cookie replay failed (session expired) for user %s", self.user_id)
-                    self._update_job("failed", error="session_expired")
-                    self._update_cred_status(cred_id, success=False, error="Session expired")
-                    return {
-                        "status": "session_expired",
-                        "message": "Your LMS session has expired. Please reconnect.",
-                    }
+                    # DON'T return here — fall through to credential login if available
+                    if not has_creds:
+                        self._update_job("failed", error="session_expired")
+                        self._update_cred_status(cred_id, success=False, error="Session expired")
+                        return {
+                            "status": "session_expired",
+                            "message": "Your LMS session has expired. Please reconnect.",
+                        }
+                    else:
+                        logger.info("Falling back to credential login for user %s", self.user_id)
                 else:
                     logger.info("Cookie replay succeeded for user %s", self.user_id)
                     self._update_cred_status(cred_id, success=True)
 
-            # ── Strategy 2: Username/password login (fallback) ─────
-            elif has_creds:
+            # ── Strategy 2: Username/password login (fallback OR primary) ─
+            if not authenticated and has_creds:
                 try:
                     username = self._decrypt(cred["encrypted_username"])
                     password = self._decrypt(cred["encrypted_password"])

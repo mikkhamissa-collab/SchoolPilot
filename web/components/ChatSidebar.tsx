@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { backendFetch, apiStream, type SSEEvent } from "@/lib/api";
+import { posthog } from "@/lib/posthog";
 import ChatMessage, { type ChatMessageData, type ActionTaken } from "@/components/ChatMessage";
 
 // ---------------------------------------------------------------------------
@@ -250,6 +251,7 @@ export default function ChatSidebar() {
       const messageText = (text || input).trim();
       if (!messageText || isLoading) return;
 
+      posthog.capture("chat_message_sent");
       setInput("");
       setError("");
       setIsLoading(true);

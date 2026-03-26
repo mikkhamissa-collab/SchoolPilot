@@ -141,7 +141,7 @@ async def verify_jwt(token: str) -> str:
                 raise ValueError("Token missing subject claim")
             return user_id
         except JWTError:
-            pass
+            logger.warning("JWKS verification failed in verify_jwt", exc_info=True)
 
     # Attempt 2: Legacy HS256
     if settings.supabase_jwt_secret:
@@ -157,6 +157,6 @@ async def verify_jwt(token: str) -> str:
                 raise ValueError("Token missing subject claim")
             return user_id
         except JWTError:
-            pass
+            logger.warning("HS256 verification failed in verify_jwt", exc_info=True)
 
     raise ValueError("Invalid token")
