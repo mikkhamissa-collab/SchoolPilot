@@ -2,15 +2,30 @@
 import logging
 from datetime import datetime, date, timezone, timedelta
 from typing import Optional
+from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.auth import get_current_user
 from app.db import get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
+
+
+def _get_user_tz(db, user_id: str) -> str:
+    """Look up the user's configured timezone, defaulting to UTC."""
+    try:
+        result = db.table("student_profiles").select("timezone").eq("user_id", user_id).execute()
+        if result.data:
+            return result.data[0].get("timezone", "UTC") or "UTC"
+    except Exception:
+        pass
+    return "UTC"
 
 
 class FocusSessionRequest(BaseModel):
@@ -20,7 +35,8 @@ class FocusSessionRequest(BaseModel):
 
 
 @router.post("/session")
-async def log_focus_session(body: FocusSessionRequest, user_id: str = Depends(get_current_user)):
+@limiter.limit("30/hour")
+async def log_focus_session(request: Request, body: FocusSessionRequest, user_id: str = Depends(get_current_user)):
     db = get_db()
     row = {
         "user_id": user_id,
@@ -33,17 +49,22 @@ async def log_focus_session(body: FocusSessionRequest, user_id: str = Depends(ge
     result = db.table("study_sessions").insert(row).execute()
     session = result.data[0] if result.data else {}
 
-    # Update streak
-    _update_streak(db, user_id)
+    # Update streak using user's timezone
+    tz_name = _get_user_tz(db, user_id)
+    streak_ok = _update_streak(db, user_id, tz_name)
+    session["streak_updated"] = streak_ok
 
     return session
 
 
 @router.get("/stats")
-async def get_focus_stats(user_id: str = Depends(get_current_user)):
+@limiter.limit("30/minute")
+async def get_focus_stats(request: Request, user_id: str = Depends(get_current_user)):
     db = get_db()
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
-    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    tz = ZoneInfo(_get_user_tz(db, user_id))
+    user_today = datetime.now(tz).date()
+    today_start = datetime.combine(user_today, datetime.min.time(), tzinfo=tz).astimezone(timezone.utc).isoformat()
+    week_ago = datetime.combine(user_today - timedelta(days=7), datetime.min.time(), tzinfo=tz).astimezone(timezone.utc).isoformat()
 
     today_sessions = (
         db.table("study_sessions")
@@ -82,8 +103,13 @@ async def get_focus_stats(user_id: str = Depends(get_current_user)):
     }
 
 
-def _update_streak(db, user_id: str):
-    today = date.today()
+def _update_streak(db, user_id: str, tz_name: str = "UTC") -> bool:
+    """Update the user's streak. Returns True on success, False on failure."""
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        tz = ZoneInfo("UTC")
+    today = datetime.now(tz).date()
     try:
         result = db.table("streaks").select("*").eq("user_id", user_id).execute()
         if result.data:
@@ -92,7 +118,7 @@ def _update_streak(db, user_id: str):
             if last_active:
                 last_date = date.fromisoformat(last_active) if isinstance(last_active, str) else last_active
                 if last_date == today:
-                    return  # Already counted today
+                    return True  # Already counted today
                 elif last_date == today - timedelta(days=1):
                     new_current = streak.get("current_streak", 0) + 1
                 else:
@@ -115,5 +141,7 @@ def _update_streak(db, user_id: str):
                 "last_active_date": today.isoformat(),
                 "total_active_days": 1,
             }).execute()
+        return True
     except Exception:
         logger.exception("Failed to update streak for user %s", user_id)
+        return False

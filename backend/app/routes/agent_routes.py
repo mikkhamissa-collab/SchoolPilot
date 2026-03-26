@@ -67,7 +67,9 @@ async def start_sync(
 
 
 @router.get("/jobs")
+@limiter.limit("30/minute")
 async def list_jobs(
+    request: Request,
     limit: int = 10,
     offset: int = 0,
     user_id: str = Depends(get_current_user),
@@ -91,7 +93,8 @@ async def list_jobs(
 
 
 @router.get("/jobs/{job_id}")
-async def get_job(job_id: str, user_id: str = Depends(get_current_user)):
+@limiter.limit("30/minute")
+async def get_job(request: Request, job_id: str, user_id: str = Depends(get_current_user)):
     """Get status of a specific job."""
     db = get_db()
     result = (
@@ -107,7 +110,9 @@ async def get_job(job_id: str, user_id: str = Depends(get_current_user)):
 
 
 @router.get("/assignments")
+@limiter.limit("30/minute")
 async def list_assignments(
+    request: Request,
     upcoming_only: bool = True,
     limit: int = 30,
     offset: int = 0,
@@ -131,7 +136,8 @@ async def list_assignments(
 
 
 @router.get("/grades")
-async def list_lms_grades(user_id: str = Depends(get_current_user)):
+@limiter.limit("30/minute")
+async def list_lms_grades(request: Request, user_id: str = Depends(get_current_user)):
     """List LMS-extracted grades per course."""
     db = get_db()
     result = db.table("lms_grades").select("*").eq("user_id", user_id).execute()
@@ -180,7 +186,8 @@ async def save_cookies(
 
 
 @router.get("/sync/debug-screenshot")
-async def debug_screenshot(user_id: str = Depends(get_current_user)):
+@limiter.limit("5/hour")
+async def debug_screenshot(request: Request, user_id: str = Depends(get_current_user)):
     """Inject cookies, navigate to dashboard, return screenshot of what the agent sees."""
     import asyncio as _asyncio
     import json as _json
@@ -244,7 +251,8 @@ async def debug_screenshot(user_id: str = Depends(get_current_user)):
 
 
 @router.get("/sync-status")
-async def sync_status(user_id: str = Depends(get_current_user)):
+@limiter.limit("30/minute")
+async def sync_status(request: Request, user_id: str = Depends(get_current_user)):
     """Get overall sync status: when was the last sync, is one running, etc."""
     db = get_db()
 

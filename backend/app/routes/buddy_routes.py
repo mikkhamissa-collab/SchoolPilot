@@ -2,8 +2,10 @@
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.auth import get_current_user
 from app.db import get_db
@@ -11,6 +13,7 @@ from app.services.email import send_buddy_nudge_email
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 
 class BuddyInvite(BaseModel):
@@ -18,7 +21,8 @@ class BuddyInvite(BaseModel):
 
 
 @router.post("/invite")
-async def invite_buddy(body: BuddyInvite, user_id: str = Depends(get_current_user)):
+@limiter.limit("5/hour")
+async def invite_buddy(request: Request, body: BuddyInvite, user_id: str = Depends(get_current_user)):
     db = get_db()
 
     # Targeted lookup — never iterate all users
@@ -57,7 +61,8 @@ async def invite_buddy(body: BuddyInvite, user_id: str = Depends(get_current_use
 
 
 @router.post("/accept")
-async def accept_buddy(user_id: str = Depends(get_current_user)):
+@limiter.limit("30/minute")
+async def accept_buddy(request: Request, user_id: str = Depends(get_current_user)):
     db = get_db()
     pending = (
         db.table("buddy_pairs")
@@ -78,7 +83,8 @@ async def accept_buddy(user_id: str = Depends(get_current_user)):
 
 
 @router.get("/status")
-async def get_buddy_status(user_id: str = Depends(get_current_user)):
+@limiter.limit("30/minute")
+async def get_buddy_status(request: Request, user_id: str = Depends(get_current_user)):
     db = get_db()
     # Only select necessary columns — never expose raw user_a/user_b UUIDs
     pairs = (
@@ -115,7 +121,8 @@ async def get_buddy_status(user_id: str = Depends(get_current_user)):
 
 
 @router.post("/nudge")
-async def nudge_buddy(user_id: str = Depends(get_current_user)):
+@limiter.limit("10/hour")
+async def nudge_buddy(request: Request, user_id: str = Depends(get_current_user)):
     db = get_db()
     pairs = (
         db.table("buddy_pairs")

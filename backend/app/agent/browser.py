@@ -118,7 +118,7 @@ class BrowserAgent:
                 "Chrome/124.0.0.0 Safari/537.36"
             ),
             java_script_enabled=True,
-            ignore_https_errors=True,
+            # ignore_https_errors removed — accept only valid TLS certs
         )
         # Block known analytics/tracking domains to speed up page loads.
         await self.context.route(

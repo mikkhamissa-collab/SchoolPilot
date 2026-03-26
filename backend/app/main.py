@@ -44,13 +44,15 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        settings = get_settings()
+        extra_origins = " ".join(settings.cors_origins)
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline'; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com; "
             "img-src 'self' data: https:; "
-            "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com wss://*.onrender.com;"
+            f"connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com wss://*.onrender.com {extra_origins};"
         )
         return response
 
@@ -78,6 +80,12 @@ async def lifespan(app: FastAPI):
         raise RuntimeError(
             f"Missing required environment variables: {', '.join(missing)}. "
             "Set them in .env or your deployment config."
+        )
+
+    if settings.cors_origin_regex:
+        logger.warning(
+            "CORS origin regex is set to '%s'. Ensure this does not match untrusted origins.",
+            settings.cors_origin_regex,
         )
 
     logger.info("SchoolPilot Agent backend starting...")
@@ -108,12 +116,14 @@ async def lifespan(app: FastAPI):
     logger.info("SchoolPilot Agent backend stopped")
 
 
+_is_dev = os.getenv("ENVIRONMENT", "production") == "development"
+
 app = FastAPI(
     title="SchoolPilot API",
     description="AI-powered academic companion for high school students. Handles LMS sync, grade tracking, study tools, and AI chat.",
     version="3.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/docs" if _is_dev else None,
+    redoc_url="/redoc" if _is_dev else None,
     lifespan=lifespan,
 )
 

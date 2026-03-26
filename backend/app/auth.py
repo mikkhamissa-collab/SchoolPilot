@@ -1,11 +1,25 @@
 # auth.py — JWT verification for Supabase auth tokens.
 # Supports both legacy HS256 (shared secret) and modern JWKS (ECC/RSA) verification.
 import logging
+import re
 import time
 import httpx
 from fastapi import HTTPException, Request
 from jose import jwt, JWTError
 from app.config import get_settings
+
+_UUID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+
+
+def _validate_uuid(val: str) -> str:
+    """Validate that a string is a properly-formatted UUID.
+
+    Prevents PostgREST filter injection if a user_id is ever interpolated
+    into query filter strings (e.g. buddy_routes .or_() calls).
+    """
+    if not _UUID_RE.match(val):
+        raise HTTPException(status_code=401, detail="Invalid user identity")
+    return val
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +104,7 @@ async def get_current_user(request: Request) -> str:
             if not user_id:
                 logger.warning("JWKS token missing subject claim")
                 raise HTTPException(status_code=401, detail="Authentication failed. Please sign in again.")
-            return user_id
+            return _validate_uuid(user_id)
         except JWTError:
             logger.debug("JWKS verification failed, trying HS256 fallback", exc_info=True)
 
@@ -107,7 +121,7 @@ async def get_current_user(request: Request) -> str:
             if not user_id:
                 logger.warning("HS256 token missing subject claim")
                 raise HTTPException(status_code=401, detail="Authentication failed. Please sign in again.")
-            return user_id
+            return _validate_uuid(user_id)
         except JWTError as e:
             logger.warning("HS256 token verification failed: %s", e)
             raise HTTPException(status_code=401, detail="Authentication failed. Please sign in again.")

@@ -2,16 +2,19 @@
 import json
 import logging
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from app.auth import get_current_user
 from app.memory.store import MemoryStore
 from app.db import get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 
 class ProfileUpdate(BaseModel):
@@ -43,14 +46,16 @@ class ClassContextUpdate(BaseModel):
 
 
 @router.get("/me")
-async def get_profile(user_id: str = Depends(get_current_user)):
+@limiter.limit("30/minute")
+async def get_profile(request: Request, user_id: str = Depends(get_current_user)):
     """Get the current student profile."""
     memory = MemoryStore(user_id)
     return await memory.get_profile()
 
 
 @router.patch("/me")
-async def update_profile(body: ProfileUpdate, user_id: str = Depends(get_current_user)):
+@limiter.limit("30/minute")
+async def update_profile(request: Request, body: ProfileUpdate, user_id: str = Depends(get_current_user)):
     """Update student profile fields."""
     memory = MemoryStore(user_id)
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
@@ -60,8 +65,10 @@ async def update_profile(body: ProfileUpdate, user_id: str = Depends(get_current
 
 
 @router.post("/onboarding")
-async def save_onboarding_step(body: OnboardingAnswer, user_id: str = Depends(get_current_user)):
+@limiter.limit("30/minute")
+async def save_onboarding_step(request: Request, body: OnboardingAnswer, user_id: str = Depends(get_current_user)):
     """Save answers from an onboarding step and advance to the next."""
+    db = get_db()
     memory = MemoryStore(user_id)
     profile = await memory.get_profile()
 
@@ -97,6 +104,11 @@ async def save_onboarding_step(body: OnboardingAnswer, user_id: str = Depends(ge
             "onboarding_complete": True,
             "onboarding_step": "done",
         })
+        # Sync auth metadata so JWT reflects onboarding status
+        try:
+            db.auth.admin.update_user_by_id(user_id, {"user_metadata": {"onboarding_completed": True}})
+        except Exception:
+            logger.warning("Failed to sync onboarding metadata to auth for user %s", user_id)
     else:
         raise HTTPException(status_code=400, detail=f"Unknown onboarding step: {step}")
 
@@ -104,14 +116,16 @@ async def save_onboarding_step(body: OnboardingAnswer, user_id: str = Depends(ge
 
 
 @router.get("/classes")
-async def list_classes(user_id: str = Depends(get_current_user)):
+@limiter.limit("30/minute")
+async def list_classes(request: Request, user_id: str = Depends(get_current_user)):
     """List all class contexts."""
     memory = MemoryStore(user_id)
     return await memory.get_all_classes()
 
 
 @router.get("/classes/{class_name}")
-async def get_class(class_name: str, user_id: str = Depends(get_current_user)):
+@limiter.limit("30/minute")
+async def get_class(request: Request, class_name: str, user_id: str = Depends(get_current_user)):
     """Get context for a specific class."""
     memory = MemoryStore(user_id)
     cls = await memory.get_class(class_name)
@@ -121,7 +135,8 @@ async def get_class(class_name: str, user_id: str = Depends(get_current_user)):
 
 
 @router.patch("/classes/{class_name}")
-async def update_class(class_name: str, body: ClassContextUpdate, user_id: str = Depends(get_current_user)):
+@limiter.limit("30/minute")
+async def update_class(request: Request, class_name: str, body: ClassContextUpdate, user_id: str = Depends(get_current_user)):
     """Update class context."""
     memory = MemoryStore(user_id)
     updates = {k: v for k, v in body.model_dump().items() if v is not None and k != "note"}
@@ -133,7 +148,8 @@ async def update_class(class_name: str, body: ClassContextUpdate, user_id: str =
 
 
 @router.get("/context")
-async def get_full_context(user_id: str = Depends(get_current_user)):
+@limiter.limit("30/minute")
+async def get_full_context(request: Request, user_id: str = Depends(get_current_user)):
     """Get the full assembled context (for debugging/display)."""
     memory = MemoryStore(user_id)
     context = await memory.build_context()
@@ -141,7 +157,8 @@ async def get_full_context(user_id: str = Depends(get_current_user)):
 
 
 @router.get("/export")
-async def export_all_data(user_id: str = Depends(get_current_user)):
+@limiter.limit("3/hour")
+async def export_all_data(request: Request, user_id: str = Depends(get_current_user)):
     """Export all student data as a streaming JSON download (GDPR-style full data export).
 
     Streams each data section incrementally to avoid loading everything into memory at once.
@@ -161,13 +178,13 @@ async def export_all_data(user_id: str = Depends(get_current_user)):
         yield json.dumps(classes)
 
         yield ',"conversations":'
-        conversations = await memory.get_conversations(limit=1000)
+        conversations = await memory.get_conversations(limit=100)
         yield json.dumps(conversations)
 
         yield ',"messages":['
         first_msg = True
         for conv in conversations:
-            msgs = await memory.get_conversation_messages(conv["id"], limit=10000)
+            msgs = await memory.get_conversation_messages(conv["id"], limit=500)
             for msg in msgs:
                 if not first_msg:
                     yield ","

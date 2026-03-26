@@ -33,6 +33,24 @@ router = APIRouter()
 # In-memory session store: session_id -> {"user_id": str, "created_at": float}
 _sessions: Dict[str, dict] = {}
 
+# Blocked keyboard keys and combos to prevent DevTools / address bar access
+_BLOCKED_KEYS = {"F12", "F11"}
+_BLOCKED_COMBOS = {
+    ("Control", "Shift", "I"), ("Control", "Shift", "J"), ("Control", "Shift", "C"),
+    ("Control", "l"), ("Control", "u"), ("Alt", "d"),
+}
+
+
+def _is_blocked_key(key: str) -> bool:
+    """Check if a key or key combo should be blocked."""
+    if key in _BLOCKED_KEYS:
+        return True
+    # Playwright combo format: "Control+Shift+I", "Control+l", etc.
+    parts = tuple(key.split("+"))
+    if parts in _BLOCKED_COMBOS:
+        return True
+    return False
+
 # Max session lifetime in seconds
 _SESSION_TIMEOUT = 180
 
@@ -175,7 +193,6 @@ async def remote_browser_ws(websocket: WebSocket, session_id: str):
                 "Chrome/124.0.0.0 Safari/537.36"
             ),
             java_script_enabled=True,
-            ignore_https_errors=True,
         )
 
         # Remove webdriver indicator
@@ -184,6 +201,26 @@ async def remote_browser_ws(websocket: WebSocket, session_id: str):
         """)
 
         page = await context.new_page()
+
+        # Verify URL stays on allowed domains after every navigation
+        async def _handle_frame_navigated(frame):
+            if frame == page.main_frame:
+                url = frame.url
+                if url and url != "about:blank" and not _is_url_allowed(url):
+                    logger.warning(
+                        "Frame navigated to disallowed URL %s for user %s — navigating back",
+                        url[:200], user_id,
+                    )
+                    try:
+                        await page.go_back()
+                    except Exception:
+                        pass
+                    await send_json({
+                        "type": "error",
+                        "message": "Navigation to that site is not allowed.",
+                    })
+
+        page.on("framenavigated", _handle_frame_navigated)
 
         # Block navigation to non-allowed domains
         async def _handle_route(route):
@@ -286,6 +323,9 @@ async def remote_browser_ws(websocket: WebSocket, session_id: str):
 
             elif msg_type == "key":
                 key = msg.get("key", "Enter")
+                if _is_blocked_key(key):
+                    logger.warning("Blocked key press '%s' from user %s", key, user_id)
+                    continue
                 try:
                     await page.keyboard.press(key)
                     await asyncio.sleep(1.0)
@@ -349,7 +389,7 @@ async def remote_browser_ws(websocket: WebSocket, session_id: str):
 
                 except Exception as e:
                     logger.exception("Failed to save cookies for user %s", user_id)
-                    await send_json({"type": "error", "message": f"Failed to save session: {str(e)}"})
+                    await send_json({"type": "error", "message": "Failed to save session. Please try again."})
                     heartbeat_active = True
                     continue
 
@@ -362,7 +402,7 @@ async def remote_browser_ws(websocket: WebSocket, session_id: str):
         logger.info("Remote browser WebSocket disconnected for user %s", user_id)
     except Exception as e:
         logger.exception("Remote browser session error for user %s", user_id)
-        await send_json({"type": "error", "message": str(e)})
+        await send_json({"type": "error", "message": "An unexpected error occurred. Please try again."})
     finally:
         # Cleanup
         heartbeat_active = False

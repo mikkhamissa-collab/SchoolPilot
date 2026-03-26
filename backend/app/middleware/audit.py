@@ -1,4 +1,6 @@
 """Audit logging middleware -- logs all data access for FERPA compliance."""
+import base64
+import json
 import logging
 import time
 from uuid import uuid4
@@ -21,6 +23,19 @@ AUDITED_PREFIXES = [
 ]
 
 
+def _extract_user_id(auth_header: str) -> str:
+    """Extract user_id from JWT sub claim without full verification (base64-decode only)."""
+    try:
+        token = auth_header.split(" ", 1)[1]
+        payload_b64 = token.split(".")[1]
+        # Add padding
+        payload_b64 += "=" * (4 - len(payload_b64) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+        return payload.get("sub", "unknown")
+    except Exception:
+        return "unknown"
+
+
 class AuditLogMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         path = request.url.path
@@ -29,8 +44,11 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
 
         request_id = str(uuid4())[:8]
         start = time.monotonic()
-        has_auth = "authorization" in request.headers
-        user_hint = "authenticated" if has_auth else "anonymous"
+        auth_header = request.headers.get("authorization", "")
+        if auth_header:
+            user_hint = _extract_user_id(auth_header)
+        else:
+            user_hint = "anonymous"
 
         response = await call_next(request)
         duration_ms = round((time.monotonic() - start) * 1000)

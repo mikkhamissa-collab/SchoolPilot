@@ -33,28 +33,27 @@ async def daily_sync_job():
     user_ids = list({c["user_id"] for c in creds.data})
     logger.info(f"Syncing {len(user_ids)} users...")
 
-    for user_id in user_ids:
-        try:
-            # Create job record
-            job = db.table("agent_jobs").insert({
-                "user_id": user_id,
-                "job_type": "full_sync",
-                "status": "pending",
-            }).execute()
+    sem = asyncio.Semaphore(3)  # Max 3 concurrent browsers
 
-            if not job.data:
-                logger.error("Failed to create job record for user %s, skipping", user_id)
-                continue
+    async def _sync_one(user_id, db):
+        async with sem:
+            try:
+                job = db.table("agent_jobs").insert({
+                    "user_id": user_id,
+                    "job_type": "full_sync",
+                    "status": "pending",
+                }).execute()
+                if not job.data:
+                    logger.error("Failed to create job record for user %s", user_id)
+                    return
+                job_id = job.data[0]["id"]
+                from app.agent.explorer import LMSExplorer
+                explorer = LMSExplorer(user_id, job_id)
+                await explorer.run()
+            except Exception as e:
+                logger.exception("Daily sync failed for user %s: %s", user_id, e)
 
-            job_id = job.data[0]["id"]
-
-            # Import here to avoid circular imports
-            from app.agent.explorer import LMSExplorer
-            explorer = LMSExplorer(user_id, job_id)
-            await explorer.run()
-
-        except Exception as e:
-            logger.exception(f"Daily sync failed for user {user_id}: {e}")
+    await asyncio.gather(*[_sync_one(uid, db) for uid in user_ids], return_exceptions=True)
 
     logger.info("Daily sync job complete.")
 

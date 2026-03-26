@@ -104,5 +104,7 @@ async def delete_conversation(conversation_id: str, user_id: str = Depends(get_c
     """Delete a conversation and its messages."""
     from app.db import get_db
     db = get_db()
-    db.table("conversations").delete().eq("id", conversation_id).eq("user_id", user_id).execute()
+    result = db.table("conversations").delete().eq("id", conversation_id).eq("user_id", user_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Conversation not found")
     return {"status": "deleted"}
