@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "@/lib/supabase-client";
+import { posthog } from "@/lib/posthog";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -328,6 +329,7 @@ export default function FocusPage() {
 
     const elapsedMinutes = Math.max(1, Math.round(durationMs / 60000));
     setCompletedMinutes(elapsedMinutes);
+    posthog.capture("focus_session_completed", { duration: elapsedMinutes, type: focusType });
 
     playChime();
     setShowCelebration(true);
@@ -418,6 +420,7 @@ export default function FocusPage() {
     setTimeLeft(totalSecs);
     setIsRunning(true);
     setError(null);
+    posthog.capture("focus_session_started", { duration: mins, type });
 
     startTimeRef.current = now;
     totalSecondsRef.current = totalSecs;

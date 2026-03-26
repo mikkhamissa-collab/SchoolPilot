@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase-client";
 import { useEffect, useState, useCallback, useRef } from "react";
+import { posthog } from "@/lib/posthog";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -750,6 +751,7 @@ export default function GradesPage() {
 
   const handleWhatif = async () => {
     if (!activeCourse || !whatifScore) return;
+    posthog.capture("grade_calculator_used", { type: "whatif" });
     try {
       const result = await apiFetch<WhatIfResult>("/api/grades/what-if", {
         method: "POST",

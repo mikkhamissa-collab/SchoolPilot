@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase-client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import RemoteBrowser from "@/components/RemoteBrowser";
+import { posthog } from "@/lib/posthog";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -191,6 +192,7 @@ export default function OnboardingPage() {
   const goToStep = useCallback((target: Step, dir: "forward" | "backward") => {
     setDirection(dir);
     setAnimating(true);
+    posthog.capture("onboarding_step", { step: target, direction: dir });
     setTimeout(() => {
       setStep(target);
       setAnimating(false);
@@ -319,6 +321,7 @@ export default function OnboardingPage() {
     await supabase.auth.updateUser({
       data: { onboarding_completed: true },
     });
+    posthog.capture("onboarding_complete");
     setSaving(false);
     router.push("/today");
   };
@@ -330,6 +333,7 @@ export default function OnboardingPage() {
     await supabase.auth.updateUser({
       data: { onboarding_completed: true },
     });
+    posthog.capture("onboarding_complete", { skipped: true });
     router.push("/today");
   };
 

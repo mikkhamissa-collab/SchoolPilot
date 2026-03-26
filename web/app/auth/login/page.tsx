@@ -7,6 +7,7 @@
 import { createClient } from "@/lib/supabase-client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, useEffect } from "react";
+import { posthog } from "@/lib/posthog";
 
 // ---------------------------------------------------------------------------
 // Login form component
@@ -63,6 +64,7 @@ function LoginContent() {
       }
 
       if (data.user) {
+        posthog.identify(data.user.id, { email: data.user.email });
         const onboarded = data.user.user_metadata?.onboarding_completed;
         router.push(onboarded ? "/today" : "/onboarding");
       }

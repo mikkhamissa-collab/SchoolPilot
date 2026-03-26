@@ -34,16 +34,28 @@ async def start_sync(
     """Start a new LMS sync job. Runs in background."""
     db = get_db()
 
-    # Check for running jobs
+    # Check for running jobs — but expire stale ones (>5 min)
+    from datetime import timedelta
     running = (
         db.table("agent_jobs")
-        .select("id")
+        .select("id, created_at")
         .eq("user_id", user_id)
-        .eq("status", "running")
+        .in_("status", ["running", "pending"])
         .execute()
     )
     if running.data:
-        raise HTTPException(status_code=409, detail="A sync is already running")
+        for job in running.data:
+            created = datetime.fromisoformat(job["created_at"].replace("Z", "+00:00"))
+            if datetime.now(timezone.utc) - created > timedelta(minutes=5):
+                # Stale job — mark as failed
+                db.table("agent_jobs").update({
+                    "status": "failed",
+                    "error_message": "Job timed out (stale)",
+                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                }).eq("id", job["id"]).execute()
+                logger.warning("Cleaned up stale job %s (created %s)", job["id"], job["created_at"])
+            else:
+                raise HTTPException(status_code=409, detail="A sync is already running")
 
     # Create job record
     job = db.table("agent_jobs").insert({
@@ -220,7 +232,7 @@ async def debug_screenshot(user_id: str = Depends(get_current_user)):
             assert agent.page is not None
             await agent.page.wait_for_load_state("networkidle", timeout=8000)
         except Exception:
-            pass
+            logger.debug("Debug screenshot networkidle wait timed out (expected for SPAs)")
 
         screenshot_b64 = await agent.screenshot()
         current_url = agent.page.url if agent.page else "unknown"

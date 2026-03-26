@@ -1,7 +1,18 @@
 # main.py — FastAPI application entry point.
 import logging
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request as FastAPIRequest
+
+# Sentry — error tracking (must init before app creation)
+import sentry_sdk
+
+sentry_sdk.init(
+    dsn=os.environ.get("SENTRY_DSN", ""),
+    traces_sample_rate=0.1,
+    profiles_sample_rate=0.1,
+    environment=os.environ.get("ENVIRONMENT", "production"),
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -145,13 +156,47 @@ app.include_router(remote_browser.router, prefix="/api/agent", tags=["remote-bro
 
 @app.get("/health")
 async def health():
-    """Health check with database connectivity verification."""
+    """Health check with database connectivity and sync status."""
     from app.db import get_db
     try:
         db = get_db()
         # Simple query to verify DB is reachable
         db.table("student_profiles").select("user_id").limit(1).execute()
-        return {"status": "ok", "db": "connected", "version": "3.0.0"}
+
+        # Last completed sync
+        last_sync = (
+            db.table("agent_jobs")
+            .select("completed_at")
+            .eq("status", "completed")
+            .order("completed_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        last_sync_at = last_sync.data[0]["completed_at"] if last_sync.data else None
+
+        # Active users (profiles with onboarding complete)
+        active = (
+            db.table("student_profiles")
+            .select("user_id", count="exact")
+            .eq("onboarding_complete", True)
+            .execute()
+        )
+
+        # Check if Playwright is importable
+        pw_available = True
+        try:
+            import playwright  # noqa: F401
+        except ImportError:
+            pw_available = False
+
+        return {
+            "status": "ok",
+            "db": "connected",
+            "version": "3.0.0",
+            "last_sync_completed_at": last_sync_at,
+            "active_users": active.count or 0,
+            "playwright_available": pw_available,
+        }
     except Exception as e:
         logger.error("Health check DB failure: %s", e)
         return JSONResponse(

@@ -361,7 +361,7 @@ class MemoryStore:
             if streak_result.data:
                 streak_data = streak_result.data[0]
         except Exception:
-            pass
+            logger.warning("Failed to fetch streak data", exc_info=True)
 
         # Fetch recent focus sessions
         focus_sessions = []
@@ -377,7 +377,7 @@ class MemoryStore:
             if focus_result.data:
                 focus_sessions = focus_result.data
         except Exception:
-            pass
+            logger.warning("Failed to fetch focus sessions", exc_info=True)
 
         parts: list[str] = []
 

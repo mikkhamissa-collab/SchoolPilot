@@ -78,11 +78,36 @@ export default function PrivacyPage() {
           </section>
 
           <section>
+            <h2 className="text-lg font-semibold text-white mb-3">Data Security</h2>
+            <p>
+              LMS credentials are encrypted using Fernet (AES-256-CBC) before storage.
+              All database tables use row-level security (RLS) policies so users can only
+              access their own data. API endpoints require authenticated JWT tokens.
+              All communication uses HTTPS/TLS encryption in transit.
+            </p>
+          </section>
+
+          <section>
             <h2 className="text-lg font-semibold text-white mb-3">Data Retention</h2>
             <p>
               Your data is retained in your account as long as you use SchoolPilot.
               You can request deletion of your data at any time by contacting us or
-              using the &quot;Delete Account&quot; option in Settings.
+              using the &quot;Delete Account&quot; option in Settings. Upon deletion,
+              all personal data including LMS credentials, assignments, grades, chat
+              messages, and study content will be permanently removed within 30 days.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold text-white mb-3">Users Under 18 (COPPA/Student Privacy)</h2>
+            <p>
+              SchoolPilot is designed for high school students, many of whom are under 18.
+              We collect only the minimum data necessary to provide the service. We do not
+              knowingly collect personal information from children under 13 without parental
+              consent. If you are under 13, please do not use SchoolPilot without a parent
+              or guardian&apos;s permission. Parents or guardians may contact us to review,
+              delete, or stop the collection of their child&apos;s personal information.
+              We comply with applicable student data privacy laws including FERPA and COPPA.
             </p>
           </section>
 

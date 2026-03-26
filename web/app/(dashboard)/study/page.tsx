@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase-client";
 import { useState, useEffect, useRef, useCallback } from "react";
+import { posthog } from "@/lib/posthog";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -675,6 +676,7 @@ export default function StudyPage() {
       setLoading(true);
       setError("");
       setActiveTool(tool);
+      posthog.capture("study_tool_used", { type: tool });
       setResult(null);
       setFlashcardResults(null);
 
