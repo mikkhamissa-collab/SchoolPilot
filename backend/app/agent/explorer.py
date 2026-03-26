@@ -150,6 +150,10 @@ class LMSExplorer:
                     logger.warning("Login failed for user %s", self.user_id)
                     self._update_job("failed", error=msg)
                     self._update_cred_status(cred_id, success=False, error=msg)
+                    # Mark credential as needing reconnect via browser
+                    self.db.table("lms_credentials").update({
+                        "last_error": "CAPTCHA detected — please reconnect via the app",
+                    }).eq("id", cred_id).execute()
                     return {"status": "login_failed", "message": msg}
 
                 logger.info("Login succeeded for user %s", self.user_id)
@@ -163,7 +167,7 @@ class LMSExplorer:
 
             # 5. Explore & extract (hard 90s timeout — kill browser if stuck)
             try:
-                extracted = await asyncio.wait_for(agent.explore(), timeout=90)
+                extracted = await asyncio.wait_for(agent.explore(), timeout=120)
             except asyncio.TimeoutError:
                 logger.error(
                     "Exploration timed out after 90s for user %s (%d items so far)",
@@ -268,6 +272,25 @@ class LMSExplorer:
         logger.info("Stored data for user %s: %s", self.user_id, counts)
         return counts
 
+    # ── Course name normalization ───────────────────────────────────
+
+    @staticmethod
+    def _normalize_course_name(name: str) -> str:
+        """Normalize a course name by stripping year/semester suffixes.
+
+        Examples:
+            "AP Psychology P5 MM [25-26]" → "AP Psychology P5 MM"
+            "Global Issues S2 P1 TG [25-26]" → "Global Issues S2 P1 TG"
+            "Math - S2" → "Math"
+        """
+        if not name:
+            return name
+        # Strip trailing [25-26], [2025-2026], etc.
+        result = re.sub(r'\s*\[\d{2,4}-\d{2,4}\]\s*$', '', name)
+        # Strip trailing " - S1", " - S2", " S1", " S2" (semester tags)
+        result = re.sub(r'\s*-?\s*S[12]\s*$', '', result)
+        return result.strip()
+
     # ── Upsert helpers ────────────────────────────────────────────────
 
     def _stable_id(self, *parts: Optional[str]) -> str:
@@ -280,18 +303,15 @@ class LMSExplorer:
         return hashlib.sha256(combined.encode("utf-8")).hexdigest()[:40]
 
     def _upsert_assignment(self, item: dict) -> None:
-        lms_id = self._stable_id(
-            item.get("course"),
-            item.get("title"),
-            item.get("due_date"),
-        )
+        course = self._normalize_course_name(item.get("course") or "")
+        lms_id = self._stable_id(course, item.get("title"))
         self.db.table("lms_assignments").upsert(
             {
                 "user_id": self.user_id,
                 "lms_id": lms_id,
                 "title": item.get("title", "Untitled"),
                 "description": item.get("description"),
-                "course_name": item.get("course"),
+                "course_name": course,
                 "assignment_type": item.get("assignment_type"),
                 "due_date": item.get("due_date"),
                 "points_possible": item.get("points"),
@@ -320,10 +340,11 @@ class LMSExplorer:
                 logger.warning("Invalid grade percentage value: %s", overall_pct)
                 overall_pct = None
 
+        course = self._normalize_course_name(item.get("course") or "Unknown")
         self.db.table("lms_grades").upsert(
             {
                 "user_id": self.user_id,
-                "course_name": item.get("course", "Unknown"),
+                "course_name": course,
                 "overall_grade": item.get("overall_grade"),
                 "overall_percentage": overall_pct,
                 "category_breakdown": item.get("categories", {}),
@@ -333,11 +354,28 @@ class LMSExplorer:
             on_conflict="user_id,course_name",
         ).execute()
 
+        # Also insert a daily grade snapshot for trend tracking
+        try:
+            self.db.table("grade_snapshots").upsert(
+                {
+                    "user_id": self.user_id,
+                    "course_name": course,
+                    "overall_percentage": overall_pct,
+                    "overall_grade": item.get("overall_grade"),
+                    "category_breakdown": item.get("categories", {}),
+                    "job_id": self.job_id,
+                },
+                on_conflict="user_id,course_name,snapshot_date",
+            ).execute()
+        except Exception:
+            logger.debug("Failed to insert grade snapshot", exc_info=True)
+
     def _upsert_course(self, item: dict) -> None:
+        class_name = self._normalize_course_name(item.get("name") or "Unknown")
         self.db.table("class_context").upsert(
             {
                 "user_id": self.user_id,
-                "class_name": item.get("name", "Unknown"),
+                "class_name": class_name,
                 "teacher_name": item.get("teacher"),
                 "period": item.get("period"),
                 "room": item.get("room"),
@@ -347,17 +385,14 @@ class LMSExplorer:
         ).execute()
 
     def _upsert_announcement(self, item: dict) -> None:
-        lms_id = self._stable_id(
-            item.get("course"),
-            item.get("title"),
-            item.get("date"),
-        )
+        course = self._normalize_course_name(item.get("course") or "")
+        lms_id = self._stable_id(course, item.get("title"), item.get("date"))
         self.db.table("lms_announcements").upsert(
             {
                 "user_id": self.user_id,
                 "lms_id": lms_id,
                 "title": item.get("title", "Untitled"),
-                "course_name": item.get("course"),
+                "course_name": course,
                 "content": item.get("content"),
                 "posted_date": item.get("date"),
                 "job_id": self.job_id,
@@ -367,17 +402,14 @@ class LMSExplorer:
         ).execute()
 
     def _upsert_calendar(self, item: dict) -> None:
-        lms_id = self._stable_id(
-            item.get("course"),
-            item.get("title"),
-            item.get("date"),
-        )
+        course = self._normalize_course_name(item.get("course") or "")
+        lms_id = self._stable_id(course, item.get("title"), item.get("date"))
         self.db.table("lms_calendar_events").upsert(
             {
                 "user_id": self.user_id,
                 "lms_id": lms_id,
                 "title": item.get("title", "Untitled"),
-                "course_name": item.get("course"),
+                "course_name": course,
                 "event_date": item.get("date"),
                 "details": item.get("details"),
                 "job_id": self.job_id,

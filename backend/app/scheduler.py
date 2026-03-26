@@ -33,29 +33,30 @@ async def daily_sync_job():
     user_ids = list({c["user_id"] for c in creds.data})
     logger.info(f"Syncing {len(user_ids)} users...")
 
-    for user_id in user_ids:
-        try:
-            # Create job record
-            job = db.table("agent_jobs").insert({
-                "user_id": user_id,
-                "job_type": "full_sync",
-                "status": "pending",
-            }).execute()
+    from app.agent.explorer import LMSExplorer
 
-            if not job.data:
-                logger.error("Failed to create job record for user %s, skipping", user_id)
-                continue
+    sem = asyncio.Semaphore(3)  # Max 3 concurrent browser instances
 
-            job_id = job.data[0]["id"]
+    async def sync_one(uid: str):
+        async with sem:
+            try:
+                job = db.table("agent_jobs").insert({
+                    "user_id": uid,
+                    "job_type": "full_sync",
+                    "status": "pending",
+                }).execute()
 
-            # Import here to avoid circular imports
-            from app.agent.explorer import LMSExplorer
-            explorer = LMSExplorer(user_id, job_id)
-            await explorer.run()
+                if not job.data:
+                    logger.error("Failed to create job record for user %s, skipping", uid)
+                    return
 
-        except Exception as e:
-            logger.exception(f"Daily sync failed for user {user_id}: {e}")
+                job_id = job.data[0]["id"]
+                explorer = LMSExplorer(uid, job_id)
+                await explorer.run()
+            except Exception as e:
+                logger.exception(f"Daily sync failed for user {uid}: {e}")
 
+    await asyncio.gather(*[sync_one(uid) for uid in user_ids])
     logger.info("Daily sync job complete.")
 
 
@@ -129,7 +130,7 @@ async def send_daily_briefings_job():
 
     profiles = (
         db.table("student_profiles")
-        .select("user_id, display_name, email_briefings, personality_preset")
+        .select("user_id, display_name, email_briefings, personality_preset, timezone")
         .eq("daily_briefing_enabled", True)
         .eq("email_briefings", True)
         .execute()
@@ -153,8 +154,21 @@ async def send_daily_briefings_job():
     from app.prompts.personalities import get_personality
     from app.services.email import render_briefing_html, send_briefing_email
 
+    now_utc = datetime.now(timezone.utc)
     for profile in profiles.data:
         try:
+            # Check if it's ~7 AM in the student's timezone
+            tz_str = profile.get("timezone") or "UTC"
+            try:
+                from zoneinfo import ZoneInfo
+                local_time = now_utc.astimezone(ZoneInfo(tz_str))
+                if local_time.hour != 7:
+                    continue  # Not 7 AM in their timezone yet
+            except Exception:
+                # If timezone parsing fails, only send at 7 AM UTC
+                if now_utc.hour != 7:
+                    continue
+
             user_id = profile["user_id"]
             memory = MemoryStore(user_id)
             context = await memory.build_context()
@@ -250,10 +264,10 @@ def start_scheduler():
         replace_existing=True,
     )
 
-    # Daily briefings at 7 AM UTC
+    # Daily briefings — run every hour, send to users where it's 7 AM local
     _scheduler.add_job(
         send_daily_briefings_job,
-        CronTrigger(hour=7, minute=0),
+        CronTrigger(minute=0),
         id="daily_briefings",
         replace_existing=True,
     )
