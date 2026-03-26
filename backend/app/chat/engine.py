@@ -331,10 +331,13 @@ class ChatEngine:
             tokens_used=tokens_used,
         )
 
-        # 8. Periodic summarization (every ~10 messages after the first 20)
+        # 8. Auto-title the conversation from the first user message
+        await self._maybe_auto_title(conversation_id, user_message)
+
+        # 9. Periodic summarization (every ~10 messages after the first 20)
         await self._maybe_summarize(conversation_id)
 
-        # 9. Done
+        # 10. Done
         yield _sse({"type": "done"})
 
     # ── Streaming internals ──────────────────────────────────────────────
@@ -927,46 +930,76 @@ Today is {today}. Current time: {time_now}.
         if current_pct is None:
             return {"error": f"No percentage grade available for '{course_name}'."}
 
+        # Count existing graded assignments for this course to weight properly
+        all_assignments = await self.memory.get_all_assignments(limit=100)
+        graded_count = sum(
+            1 for a in all_assignments
+            if (a.get("course_name") or "").lower() == course_name.lower()
+            and a.get("is_graded")
+        )
+        # Use at least 1 so division works; more graded items = less impact per new score
+        weight_existing = max(graded_count, 1)
+
         if scenario == "what_if":
             score = tool_input.get("hypothetical_score", 85)
             total = tool_input.get("hypothetical_total", 100)
-            # Simple weighted average estimate
-            new_pct = (current_pct + (score / total * 100)) / 2
+            new_score_pct = score / total * 100
+            # Weighted average: existing grade counts as weight_existing parts,
+            # new score counts as 1 part
+            new_pct = (current_pct * weight_existing + new_score_pct) / (weight_existing + 1)
             return {
                 "course": course_name,
                 "current_grade": current_pct,
                 "hypothetical_score": f"{score}/{total}",
                 "projected_grade": round(new_pct, 1),
-                "note": "This is an estimate. Actual grade depends on category weights.",
+                "graded_assignments": weight_existing,
+                "note": "Estimate based on equal-weight assignments. Actual depends on category weights.",
             }
         elif scenario == "required_score":
             target = tool_input.get("target_grade", 90)
-            # Estimate: what score on a 100-point assignment gets you to target
-            needed = 2 * target - current_pct
+            # Solve: (current * n + needed) / (n + 1) = target
+            # → needed = target * (n + 1) - current * n
+            needed = target * (weight_existing + 1) - current_pct * weight_existing
             return {
                 "course": course_name,
                 "current_grade": current_pct,
                 "target_grade": target,
                 "needed_score": max(0, min(100, round(needed, 1))),
-                "note": "Estimated score needed on a 100-point assignment. Actual depends on weights.",
+                "graded_assignments": weight_existing,
+                "achievable": 0 <= needed <= 100,
+                "note": "Estimated score needed on a 100-point assignment. Actual depends on category weights.",
             }
 
         return {"error": f"Unknown scenario: {scenario}"}
 
     async def _tool_generate_study_guide(self, tool_input: dict) -> dict:
-        """Trigger study guide generation (returns a brief guide)."""
+        """Actually generate a study guide using Claude."""
         course = tool_input.get("course", "").strip()
         topic = tool_input.get("topic", "").strip()
 
         if not course or not topic:
             return {"error": "Both course and topic are required."}
 
-        return {
-            "status": "ready",
-            "course": course,
-            "topic": topic,
-            "message": f"I'll create a study guide for {topic} in {course}. You can also visit the Study page for more detailed guides, flashcards, and practice quizzes.",
-        }
+        from app.prompts.study import STUDY_GUIDE_PROMPT
+
+        try:
+            response = await self.client.messages.create(
+                model=self.settings.claude_model,
+                max_tokens=2048,
+                system=STUDY_GUIDE_PROMPT,
+                messages=[{"role": "user", "content": f"Course: {course}\nTopic: {topic}"}],
+                timeout=30.0,
+            )
+            guide_text = response.content[0].text
+            return {
+                "status": "generated",
+                "course": course,
+                "topic": topic,
+                "guide": guide_text,
+            }
+        except Exception as e:
+            logger.exception("Study guide generation failed")
+            return {"error": f"Failed to generate study guide: {str(e)}"}
 
     async def _tool_get_due_soon(self, tool_input: dict) -> dict:
         """Get assignments due in the next 48 hours."""
@@ -997,6 +1030,50 @@ Today is {today}. Current time: {time_now}.
         }
 
     # ── Summarization ────────────────────────────────────────────────────
+
+    async def _maybe_auto_title(self, conversation_id: str, user_message: str) -> None:
+        """Auto-title the conversation using Haiku after the first message.
+
+        Only runs when the conversation still has the default title ("New conversation").
+        Uses claude-haiku for speed/cost to generate a concise 3-5 word title.
+        """
+        try:
+            conv = (
+                self.memory.db.table("conversations")
+                .select("title, message_count")
+                .eq("id", conversation_id)
+                .execute()
+            )
+            if not conv.data:
+                return
+            current_title = conv.data[0].get("title", "")
+            msg_count = conv.data[0].get("message_count", 0)
+
+            # Only auto-title on the first exchange, and only if still default
+            if msg_count > 2 or (current_title and current_title not in ("New conversation", None, "")):
+                return
+
+            # Use Haiku for speed/cost
+            title_response = await self.client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=20,
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        f"Generate a 3-5 word title for a conversation that starts with: "
+                        f"{user_message[:200]}. Return ONLY the title, nothing else."
+                    ),
+                }],
+            )
+            title = title_response.content[0].text.strip().strip('"')[:50]
+
+            if title:
+                self.memory.db.table("conversations").update({
+                    "title": title,
+                }).eq("id", conversation_id).execute()
+                logger.debug("Auto-titled conversation %s: '%s'", conversation_id, title)
+        except Exception:
+            logger.debug("Auto-title failed for conversation %s", conversation_id, exc_info=True)
 
     async def _maybe_summarize(self, conversation_id: str) -> None:
         """Trigger conversation summarization if the message count warrants it.

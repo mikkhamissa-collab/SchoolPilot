@@ -63,6 +63,10 @@ function LoginContent() {
       }
 
       if (data.user) {
+        // Identify user in PostHog for analytics
+        import("posthog-js").then((ph) => {
+          ph.default.identify(data.user!.id, { email: data.user!.email });
+        }).catch(() => {});
         const onboarded = data.user.user_metadata?.onboarding_completed;
         router.push(onboarded ? "/today" : "/onboarding");
       }
@@ -165,185 +169,217 @@ function LoginContent() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg-dark p-6">
-      <div className="w-full max-w-sm">
+    <div className="relative min-h-screen flex items-center justify-center p-6 overflow-hidden" style={{ backgroundColor: "#09090b" }}>
+      {/* Subtle background glow */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background: "radial-gradient(ellipse 600px 400px at 50% 40%, rgba(124,58,237,0.15), transparent)",
+        }}
+      />
+
+      <div className="relative w-full max-w-sm">
         {/* Logo and title */}
         <div className="text-center mb-8">
-          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-accent/20 flex items-center justify-center">
-            <svg className="w-7 h-7 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-7.007 11.55A5.981 5.981 0 0 0 6.75 15.75v-1.5" />
-            </svg>
+          <div className="inline-flex items-center gap-2.5 mb-6">
+            <div
+              className="w-[22px] h-[22px] rounded-[6px]"
+              style={{ background: "linear-gradient(135deg, #7c3aed, #a78bfa)" }}
+            />
+            <span className="text-[#fafafa] font-semibold text-base tracking-tight">SchoolPilot</span>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-1">SchoolPilot</h1>
-          <p className="text-text-secondary text-sm">
-            {mode === "forgot" ? "Reset your password" : "Your AI study assistant"}
+          <h1 className="text-2xl font-bold text-[#fafafa] mb-1">
+            {mode === "forgot" ? "Reset your password" : "Welcome back"}
+          </h1>
+          <p className="text-[#a1a1aa] text-sm">
+            {mode === "forgot"
+              ? "Enter your email to receive a reset link"
+              : "Your AI study assistant"}
           </p>
         </div>
 
-        {/* Login / Sign Up tabs */}
-        {mode !== "forgot" && (
-          <div className="flex mb-6 bg-bg-card rounded-xl p-1 border border-border">
-            <button
-              type="button"
-              onClick={() => { setMode("login"); setError(""); setSuccess(""); }}
-              className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
-                mode === "login"
-                  ? "bg-accent text-white"
-                  : "text-text-muted hover:text-white"
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              onClick={() => { setMode("signup"); setError(""); setSuccess(""); }}
-              className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
-                mode === "signup"
-                  ? "bg-accent text-white"
-                  : "text-text-muted hover:text-white"
-              }`}
-            >
-              Sign Up
-            </button>
-          </div>
-        )}
-
-        {/* Success message */}
-        {success && (
-          <div className="mb-4 p-3 rounded-lg bg-success/10 border border-success/20 text-success text-sm text-center">
-            {success}
-          </div>
-        )}
-
-        {/* Error message */}
-        {error && (
-          <div className="mb-4 p-3 rounded-lg bg-error/10 border border-error/20 text-error text-sm text-center">
-            {error}
-          </div>
-        )}
-
-        {/* Form */}
-        <form onSubmit={mode === "login" ? handleLogin : mode === "signup" ? handleSignup : handleForgotPassword} className="space-y-4">
-          {/* Name field (signup only) */}
-          {mode === "signup" && (
-            <div>
-              <label htmlFor="auth-name" className="block text-text-secondary text-sm mb-1.5">
-                Name
-              </label>
-              <input
-                id="auth-name"
-                type="text"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="Your first name"
-                autoComplete="name"
-                className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors"
-                autoFocus
-              />
-            </div>
-          )}
-
-          {/* Email */}
-          <div>
-            <label htmlFor="auth-email" className="block text-text-secondary text-sm mb-1.5">
-              Email
-            </label>
-            <input
-              id="auth-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@school.edu"
-              autoComplete="email"
-              className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors"
-              autoFocus={mode === "login"}
-            />
-          </div>
-
-          {/* Password (hidden in forgot mode) */}
+        {/* Card */}
+        <div className="rounded-xl p-6" style={{ backgroundColor: "#111113", border: "1px solid #1e1e22" }}>
+          {/* Login / Sign Up text tabs */}
           {mode !== "forgot" && (
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label htmlFor="auth-password" className="text-text-secondary text-sm">
-                  Password
-                </label>
-                {mode === "login" && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMode("forgot");
-                      setError("");
-                      setSuccess("");
-                    }}
-                    className="text-accent hover:underline cursor-pointer text-xs font-medium"
-                  >
-                    Forgot password?
-                  </button>
-                )}
-              </div>
-              <input
-                id="auth-password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={mode === "signup" ? "At least 8 characters" : "Your password"}
-                autoComplete={mode === "login" ? "current-password" : "new-password"}
-                className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors"
-              />
+            <div className="flex mb-6 gap-1">
+              <button
+                type="button"
+                onClick={() => { setMode("login"); setError(""); setSuccess(""); }}
+                className={`flex-1 py-2 text-sm font-medium transition-colors cursor-pointer rounded-lg ${
+                  mode === "login"
+                    ? "text-[#fafafa]"
+                    : "text-[#52525b] hover:text-[#a1a1aa]"
+                }`}
+                style={mode === "login" ? { backgroundColor: "#18181b" } : undefined}
+              >
+                Log in
+              </button>
+              <button
+                type="button"
+                onClick={() => { setMode("signup"); setError(""); setSuccess(""); }}
+                className={`flex-1 py-2 text-sm font-medium transition-colors cursor-pointer rounded-lg ${
+                  mode === "signup"
+                    ? "text-[#fafafa]"
+                    : "text-[#52525b] hover:text-[#a1a1aa]"
+                }`}
+                style={mode === "signup" ? { backgroundColor: "#18181b" } : undefined}
+              >
+                Sign up
+              </button>
             </div>
           )}
 
-          {/* Confirm Password (signup only) */}
-          {mode === "signup" && (
+          {/* Success message */}
+          {success && (
+            <div className="mb-4 p-3 rounded-lg text-sm text-center text-green-400" style={{ backgroundColor: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)" }}>
+              {success}
+            </div>
+          )}
+
+          {/* Error message */}
+          {error && (
+            <div className="mb-4 p-3 rounded-lg text-sm text-center text-red-400" style={{ backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)" }}>
+              {error}
+            </div>
+          )}
+
+          {/* Form */}
+          <form onSubmit={mode === "login" ? handleLogin : mode === "signup" ? handleSignup : handleForgotPassword} className="space-y-4">
+            {/* Name field (signup only) */}
+            {mode === "signup" && (
+              <div>
+                <label htmlFor="auth-name" className="block text-[#a1a1aa] text-sm mb-1.5">
+                  Name
+                </label>
+                <input
+                  id="auth-name"
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="Your first name"
+                  autoComplete="name"
+                  className="w-full px-3.5 py-2.5 rounded-lg text-[#fafafa] text-sm placeholder:text-[#52525b] focus:outline-none transition-colors"
+                  style={{ backgroundColor: "#09090b", border: "1px solid #1e1e22" }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(124,58,237,0.4)"; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = "#1e1e22"; }}
+                  autoFocus
+                />
+              </div>
+            )}
+
+            {/* Email */}
             <div>
-              <label htmlFor="auth-confirm" className="block text-text-secondary text-sm mb-1.5">
-                Confirm password
+              <label htmlFor="auth-email" className="block text-[#a1a1aa] text-sm mb-1.5">
+                Email
               </label>
               <input
-                id="auth-confirm"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Type your password again"
-                autoComplete="new-password"
-                className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors"
+                id="auth-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@school.edu"
+                autoComplete="email"
+                className="w-full px-3.5 py-2.5 rounded-lg text-[#fafafa] text-sm placeholder:text-[#52525b] focus:outline-none transition-colors"
+                style={{ backgroundColor: "#09090b", border: "1px solid #1e1e22" }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(124,58,237,0.4)"; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = "#1e1e22"; }}
+                autoFocus={mode === "login"}
               />
             </div>
-          )}
 
-          {/* Submit button */}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3 rounded-xl bg-accent hover:bg-accent-hover text-white font-semibold text-base transition-colors cursor-pointer disabled:opacity-50"
-          >
-            {loading
-              ? mode === "forgot"
-                ? "Sending link..."
-                : mode === "login"
-                  ? "Signing in..."
-                  : "Creating account..."
-              : mode === "forgot"
-                ? "Send Reset Link"
-                : mode === "login"
-                  ? "Sign In"
-                  : "Create Account"}
-          </button>
-        </form>
+            {/* Password (hidden in forgot mode) */}
+            {mode !== "forgot" && (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label htmlFor="auth-password" className="text-[#a1a1aa] text-sm">
+                    Password
+                  </label>
+                  {mode === "login" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode("forgot");
+                        setError("");
+                        setSuccess("");
+                      }}
+                      className="text-[#7c3aed] hover:underline cursor-pointer text-xs font-medium"
+                    >
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
+                <input
+                  id="auth-password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={mode === "signup" ? "At least 8 characters" : "Your password"}
+                  autoComplete={mode === "login" ? "current-password" : "new-password"}
+                  className="w-full px-3.5 py-2.5 rounded-lg text-[#fafafa] text-sm placeholder:text-[#52525b] focus:outline-none transition-colors"
+                  style={{ backgroundColor: "#09090b", border: "1px solid #1e1e22" }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(124,58,237,0.4)"; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = "#1e1e22"; }}
+                />
+              </div>
+            )}
+
+            {/* Confirm Password (signup only) */}
+            {mode === "signup" && (
+              <div>
+                <label htmlFor="auth-confirm" className="block text-[#a1a1aa] text-sm mb-1.5">
+                  Confirm password
+                </label>
+                <input
+                  id="auth-confirm"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Type your password again"
+                  autoComplete="new-password"
+                  className="w-full px-3.5 py-2.5 rounded-lg text-[#fafafa] text-sm placeholder:text-[#52525b] focus:outline-none transition-colors"
+                  style={{ backgroundColor: "#09090b", border: "1px solid #1e1e22" }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(124,58,237,0.4)"; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = "#1e1e22"; }}
+                />
+              </div>
+            )}
+
+            {/* Submit button */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-2.5 rounded-lg font-semibold text-sm transition-opacity cursor-pointer disabled:opacity-50"
+              style={{ backgroundColor: "#fafafa", color: "#09090b" }}
+            >
+              {loading
+                ? mode === "forgot"
+                  ? "Sending link..."
+                  : mode === "login"
+                    ? "Signing in..."
+                    : "Creating account..."
+                : mode === "forgot"
+                  ? "Send Reset Link"
+                  : mode === "login"
+                    ? "Log in"
+                    : "Create Account"}
+            </button>
+          </form>
+        </div>
 
         {/* Back to sign in (forgot mode only) */}
         {mode === "forgot" && (
           <>
             <div className="my-6 flex items-center gap-3">
-              <div className="flex-1 h-px bg-border" />
-              <span className="text-text-muted text-xs">or</span>
-              <div className="flex-1 h-px bg-border" />
+              <div className="flex-1 h-px" style={{ backgroundColor: "#1e1e22" }} />
+              <span className="text-[#52525b] text-xs">or</span>
+              <div className="flex-1 h-px" style={{ backgroundColor: "#1e1e22" }} />
             </div>
-            <p className="text-center text-text-secondary text-sm">
+            <p className="text-center text-[#a1a1aa] text-sm">
               Remember your password?{" "}
               <button
                 onClick={() => { setMode("login"); setError(""); setSuccess(""); }}
-                className="text-accent hover:underline cursor-pointer font-medium"
+                className="text-[#7c3aed] hover:underline cursor-pointer font-medium"
               >
                 Sign in
               </button>
@@ -352,8 +388,8 @@ function LoginContent() {
         )}
 
         {/* Footer */}
-        <p className="mt-8 text-center text-text-muted text-xs">
-          By signing in, you agree to use SchoolPilot responsibly.
+        <p className="mt-6 text-center text-[#52525b] text-xs">
+          Free for all students
         </p>
       </div>
     </div>
@@ -368,8 +404,8 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-bg-dark">
-          <div className="text-text-secondary">Loading...</div>
+        <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "#09090b" }}>
+          <div className="text-[#a1a1aa]">Loading...</div>
         </div>
       }
     >

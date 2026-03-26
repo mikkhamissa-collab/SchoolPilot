@@ -1,7 +1,20 @@
 # main.py — FastAPI application entry point.
 import logging
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request as FastAPIRequest
+
+# ── Sentry error tracking (init early, before anything else) ──────────
+_SENTRY_DSN = os.getenv("SENTRY_DSN")
+if _SENTRY_DSN:
+    import sentry_sdk
+    sentry_sdk.init(
+        dsn=_SENTRY_DSN,
+        traces_sample_rate=0.2,
+        profiles_sample_rate=0.1,
+        environment=os.getenv("ENVIRONMENT", "production"),
+        release=os.getenv("RENDER_GIT_COMMIT", "unknown"),
+    )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware

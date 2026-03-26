@@ -323,7 +323,7 @@ export default function PlanPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-white">Weekly Plan</h2>
+          <h2 className="text-2xl font-bold text-text">Weekly Plan</h2>
           <p className="text-text-secondary text-sm mt-1">
             {weekDays[0].date.toLocaleDateString("en-US", {
               month: "short",
@@ -341,14 +341,14 @@ export default function PlanPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={generateAIPlan}
-            className="px-5 py-2.5 rounded-xl bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
+            className="px-5 py-2.5 rounded-xl bg-accent hover:opacity-85 text-text text-sm font-medium transition-colors"
           >
             Generate AI Plan
           </button>
           <button
             onClick={fetchAssignments}
             disabled={loading}
-            className="px-4 py-2.5 rounded-xl bg-bg-card border border-border text-text-secondary hover:text-white text-sm transition-colors disabled:opacity-50"
+            className="px-4 py-2.5 rounded-xl bg-surface border border-border text-text-secondary hover:text-text text-sm transition-colors disabled:opacity-50"
           >
             {loading ? "Syncing..." : "Refresh"}
           </button>
@@ -357,38 +357,38 @@ export default function PlanPage() {
 
       {/* Stats bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="p-4 rounded-xl bg-bg-card border border-border text-center">
-          <p className="text-2xl font-bold text-white">
+        <div className="p-4 rounded-xl bg-surface border border-border text-center">
+          <p className="text-2xl font-bold text-text">
             {assignmentsDueThisWeek.length}
           </p>
-          <p className="text-text-muted text-xs mt-1">Due This Week</p>
+          <p className="text-muted text-xs mt-1">Due This Week</p>
         </div>
-        <div className="p-4 rounded-xl bg-bg-card border border-border text-center">
-          <p className="text-2xl font-bold text-white">
+        <div className="p-4 rounded-xl bg-surface border border-border text-center">
+          <p className="text-2xl font-bold text-text">
             {assignmentsDueThisWeek.filter((a) => a.is_submitted).length}
           </p>
-          <p className="text-text-muted text-xs mt-1">Submitted</p>
+          <p className="text-muted text-xs mt-1">Submitted</p>
         </div>
-        <div className="p-4 rounded-xl bg-bg-card border border-border text-center">
-          <p className="text-2xl font-bold text-warning">{estimatedHours}h</p>
-          <p className="text-text-muted text-xs mt-1">Est. Study Time</p>
+        <div className="p-4 rounded-xl bg-surface border border-border text-center">
+          <p className="text-2xl font-bold text-amber">{estimatedHours}h</p>
+          <p className="text-muted text-xs mt-1">Est. Study Time</p>
         </div>
-        <div className="p-4 rounded-xl bg-bg-card border border-border text-center">
+        <div className="p-4 rounded-xl bg-surface border border-border text-center">
           <p className="text-2xl font-bold text-accent">{allCourses.length}</p>
-          <p className="text-text-muted text-xs mt-1">Classes</p>
+          <p className="text-muted text-xs mt-1">Classes</p>
         </div>
       </div>
 
       {/* Course filter */}
       {allCourses.length > 1 && (
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          <span className="text-text-muted text-xs shrink-0">Filter:</span>
+          <span className="text-muted text-xs shrink-0">Filter:</span>
           <button
             onClick={() => setCourseFilter("all")}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border whitespace-nowrap ${
               courseFilter === "all"
                 ? "bg-accent/20 text-accent border-accent/40"
-                : "bg-bg-card text-text-secondary hover:text-white border-border"
+                : "bg-surface text-text-secondary hover:text-text border-border"
             }`}
           >
             All Classes
@@ -400,7 +400,7 @@ export default function PlanPage() {
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border whitespace-nowrap ${
                 courseFilter === c
                   ? "bg-accent/20 text-accent border-accent/40"
-                  : "bg-bg-card text-text-secondary hover:text-white border-border"
+                  : "bg-surface text-text-secondary hover:text-text border-border"
               }`}
             >
               {c}
@@ -422,7 +422,7 @@ export default function PlanPage() {
           <span>Click on a day to move this task there</span>
           <button
             onClick={() => setMovingTask(null)}
-            className="text-xs px-3 py-1 rounded-lg bg-bg-card border border-border text-text-secondary hover:text-white"
+            className="text-xs px-3 py-1 rounded-lg bg-surface border border-border text-text-secondary hover:text-text"
           >
             Cancel
           </button>
@@ -433,7 +433,7 @@ export default function PlanPage() {
       {loading && assignments.length === 0 ? (
         <div className="text-center py-16">
           <div className="text-4xl mb-4 animate-pulse">...</div>
-          <p className="text-text-muted text-sm">Loading assignments...</p>
+          <p className="text-muted text-sm">Loading assignments...</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
@@ -452,8 +452,8 @@ export default function PlanPage() {
                 }}
                 className={`rounded-xl border overflow-hidden flex flex-col ${
                   day.isToday
-                    ? "border-accent/40 bg-bg-card"
-                    : "border-border bg-bg-card/50"
+                    ? "border-accent/40 bg-surface"
+                    : "border-border bg-surface/50"
                 } ${movingTask ? "cursor-pointer hover:border-accent/60" : ""}`}
               >
                 {/* Day header */}
@@ -468,14 +468,14 @@ export default function PlanPage() {
                     <div>
                       <span
                         className={`text-xs font-medium ${
-                          day.isToday ? "text-accent" : "text-text-muted"
+                          day.isToday ? "text-accent" : "text-muted"
                         }`}
                       >
                         {day.dayName}
                       </span>
                       <span
                         className={`ml-1.5 text-sm font-bold ${
-                          day.isToday ? "text-white" : "text-text-secondary"
+                          day.isToday ? "text-text" : "text-text-secondary"
                         }`}
                       >
                         {day.date.getDate()}
@@ -506,13 +506,13 @@ export default function PlanPage() {
                         <p
                           className={`font-medium leading-tight ${
                             a.is_submitted
-                              ? "line-through text-text-muted"
-                              : "text-white"
+                              ? "line-through text-muted"
+                              : "text-text"
                           }`}
                         >
                           {a.title}
                         </p>
-                        <p className="text-text-muted truncate">
+                        <p className="text-muted truncate">
                           {a.course_name}
                         </p>
                         <div className="flex items-center gap-1.5">
@@ -524,7 +524,7 @@ export default function PlanPage() {
                             </span>
                           )}
                           {a.assignment_type && (
-                            <span className="text-text-muted text-[10px]">
+                            <span className="text-muted text-[10px]">
                               {a.assignment_type}
                             </span>
                           )}
@@ -542,7 +542,7 @@ export default function PlanPage() {
                   {dayTasks.map((t) => (
                     <div
                       key={t.id}
-                      className="px-2.5 py-2 rounded-lg bg-bg-hover/50 text-xs group"
+                      className="px-2.5 py-2 rounded-lg bg-surface-hover/50 text-xs group"
                     >
                       <div className="flex items-start gap-2">
                         <button
@@ -552,7 +552,7 @@ export default function PlanPage() {
                           }}
                           className={`mt-0.5 w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
                             t.completed
-                              ? "bg-accent border-accent text-white"
+                              ? "bg-accent border-accent text-text"
                               : "border-border hover:border-accent"
                           }`}
                           aria-label={
@@ -576,14 +576,14 @@ export default function PlanPage() {
                           <p
                             className={`leading-tight ${
                               t.completed
-                                ? "line-through text-text-muted"
-                                : "text-white"
+                                ? "line-through text-muted"
+                                : "text-text"
                             }`}
                           >
                             {t.title}
                           </p>
                           {t.course && (
-                            <p className="text-text-muted text-[10px] mt-0.5">
+                            <p className="text-muted text-[10px] mt-0.5">
                               {t.course}
                             </p>
                           )}
@@ -594,7 +594,7 @@ export default function PlanPage() {
                               e.stopPropagation();
                               setMovingTask({ type: "task", id: t.id });
                             }}
-                            className="text-text-muted hover:text-accent text-[10px]"
+                            className="text-muted hover:text-accent text-[10px]"
                             title="Move to another day"
                           >
                             Move
@@ -604,7 +604,7 @@ export default function PlanPage() {
                               e.stopPropagation();
                               deleteTask(t.id);
                             }}
-                            className="text-text-muted hover:text-red-400 text-[10px]"
+                            className="text-muted hover:text-red-400 text-[10px]"
                             title="Delete task"
                           >
                             Del
@@ -616,7 +616,7 @@ export default function PlanPage() {
 
                   {/* Empty state */}
                   {isEmpty && (
-                    <p className="text-text-muted text-[10px] text-center py-3">
+                    <p className="text-muted text-[10px] text-center py-3">
                       Nothing planned
                     </p>
                   )}
@@ -639,12 +639,12 @@ export default function PlanPage() {
                             setNewTaskTitle("");
                           }
                         }}
-                        className="w-full px-2 py-1.5 rounded-lg bg-bg-dark border border-border text-white text-xs placeholder:text-text-muted focus:outline-none focus:border-accent"
+                        className="w-full px-2 py-1.5 rounded-lg bg-bg border border-border text-text text-xs placeholder:text-muted focus:outline-none focus:border-accent"
                       />
                       <select
                         value={newTaskCourse}
                         onChange={(e) => setNewTaskCourse(e.target.value)}
-                        className="w-full px-2 py-1.5 rounded-lg bg-bg-dark border border-border text-text-secondary text-xs focus:outline-none focus:border-accent"
+                        className="w-full px-2 py-1.5 rounded-lg bg-bg border border-border text-text-secondary text-xs focus:outline-none focus:border-accent"
                       >
                         <option value="">No class</option>
                         {allCourses.map((c) => (
@@ -657,7 +657,7 @@ export default function PlanPage() {
                         <button
                           onClick={() => addTask(day.key)}
                           disabled={!newTaskTitle.trim()}
-                          className="flex-1 py-1 rounded-lg bg-accent text-white text-xs font-medium disabled:opacity-40"
+                          className="flex-1 py-1 rounded-lg bg-accent text-text text-xs font-medium disabled:opacity-40"
                         >
                           Add
                         </button>
@@ -667,7 +667,7 @@ export default function PlanPage() {
                             setNewTaskTitle("");
                             setNewTaskCourse("");
                           }}
-                          className="px-2 py-1 rounded-lg bg-bg-hover text-text-muted text-xs"
+                          className="px-2 py-1 rounded-lg bg-surface-hover text-muted text-xs"
                         >
                           Cancel
                         </button>
@@ -679,7 +679,7 @@ export default function PlanPage() {
                         e.stopPropagation();
                         setAddingToDay(day.key);
                       }}
-                      className="w-full py-1.5 rounded-lg text-text-muted hover:text-accent text-[10px] hover:bg-bg-hover/50 transition-colors"
+                      className="w-full py-1.5 rounded-lg text-muted hover:text-accent text-[10px] hover:bg-surface-hover/50 transition-colors"
                     >
                       + Add task
                     </button>
@@ -704,24 +704,24 @@ export default function PlanPage() {
         if (unscheduled.length === 0) return null;
 
         return (
-          <div className="p-5 rounded-xl bg-bg-card border border-border">
-            <h3 className="text-white font-medium text-sm mb-3">
+          <div className="p-5 rounded-xl bg-surface border border-border">
+            <h3 className="text-text font-medium text-sm mb-3">
               Other Assignments
             </h3>
-            <p className="text-text-muted text-xs mb-3">
+            <p className="text-muted text-xs mb-3">
               Due outside this week or no due date set
             </p>
             <div className="space-y-2 max-h-48 overflow-y-auto">
               {unscheduled.map((a) => (
                 <div
                   key={a.id}
-                  className="flex items-center justify-between px-3 py-2 rounded-lg bg-bg-dark/50"
+                  className="flex items-center justify-between px-3 py-2 rounded-lg bg-bg/50"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="text-white text-sm truncate">{a.title}</p>
-                    <p className="text-text-muted text-xs">{a.course_name}</p>
+                    <p className="text-text text-sm truncate">{a.title}</p>
+                    <p className="text-muted text-xs">{a.course_name}</p>
                   </div>
-                  <span className="text-text-muted text-xs ml-3 shrink-0">
+                  <span className="text-muted text-xs ml-3 shrink-0">
                     {a.due_date
                       ? new Date(a.due_date).toLocaleDateString("en-US", {
                           month: "short",
@@ -749,12 +749,12 @@ export default function PlanPage() {
               })
             );
           }}
-          className="p-4 rounded-xl bg-bg-card border border-border text-left hover:border-accent/40 transition-colors group"
+          className="p-4 rounded-xl bg-surface border border-border text-left hover:border-accent/40 transition-colors group"
         >
-          <p className="text-white text-sm font-medium group-hover:text-accent transition-colors">
+          <p className="text-text text-sm font-medium group-hover:text-accent transition-colors">
             What should I prioritize today?
           </p>
-          <p className="text-text-muted text-xs mt-1">
+          <p className="text-muted text-xs mt-1">
             Ask AI to analyze your workload and suggest priorities
           </p>
         </button>
@@ -769,12 +769,12 @@ export default function PlanPage() {
               })
             );
           }}
-          className="p-4 rounded-xl bg-bg-card border border-border text-left hover:border-accent/40 transition-colors group"
+          className="p-4 rounded-xl bg-surface border border-border text-left hover:border-accent/40 transition-colors group"
         >
-          <p className="text-white text-sm font-medium group-hover:text-accent transition-colors">
+          <p className="text-text text-sm font-medium group-hover:text-accent transition-colors">
             Break down a big assignment
           </p>
-          <p className="text-text-muted text-xs mt-1">
+          <p className="text-muted text-xs mt-1">
             Get step-by-step tasks you can schedule into your week
           </p>
         </button>

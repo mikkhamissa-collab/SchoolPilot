@@ -1,18 +1,32 @@
-// Left sidebar navigation — collapsed icon rail on desktop (w-14), full drawer on mobile
+// Left sidebar navigation — collapsed icon rail on desktop (w-14)
 "use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase-client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ComponentType } from "react";
+import {
+  SunIcon,
+  ChartIcon,
+  BookIcon,
+  ClockIcon,
+  UsersIcon,
+  GearIcon,
+  ChatIcon,
+  LogOutIcon,
+} from "@/components/icons";
 
-const navItems = [
-  { href: "/today", label: "Today", icon: "🏠" },
-  { href: "/grades", label: "Grades", icon: "📊" },
-  { href: "/study", label: "Study", icon: "📖" },
-  { href: "/focus", label: "Focus", icon: "🕐" },
-  { href: "/buddy", label: "Buddy", icon: "👥" },
-  { href: "/settings", label: "Settings", icon: "⚙️" },
+const navItems: {
+  href: string;
+  label: string;
+  Icon: ComponentType<{ className?: string }>;
+}[] = [
+  { href: "/today", label: "Today", Icon: SunIcon },
+  { href: "/grades", label: "Grades", Icon: ChartIcon },
+  { href: "/study", label: "Study", Icon: BookIcon },
+  { href: "/focus", label: "Focus", Icon: ClockIcon },
+  { href: "/buddy", label: "Buddy", Icon: UsersIcon },
+  { href: "/settings", label: "Settings", Icon: GearIcon },
 ];
 
 export default function Sidebar() {
@@ -62,12 +76,16 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="hidden md:flex flex-col w-14 h-screen bg-bg-card border-r border-border fixed left-0 top-0 z-40">
-      {/* Logo */}
+    <aside className="hidden md:flex flex-col w-14 h-screen bg-surface border-r border-border fixed left-0 top-0 z-40">
+      {/* Logo — gradient square */}
       <div className="flex items-center justify-center py-4 border-b border-border">
-        <span className="text-lg font-bold text-white" title="SchoolPilot">
-          S
-        </span>
+        <div
+          className="w-[22px] h-[22px] rounded-[6px]"
+          style={{
+            background: "linear-gradient(135deg, #7c3aed, #a78bfa)",
+          }}
+          title="SchoolPilot"
+        />
       </div>
 
       {/* Nav — icon-only rail */}
@@ -81,13 +99,13 @@ export default function Sidebar() {
               title={item.label}
               aria-label={item.label}
               aria-current={active ? "page" : undefined}
-              className={`flex items-center justify-center w-10 h-10 rounded-lg text-base transition-colors ${
+              className={`flex items-center justify-center w-10 h-10 rounded-lg transition-colors ${
                 active
-                  ? "bg-accent/15 text-accent"
-                  : "text-text-secondary hover:text-white hover:bg-bg-hover"
+                  ? "bg-accent-glow text-accent"
+                  : "text-muted hover:text-text hover:bg-surface-hover"
               }`}
             >
-              <span aria-hidden="true">{item.icon}</span>
+              <item.Icon className="w-5 h-5" />
             </Link>
           );
         })}
@@ -97,9 +115,9 @@ export default function Sidebar() {
           onClick={handleChatToggle}
           title="Toggle Chat"
           aria-label="Toggle chat sidebar"
-          className="flex items-center justify-center w-10 h-10 rounded-lg text-base text-text-secondary hover:text-white hover:bg-bg-hover transition-colors cursor-pointer"
+          className="flex items-center justify-center w-10 h-10 rounded-lg text-muted hover:text-text hover:bg-surface-hover transition-colors cursor-pointer"
         >
-          <span aria-hidden="true">💬</span>
+          <ChatIcon className="w-5 h-5" />
         </button>
       </nav>
 
@@ -114,7 +132,7 @@ export default function Sidebar() {
           />
         ) : (
           <div
-            className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-accent text-sm font-semibold"
+            className="w-8 h-8 rounded-full bg-surface flex items-center justify-center text-muted text-sm font-semibold"
             title={user?.name || "User"}
           >
             {user?.name?.[0]?.toUpperCase() || "?"}
@@ -123,23 +141,9 @@ export default function Sidebar() {
         <button
           onClick={handleSignOut}
           title="Sign out"
-          className="text-xs text-text-muted hover:text-error transition-colors cursor-pointer"
+          className="text-muted hover:text-red transition-colors cursor-pointer"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" y1="12" x2="9" y2="12" />
-          </svg>
+          <LogOutIcon className="w-4 h-4" />
         </button>
       </div>
     </aside>

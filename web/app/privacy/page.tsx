@@ -7,14 +7,14 @@ export const metadata = {
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-bg-dark">
+    <div className="min-h-screen bg-bg">
       <nav className="flex items-center justify-between px-6 py-4 max-w-3xl mx-auto">
         <Link href="/" className="text-xl font-bold text-white">
           SchoolPilot
         </Link>
         <Link
           href="/auth/login"
-          className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
+          className="px-4 py-2 rounded-lg bg-text text-bg hover:opacity-85 text-sm font-medium transition-colors"
         >
           Sign In
         </Link>
@@ -22,7 +22,7 @@ export default function PrivacyPage() {
 
       <main className="px-6 py-12 max-w-3xl mx-auto">
         <h1 className="text-3xl font-bold text-white mb-8">Privacy Policy</h1>
-        <p className="text-text-muted text-sm mb-8">Last updated: March 9, 2026</p>
+        <p className="text-muted text-sm mb-8">Last updated: March 9, 2026</p>
 
         <div className="space-y-8 text-text-secondary text-sm leading-relaxed">
           <section>
@@ -97,7 +97,7 @@ export default function PrivacyPage() {
       </main>
 
       <footer className="border-t border-border px-6 py-6 mt-12">
-        <div className="max-w-3xl mx-auto flex items-center justify-between text-text-muted text-sm">
+        <div className="max-w-3xl mx-auto flex items-center justify-between text-muted text-sm">
           <span>SchoolPilot</span>
           <Link href="/" className="hover:text-white transition-colors">Home</Link>
         </div>

@@ -76,11 +76,13 @@ export default function WeeklyRecapModal({
       <div
         ref={dialogRef}
         tabIndex={-1}
-        className="w-full max-w-sm bg-bg-card border border-border rounded-2xl p-6 space-y-5 outline-none"
+        className="w-full max-w-sm bg-surface border border-border rounded-2xl p-6 space-y-5 outline-none"
       >
         <div className="text-center">
-          <div className="text-3xl mb-2">📊</div>
-          <h3 className="text-lg font-bold text-white">
+          <div className="text-3xl mb-2">
+            <svg className="w-8 h-8 mx-auto text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+          </div>
+          <h3 className="text-lg font-bold text-text">
             Your Week: {data.weekLabel}
           </h3>
         </div>
@@ -88,32 +90,32 @@ export default function WeeklyRecapModal({
         {/* Stats row */}
         <div className="flex justify-around text-center">
           <div>
-            <div className="text-2xl font-bold text-white">
+            <div className="text-2xl font-bold text-text">
               {data.tasksCompleted}
             </div>
-            <div className="text-text-muted text-xs">Tasks done</div>
+            <div className="text-muted text-xs">Tasks done</div>
           </div>
           <div>
-            <div className="text-2xl font-bold text-warning">
-              🔥 {data.streakDays}
+            <div className="text-2xl font-bold text-amber">
+              {data.streakDays}
             </div>
-            <div className="text-text-muted text-xs">Streak</div>
+            <div className="text-muted text-xs">Streak</div>
           </div>
           <div>
             <div className="text-2xl font-bold text-accent">
               {data.gradesLogged}
             </div>
-            <div className="text-text-muted text-xs">Grades logged</div>
+            <div className="text-muted text-xs">Grades logged</div>
           </div>
         </div>
 
         {/* Win */}
         {data.win && (
-          <div className="p-3 rounded-xl bg-success/10 border border-success/20">
-            <div className="text-success text-xs font-bold uppercase tracking-wide mb-1">
+          <div className="p-3 rounded-xl bg-green/10 border border-success/20">
+            <div className="text-green text-xs font-bold uppercase tracking-wide mb-1">
               This Week&apos;s Win
             </div>
-            <div className="text-white text-sm">{data.win}</div>
+            <div className="text-text text-sm">{data.win}</div>
           </div>
         )}
 
@@ -123,14 +125,14 @@ export default function WeeklyRecapModal({
             <div className="text-accent text-xs font-bold uppercase tracking-wide mb-1">
               Insight
             </div>
-            <div className="text-white text-sm">{data.insight}</div>
+            <div className="text-text text-sm">{data.insight}</div>
           </div>
         )}
 
         {/* Preview */}
         {data.preview && (
-          <div className="p-3 rounded-xl bg-bg-dark">
-            <div className="text-text-muted text-xs font-bold uppercase tracking-wide mb-1">
+          <div className="p-3 rounded-xl bg-bg">
+            <div className="text-muted text-xs font-bold uppercase tracking-wide mb-1">
               Next Week
             </div>
             <div className="text-text-secondary text-sm">{data.preview}</div>
@@ -147,7 +149,7 @@ export default function WeeklyRecapModal({
           </button>
           <button
             onClick={onDismiss}
-            className="flex-1 py-3 rounded-xl bg-bg-hover text-text-secondary font-medium text-sm hover:text-white transition-colors cursor-pointer"
+            className="flex-1 py-3 rounded-xl bg-surface-hover text-text-secondary font-medium text-sm hover:text-text transition-colors cursor-pointer"
           >
             Dismiss
           </button>

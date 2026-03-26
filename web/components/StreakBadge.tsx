@@ -1,5 +1,7 @@
 "use client";
 
+import { FlameIcon } from "@/components/icons";
+
 interface StreakBadgeProps {
   streak: number;
   freezeAvailable: boolean;
@@ -15,22 +17,22 @@ export default function StreakBadge({
 
   if (compact) {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-warning/10 text-warning text-xs font-medium">
-        <span>🔥</span> {streak}
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber/10 text-amber text-xs font-medium">
+        <FlameIcon className="w-3 h-3" /> {streak}
       </span>
     );
   }
 
   return (
-    <div className="p-4 rounded-xl bg-bg-card border border-border">
+    <div className="p-4 rounded-xl bg-surface border border-border">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="text-2xl">🔥</span>
+          <FlameIcon className="w-5 h-5 text-amber" />
           <div>
-            <div className="text-white font-bold text-lg">
+            <div className="text-text font-bold text-lg">
               {streak} day{streak !== 1 ? "s" : ""}
             </div>
-            <div className="text-text-muted text-xs">
+            <div className="text-muted text-xs">
               {streak === 0
                 ? "Complete your focus task to start a streak"
                 : "Complete today's focus to keep it alive"}
@@ -39,10 +41,10 @@ export default function StreakBadge({
         </div>
         {freezeAvailable && streak > 0 && (
           <span
-            className="text-xs px-2 py-1 rounded-lg bg-blue-500/10 text-blue-400"
+            className="text-xs px-2 py-1 rounded-lg bg-accent/10 text-accent-light"
             title="Miss a day and your streak is protected"
           >
-            ❄️ 1 freeze
+            1 freeze
           </span>
         )}
       </div>

@@ -75,14 +75,14 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const FETCH_TIMEOUT = 10_000;
 
 const MARZANO_LABELS: Record<number, { label: string; color: string }> = {
-  4: { label: "Exceeding", color: "text-success" },
+  4: { label: "Exceeding", color: "text-green" },
   3.5: { label: "Mastering", color: "text-accent" },
   3: { label: "Meeting", color: "text-accent" },
-  2.5: { label: "Approaching", color: "text-warning" },
-  2: { label: "Developing", color: "text-warning" },
-  1.5: { label: "Beginning", color: "text-error" },
-  1: { label: "Beginning", color: "text-error" },
-  0: { label: "Not Yet", color: "text-error" },
+  2.5: { label: "Approaching", color: "text-amber" },
+  2: { label: "Developing", color: "text-amber" },
+  1.5: { label: "Beginning", color: "text-red" },
+  1: { label: "Beginning", color: "text-red" },
+  0: { label: "Not Yet", color: "text-red" },
 };
 
 // ---------------------------------------------------------------------------
@@ -93,7 +93,7 @@ function getMarzanoLabel(score: number): { label: string; color: string } {
   const rounded = Math.round(score * 2) / 2;
   return (
     MARZANO_LABELS[rounded] ||
-    MARZANO_LABELS[Math.floor(score)] || { label: "", color: "text-text-muted" }
+    MARZANO_LABELS[Math.floor(score)] || { label: "", color: "text-muted" }
   );
 }
 
@@ -155,20 +155,20 @@ function letterGrade(pct: number): string {
 }
 
 function gradeColor(pct: number): string {
-  if (pct >= 90) return "text-success";
-  if (pct >= 80) return "text-accent";
-  if (pct >= 70) return "text-warning";
-  return "text-error";
+  if (pct >= 90) return "text-green";
+  if (pct >= 80) return "text-text";
+  return "text-amber";
 }
 
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function Skeleton({ className }: { className?: string }) {
+function SkeletonPulse({ className }: { className?: string }) {
   return (
     <div
-      className={`bg-bg-card rounded-lg animate-pulse ${className || ""}`}
+      className={`bg-surface rounded-lg ${className || ""}`}
+      style={{ animation: "skeletonPulse 1.5s ease-in-out infinite" }}
     />
   );
 }
@@ -185,18 +185,21 @@ function ToastContainer({
       {toasts.map((t) => (
         <div
           key={t.id}
-          className={`px-4 py-3 rounded-lg text-sm font-medium shadow-lg flex items-center justify-between gap-3 animate-slide-up ${
+          className={`px-4 py-3 rounded-lg text-sm font-medium shadow-lg flex items-center justify-between gap-3 ${
             t.type === "success"
-              ? "bg-success/15 text-success border border-success/30"
-              : "bg-error/15 text-error border border-error/30"
+              ? "bg-green/15 text-green border border-green/30"
+              : "bg-red/15 text-red border border-red/30"
           }`}
+          style={{ animation: "fadeUp 0.2s ease-out" }}
         >
           <span>{t.message}</span>
           <button
             onClick={() => onDismiss(t.id)}
             className="opacity-60 hover:opacity-100 cursor-pointer shrink-0"
           >
-            x
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
       ))}
@@ -216,14 +219,14 @@ function TrendArrow({
   if (Math.abs(diff) < 0.1) return null;
   if (diff > 0) {
     return (
-      <span className="text-success text-xs ml-1" title={`+${diff.toFixed(1)}%`}>
-        ▲ +{diff.toFixed(1)}
+      <span className="text-green text-xs ml-1 font-mono" title={`+${diff.toFixed(1)}%`}>
+        +{diff.toFixed(1)}
       </span>
     );
   }
   return (
-    <span className="text-error text-xs ml-1" title={`${diff.toFixed(1)}%`}>
-      ▼ {diff.toFixed(1)}
+    <span className="text-red text-xs ml-1 font-mono" title={`${diff.toFixed(1)}%`}>
+      {diff.toFixed(1)}
     </span>
   );
 }
@@ -244,19 +247,19 @@ function ConfirmModal({
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-bg-card border border-border rounded-2xl p-6 max-w-sm mx-4 shadow-2xl">
-        <h3 className="text-lg font-semibold text-white mb-2">{title}</h3>
+      <div className="bg-surface border border-border rounded-2xl p-6 max-w-sm mx-4 shadow-2xl">
+        <h3 className="text-lg font-semibold text-text mb-2">{title}</h3>
         <p className="text-text-secondary text-sm mb-6">{message}</p>
         <div className="flex gap-3 justify-end">
           <button
             onClick={onCancel}
-            className="px-4 py-2 rounded-lg bg-bg-dark text-text-secondary hover:text-white text-sm transition-colors cursor-pointer"
+            className="px-4 py-2 rounded-lg bg-bg text-text-secondary hover:text-text text-sm transition-colors cursor-pointer"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
-            className="px-4 py-2 rounded-lg bg-error hover:bg-error/80 text-white text-sm font-medium transition-colors cursor-pointer"
+            className="px-4 py-2 rounded-lg bg-red hover:bg-red/80 text-white text-sm font-medium transition-colors cursor-pointer"
           >
             Delete
           </button>
@@ -331,12 +334,12 @@ function LogGradeModal({
   };
 
   const inputClass =
-    "px-3 py-2 rounded-lg bg-bg-dark border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent text-sm w-full";
+    "px-3 py-2 rounded-lg bg-bg border border-border text-text placeholder:text-muted focus:outline-none focus:border-accent text-sm w-full";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-bg-card border border-border rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4">
-        <h3 className="text-lg font-semibold text-white">Log a Grade</h3>
+      <div className="bg-surface border border-border rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4">
+        <h3 className="text-lg font-semibold text-text">Log a Grade</h3>
 
         <div>
           <label className="text-text-secondary text-xs mb-1 block">
@@ -415,13 +418,13 @@ function LogGradeModal({
         </div>
 
         {validationError && (
-          <p className="text-error text-xs">{validationError}</p>
+          <p className="text-red text-xs">{validationError}</p>
         )}
 
         <div className="flex gap-3 justify-end pt-2">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-lg bg-bg-dark border border-border text-text-secondary text-sm cursor-pointer hover:text-white transition-colors"
+            className="px-4 py-2 rounded-lg bg-bg border border-border text-text-secondary text-sm cursor-pointer hover:text-text transition-colors"
           >
             Cancel
           </button>
@@ -818,11 +821,11 @@ export default function GradesPage() {
   // -----------------------------------------------------------------------
 
   const inputClass =
-    "px-3 py-2 rounded-lg bg-bg-dark border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent text-sm";
+    "px-3 py-2 rounded-lg bg-bg border border-border text-text placeholder:text-muted focus:outline-none focus:border-accent text-sm";
   const btnClass =
     "px-4 py-2 rounded-lg bg-accent hover:bg-accent/80 text-white text-sm font-medium transition-colors cursor-pointer";
   const btnSecondary =
-    "px-4 py-2 rounded-lg bg-bg-dark border border-border text-text-secondary text-sm cursor-pointer hover:text-white transition-colors";
+    "px-4 py-2 rounded-lg bg-bg border border-border text-text-secondary text-sm cursor-pointer hover:text-text transition-colors";
 
   // -----------------------------------------------------------------------
   // Loading skeleton
@@ -831,19 +834,19 @@ export default function GradesPage() {
   if (loading) {
     return (
       <div className="max-w-3xl mx-auto px-4 space-y-6 py-6">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-5 w-72" />
+        <SkeletonPulse className="h-8 w-48" />
+        <SkeletonPulse className="h-5 w-72" />
         <div className="flex gap-2 flex-wrap">
           {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-10 w-28" />
+            <SkeletonPulse key={i} className="h-10 w-28" />
           ))}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-32 rounded-xl" />
+        {/* Skeleton rows for course list */}
+        <div className="space-y-2">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <SkeletonPulse key={i} className="h-14 rounded-xl" />
           ))}
         </div>
-        <Skeleton className="h-48 rounded-xl" />
       </div>
     );
   }
@@ -861,7 +864,7 @@ export default function GradesPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-white">Grade Tracker</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-text">Grade Tracker</h2>
           <p className="text-text-secondary text-sm mt-1">
             Know exactly where you stand. No surprises.
           </p>
@@ -887,13 +890,13 @@ export default function GradesPage() {
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
                   activeCourse?.id === c.id
                     ? "bg-accent text-white"
-                    : "bg-bg-card border border-border text-text-secondary hover:text-white"
+                    : "bg-surface border border-border text-text-secondary hover:text-text"
                 }`}
               >
                 {c.name}
                 {cls?.grade_percentage != null && (
                   <>
-                    <span className="opacity-60">
+                    <span className="opacity-60 font-mono">
                       {cls.grade_percentage.toFixed(0)}%
                     </span>
                     <TrendArrow
@@ -906,9 +909,11 @@ export default function GradesPage() {
               <button
                 onClick={() => handleDeleteCourse(c.id, c.name)}
                 aria-label={`Delete ${c.name}`}
-                className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-error text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
               >
-                x
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
           );
@@ -922,13 +927,13 @@ export default function GradesPage() {
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
               activeClass?.course_name === cls.course_name
                 ? "bg-accent/60 text-white"
-                : "bg-bg-card border border-border text-text-secondary hover:text-white border-dashed"
+                : "bg-surface border border-border text-text-secondary hover:text-text border-dashed"
             }`}
           >
             {cls.course_name}
             {cls.grade_percentage != null && (
               <>
-                <span className="opacity-60">
+                <span className="opacity-60 font-mono">
                   {cls.grade_percentage.toFixed(0)}%
                 </span>
                 <TrendArrow
@@ -942,7 +947,7 @@ export default function GradesPage() {
 
         <button
           onClick={() => setShowAddCourse(!showAddCourse)}
-          className="px-4 py-2 rounded-lg text-sm font-medium bg-bg-card border border-dashed border-border text-text-muted hover:text-accent hover:border-accent/30 transition-colors cursor-pointer"
+          className="px-4 py-2 rounded-lg text-sm font-medium bg-surface border border-dashed border-border text-muted hover:text-accent hover:border-accent/30 transition-colors cursor-pointer"
         >
           + Add Course
         </button>
@@ -966,7 +971,7 @@ export default function GradesPage() {
 
       {/* ---- Empty state ---- */}
       {hasNoCourses && !showAddCourse && (
-        <div className="p-8 rounded-xl bg-bg-card border border-border text-center">
+        <div className="p-8 rounded-xl bg-surface border border-border text-center">
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-accent/10 flex items-center justify-center">
             <svg
               className="w-8 h-8 text-accent"
@@ -982,10 +987,10 @@ export default function GradesPage() {
               />
             </svg>
           </div>
-          <h3 className="text-white font-semibold text-lg mb-2">
+          <h3 className="text-text font-semibold text-lg mb-2">
             No courses yet
           </h3>
-          <p className="text-text-muted text-sm mb-4 max-w-xs mx-auto">
+          <p className="text-muted text-sm mb-4 max-w-xs mx-auto">
             Add your courses to start tracking grades, or sync your LMS to
             import them automatically.
           </p>
@@ -1000,8 +1005,8 @@ export default function GradesPage() {
 
       {/* ---- Add course form ---- */}
       {showAddCourse && (
-        <div className="p-5 rounded-xl bg-bg-card border border-border space-y-4">
-          <h3 className="text-white font-semibold">New Course</h3>
+        <div className="p-5 rounded-xl bg-surface border border-border space-y-4">
+          <h3 className="text-text font-semibold">New Course</h3>
           <input
             type="text"
             placeholder="Course name (e.g. AP Chemistry)"
@@ -1037,7 +1042,7 @@ export default function GradesPage() {
                     }}
                     className={`w-20 ${inputClass}`}
                   />
-                  <span className="text-text-muted text-sm">%</span>
+                  <span className="text-muted text-sm">%</span>
                 </div>
                 {newCategories.length > 1 && (
                   <button
@@ -1047,9 +1052,11 @@ export default function GradesPage() {
                       )
                     }
                     aria-label="Remove category"
-                    className="text-text-muted hover:text-error text-lg cursor-pointer"
+                    className="text-muted hover:text-red text-lg cursor-pointer"
                   >
-                    x
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
                   </button>
                 )}
               </div>
@@ -1083,13 +1090,14 @@ export default function GradesPage() {
       {/* ---- Course Overview Grid (all classes at a glance) ---- */}
       {classContexts.length > 0 && !activeCourse && !activeClass && (
         <div>
-          <h3 className="text-sm font-semibold text-text-secondary mb-3">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted mb-3">
             All Classes
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-1">
             {classContexts.map((cls) => {
               const pct = cls.grade_percentage;
               const letter = cls.grade_letter || (pct != null ? letterGrade(pct) : null);
+              const isAtRisk = pct != null && pct < 80;
               return (
                 <button
                   key={cls.course_name}
@@ -1102,53 +1110,36 @@ export default function GradesPage() {
                     if (matched) loadCourse(matched);
                     else selectClass(cls);
                   }}
-                  className="p-4 rounded-xl bg-bg-card border border-border text-left hover:border-accent/40 transition-colors cursor-pointer"
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-surface border border-border text-left hover:border-border-light transition-colors cursor-pointer group"
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-white font-medium text-sm truncate mr-2">
-                      {cls.course_name}
+                  <span className="text-text font-medium text-sm truncate flex-1">
+                    {cls.course_name}
+                  </span>
+                  {isAtRisk && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-amber/15 text-amber">
+                      At Risk
                     </span>
-                    {letter && (
-                      <span
-                        className={`text-lg font-bold ${
-                          pct != null ? gradeColor(pct) : "text-text-muted"
-                        }`}
-                      >
-                        {letter}
-                      </span>
-                    )}
-                  </div>
+                  )}
+                  <TrendArrow
+                    current={pct}
+                    previous={cls.previous_grade_percentage}
+                  />
                   {pct != null ? (
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 h-2 rounded-full bg-bg-dark overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${
-                            pct >= 90
-                              ? "bg-success"
-                              : pct >= 80
-                              ? "bg-accent"
-                              : pct >= 70
-                              ? "bg-warning"
-                              : "bg-error"
-                          }`}
-                          style={{ width: `${Math.min(pct, 100)}%` }}
-                        />
-                      </div>
-                      <span className="text-text-secondary text-xs font-medium w-12 text-right">
-                        {pct.toFixed(1)}%
-                      </span>
-                      <TrendArrow
-                        current={pct}
-                        previous={cls.previous_grade_percentage}
-                      />
-                    </div>
+                    <span className={`font-mono text-sm font-medium tabular-nums ${gradeColor(pct)}`}>
+                      {pct.toFixed(1)}%
+                    </span>
                   ) : (
-                    <p className="text-text-muted text-xs">No grade data yet</p>
+                    <span className="text-muted text-sm">--</span>
+                  )}
+                  {letter && (
+                    <span className="text-dim text-sm font-medium w-6 text-right">
+                      {letter}
+                    </span>
                   )}
                   {cls.teacher_name && (
-                    <p className="text-text-muted text-xs mt-2">
+                    <span className="text-dim text-xs hidden sm:inline truncate max-w-[120px]">
                       {cls.teacher_name}
-                    </p>
+                    </span>
                   )}
                 </button>
               );
@@ -1160,9 +1151,9 @@ export default function GradesPage() {
       {/* ---- LMS-only class detail (no local course) ---- */}
       {activeClass && !activeCourse && (
         <div className="space-y-4">
-          <div className="p-5 rounded-xl bg-bg-card border border-border">
+          <div className="p-5 rounded-xl bg-surface border border-border">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-white font-semibold text-lg">
+              <h3 className="text-text font-semibold text-lg">
                 {activeClass.course_name}
               </h3>
               {activeClass.grade_letter && (
@@ -1170,7 +1161,7 @@ export default function GradesPage() {
                   className={`text-2xl font-bold ${
                     activeClass.grade_percentage != null
                       ? gradeColor(activeClass.grade_percentage)
-                      : "text-text-muted"
+                      : "text-muted"
                   }`}
                 >
                   {activeClass.grade_letter}
@@ -1179,7 +1170,7 @@ export default function GradesPage() {
             </div>
             {activeClass.grade_percentage != null ? (
               <div className="flex items-baseline gap-3">
-                <span className="text-4xl font-bold text-white">
+                <span className="text-4xl font-bold font-mono text-text">
                   {activeClass.grade_percentage.toFixed(1)}%
                 </span>
                 <TrendArrow
@@ -1188,19 +1179,19 @@ export default function GradesPage() {
                 />
               </div>
             ) : (
-              <p className="text-text-muted text-sm">
+              <p className="text-muted text-sm">
                 No grade percentage synced yet. Trigger an LMS sync to import
                 grades.
               </p>
             )}
             {activeClass.teacher_name && (
-              <p className="text-text-muted text-sm mt-2">
+              <p className="text-muted text-sm mt-2">
                 Teacher: {activeClass.teacher_name}
               </p>
             )}
           </div>
 
-          <div className="p-5 rounded-xl bg-bg-card border border-border text-center">
+          <div className="p-5 rounded-xl bg-surface border border-border text-center">
             <p className="text-text-secondary text-sm mb-3">
               This class was imported from your LMS. Add it as a local course
               to log grades and use calculators.
@@ -1224,16 +1215,16 @@ export default function GradesPage() {
         <>
           {/* Grade summary card */}
           {calcLoading ? (
-            <Skeleton className="h-32 rounded-xl" />
+            <SkeletonPulse className="h-32 rounded-xl" />
           ) : gradeResult ? (
-            <div className="p-5 rounded-xl bg-bg-card border border-border">
+            <div className="p-5 rounded-xl bg-surface border border-border">
               {activeCourse.policies?.marzano ? (
                 <>
                   <div className="flex items-baseline gap-3 mb-2">
-                    <span className="text-4xl font-bold text-white">
+                    <span className="text-4xl font-bold font-mono text-text">
                       {(gradeResult.overall / 25).toFixed(1)}
                     </span>
-                    <span className="text-lg text-text-muted">/ 4.0</span>
+                    <span className="text-lg text-muted">/ 4.0</span>
                   </div>
                   <div
                     className={`text-lg font-semibold mb-4 ${
@@ -1254,12 +1245,12 @@ export default function GradesPage() {
                           >
                             <span className="text-text-secondary">
                               {name}{" "}
-                              <span className="text-text-muted">
+                              <span className="text-muted">
                                 ({(data.weight * 100).toFixed(0)}%)
                               </span>
                             </span>
                             <div className="text-right">
-                              <span className="text-white font-medium">
+                              <span className="text-text font-medium font-mono">
                                 {marzanoScore.toFixed(1)}
                               </span>
                               <span
@@ -1277,7 +1268,7 @@ export default function GradesPage() {
               ) : (
                 <>
                   <div className="flex items-baseline gap-3 mb-1">
-                    <span className="text-4xl font-bold text-white">
+                    <span className="text-4xl font-bold font-mono text-text">
                       {gradeResult.overall.toFixed(1)}%
                     </span>
                     <span
@@ -1313,13 +1304,13 @@ export default function GradesPage() {
                         >
                           <span className="text-text-secondary">
                             {name}{" "}
-                            <span className="text-text-muted">
+                            <span className="text-muted">
                               ({(data.weight * 100).toFixed(0)}%)
                             </span>
                           </span>
-                          <span className="text-white font-medium">
+                          <span className="text-text font-medium font-mono">
                             {data.average.toFixed(1)}%
-                            <span className="text-text-muted ml-1">
+                            <span className="text-muted ml-1">
                               ({data.assignments})
                             </span>
                           </span>
@@ -1331,7 +1322,7 @@ export default function GradesPage() {
               )}
             </div>
           ) : (
-            <div className="p-6 rounded-xl bg-bg-card border border-border text-center">
+            <div className="p-6 rounded-xl bg-surface border border-border text-center">
               <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-accent/10 flex items-center justify-center">
                 <svg
                   className="w-6 h-6 text-accent"
@@ -1347,10 +1338,10 @@ export default function GradesPage() {
                   />
                 </svg>
               </div>
-              <p className="text-white font-medium mb-1">
+              <p className="text-text font-medium mb-1">
                 No grades logged yet
               </p>
-              <p className="text-text-muted text-sm">
+              <p className="text-muted text-sm">
                 Use the &ldquo;Log Grade&rdquo; button to add your first grade
                 for {activeCourse.name}.
               </p>
@@ -1359,16 +1350,16 @@ export default function GradesPage() {
 
           {/* ---- What Do I Need? (Required Score) ---- */}
           {activeCourse.categories.length > 0 && grades.length > 0 && (
-            <div className="p-5 rounded-xl bg-bg-card border border-border space-y-3">
-              <h3 className="text-sm font-semibold text-white">
+            <div className="p-5 rounded-xl bg-surface border border-border space-y-3">
+              <h3 className="text-sm font-semibold text-text">
                 What Do I Need?
               </h3>
-              <p className="text-text-muted text-xs">
+              <p className="text-muted text-xs">
                 Find out what score you need on your next assignment to hit
                 your target grade.
               </p>
               <div className="flex gap-3 items-center flex-wrap">
-                <span className="text-text-muted text-sm">I want</span>
+                <span className="text-muted text-sm">I want</span>
                 <input
                   type="number"
                   value={reqTarget}
@@ -1376,7 +1367,7 @@ export default function GradesPage() {
                   aria-label="Target grade percentage"
                   className={`w-20 ${inputClass}`}
                 />
-                <span className="text-text-muted text-sm">% in</span>
+                <span className="text-muted text-sm">% in</span>
                 <select
                   value={reqCat}
                   onChange={(e) => setReqCat(e.target.value)}
@@ -1403,8 +1394,8 @@ export default function GradesPage() {
                 <div
                   className={`p-3 rounded-lg text-sm ${
                     reqResult.achievable
-                      ? "bg-success/10 text-success"
-                      : "bg-error/10 text-error"
+                      ? "bg-green/10 text-green"
+                      : "bg-red/10 text-red"
                   }`}
                 >
                   {reqResult.achievable
@@ -1427,11 +1418,11 @@ export default function GradesPage() {
 
           {/* ---- What If? ---- */}
           {activeCourse.categories.length > 0 && grades.length > 0 && (
-            <div className="p-5 rounded-xl bg-bg-card border border-border space-y-3">
-              <h3 className="text-sm font-semibold text-white">
+            <div className="p-5 rounded-xl bg-surface border border-border space-y-3">
+              <h3 className="text-sm font-semibold text-text">
                 What If I Get...
               </h3>
-              <p className="text-text-muted text-xs">
+              <p className="text-muted text-xs">
                 See how a hypothetical grade would affect your overall average.
               </p>
               <div className="flex gap-3 items-center flex-wrap">
@@ -1443,7 +1434,7 @@ export default function GradesPage() {
                   aria-label="Hypothetical score"
                   className={`w-20 ${inputClass}`}
                 />
-                <span className="text-text-muted">/</span>
+                <span className="text-muted">/</span>
                 <input
                   type="number"
                   placeholder="Max"
@@ -1452,7 +1443,7 @@ export default function GradesPage() {
                   aria-label="Hypothetical max score"
                   className={`w-20 ${inputClass}`}
                 />
-                <span className="text-text-muted text-sm">in</span>
+                <span className="text-muted text-sm">in</span>
                 <select
                   value={whatifCat}
                   onChange={(e) => setWhatifCat(e.target.value)}
@@ -1470,20 +1461,20 @@ export default function GradesPage() {
                 </button>
               </div>
               {whatifResult && (
-                <div className="p-3 rounded-lg bg-bg-dark text-sm">
-                  <span className="text-white font-medium">
+                <div className="p-3 rounded-lg bg-bg text-sm">
+                  <span className="text-text font-medium font-mono">
                     {whatifResult.overall?.toFixed(1)}%
                   </span>
-                  <span className="text-text-muted">
+                  <span className="text-muted">
                     {" "}
                     ({whatifResult.letter})
                   </span>
                   {gradeResult && (
                     <span
-                      className={`ml-2 font-medium ${
+                      className={`ml-2 font-medium font-mono ${
                         whatifResult.overall - gradeResult.overall >= 0
-                          ? "text-success"
-                          : "text-error"
+                          ? "text-green"
+                          : "text-red"
                       }`}
                     >
                       {whatifResult.overall - gradeResult.overall >= 0
@@ -1500,7 +1491,7 @@ export default function GradesPage() {
           {/* ---- Grade History ---- */}
           {grades.length > 0 && (
             <div>
-              <h3 className="text-sm font-semibold text-text-secondary mb-3">
+              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted mb-3">
                 Logged Grades
               </h3>
               <div className="space-y-1">
@@ -1516,22 +1507,22 @@ export default function GradesPage() {
                   return (
                     <div
                       key={g.id}
-                      className="flex items-center justify-between p-3 rounded-lg bg-bg-card border border-border text-sm"
+                      className="flex items-center justify-between p-3 rounded-lg bg-surface border border-border text-sm"
                     >
                       <div className="min-w-0 flex-1">
-                        <span className="text-white truncate block">
+                        <span className="text-text truncate block">
                           {g.name}
                         </span>
-                        <span className="text-text-muted text-xs">
+                        <span className="text-muted text-xs">
                           {g.category}
                         </span>
                       </div>
                       {isMarzano ? (
                         <div className="text-right shrink-0 ml-3">
-                          <span className="text-white font-medium">
+                          <span className="text-text font-medium font-mono">
                             {g.score.toFixed(1)}
                           </span>
-                          <span className="text-text-muted">/4</span>
+                          <span className="text-muted">/4</span>
                           {marzanoInfo && (
                             <span
                               className={`ml-2 text-xs ${marzanoInfo.color}`}
@@ -1541,9 +1532,9 @@ export default function GradesPage() {
                           )}
                         </div>
                       ) : (
-                        <span className="text-white font-medium shrink-0 ml-3">
+                        <span className="text-text font-medium font-mono shrink-0 ml-3">
                           {g.score}/{g.max_score}
-                          <span className="text-text-muted ml-1">
+                          <span className="text-muted ml-1">
                             ({pct.toFixed(0)}%)
                           </span>
                         </span>
@@ -1556,23 +1547,6 @@ export default function GradesPage() {
           )}
         </>
       )}
-
-      {/* Slide-up animation for toasts */}
-      <style jsx global>{`
-        @keyframes slide-up {
-          from {
-            opacity: 0;
-            transform: translateY(12px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-slide-up {
-          animation: slide-up 0.2s ease-out;
-        }
-      `}</style>
     </div>
   );
 }

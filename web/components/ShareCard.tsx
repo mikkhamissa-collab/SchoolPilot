@@ -120,7 +120,7 @@ export default function ShareCard({
     >
       <div ref={contentRef} tabIndex={-1} className="w-full max-w-sm space-y-4 outline-none">
         {/* The visual card */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-accent via-accent-hover to-[#4c1d95] p-6 text-white">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-accent via-accent/85 to-[#4c1d95] p-6 text-text">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
           <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
 
@@ -166,11 +166,11 @@ export default function ShareCard({
           </button>
           <button
             onClick={copyLink}
-            className="flex-1 py-3 rounded-xl bg-bg-card border border-border text-white font-semibold text-sm hover:bg-bg-hover transition-colors flex items-center justify-center gap-2"
+            className="flex-1 py-3 rounded-xl bg-surface border border-border text-text font-semibold text-sm hover:bg-surface-hover transition-colors flex items-center justify-center gap-2"
           >
             {copied ? (
               <>
-                <svg className="w-4 h-4 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 Copied!
@@ -188,7 +188,7 @@ export default function ShareCard({
 
         <button
           onClick={() => setShowCard(false)}
-          className="w-full py-2 text-text-muted text-sm hover:text-white transition-colors"
+          className="w-full py-2 text-muted text-sm hover:text-text transition-colors"
         >
           Close
         </button>

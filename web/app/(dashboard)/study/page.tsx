@@ -44,15 +44,59 @@ interface SavedContent {
 }
 
 // ---------------------------------------------------------------------------
+// SVG Icons (no emojis)
+// ---------------------------------------------------------------------------
+
+function BookIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+    </svg>
+  );
+}
+
+function CardsIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+    </svg>
+  );
+}
+
+function ClipboardIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+    </svg>
+  );
+}
+
+function LightbulbIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+    </svg>
+  );
+}
+
+function DocumentIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-const TOOLS: { key: StudyTool; label: string; icon: string; description: string }[] = [
-  { key: "guide", label: "Study Guide", icon: "📖", description: "Comprehensive study guide" },
-  { key: "flashcards", label: "Flashcards", icon: "🗂️", description: "Flip-card review" },
-  { key: "quiz", label: "Practice Quiz", icon: "📝", description: "Multiple choice quiz" },
-  { key: "explain", label: "Explain", icon: "💡", description: "Concept breakdown" },
-  { key: "summary", label: "Summary", icon: "📋", description: "One-page summary" },
+const TOOLS: { key: StudyTool; label: string; Icon: React.FC<{ className?: string }>; description: string }[] = [
+  { key: "guide", label: "Study Guide", Icon: BookIcon, description: "Comprehensive study guide" },
+  { key: "flashcards", label: "Flashcards", Icon: CardsIcon, description: "Flip-card review" },
+  { key: "quiz", label: "Practice Quiz", Icon: ClipboardIcon, description: "Multiple choice quiz" },
+  { key: "explain", label: "Explain", Icon: LightbulbIcon, description: "Concept breakdown" },
+  { key: "summary", label: "Summary", Icon: DocumentIcon, description: "One-page summary" },
 ];
 
 const LOADING_MESSAGES: Record<StudyTool, string> = {
@@ -130,24 +174,46 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
 }
 
 // ---------------------------------------------------------------------------
-// Skeleton loaders
+// ThinkingOrb + ThinkingDots
 // ---------------------------------------------------------------------------
 
-function SkeletonBlock({ lines, message }: { lines: number; message: string }) {
+function ThinkingDots() {
   return (
-    <div className="bg-bg-card rounded-xl p-6 border border-border">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-        <p className="text-text-secondary text-sm">{message}</p>
-      </div>
-      <div className="space-y-3">
-        {Array.from({ length: lines }).map((_, i) => (
-          <div
-            key={i}
-            className="h-4 bg-bg-dark rounded animate-pulse"
-            style={{ width: `${70 + Math.random() * 30}%` }}
-          />
-        ))}
+    <span className="inline-flex items-center gap-0.5 ml-1">
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="w-1 h-1 rounded-full bg-current"
+          style={{
+            animation: "pulse3 1.2s ease-in-out infinite",
+            animationDelay: `${i * 0.15}s`,
+          }}
+        />
+      ))}
+    </span>
+  );
+}
+
+function ThinkingOrb() {
+  return (
+    <div
+      className="w-8 h-8 rounded-full bg-accent/30 border border-accent/50"
+      style={{ animation: "breathe 2s ease-in-out infinite" }}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Loading skeletons
+// ---------------------------------------------------------------------------
+
+function GeneratingLoader({ message }: { message: string }) {
+  return (
+    <div className="bg-surface rounded-xl p-8 border border-border flex flex-col items-center justify-center gap-4">
+      <ThinkingOrb />
+      <div className="flex items-center gap-2 text-text-secondary text-sm">
+        <span>{message}</span>
+        <ThinkingDots />
       </div>
     </div>
   );
@@ -155,16 +221,11 @@ function SkeletonBlock({ lines, message }: { lines: number; message: string }) {
 
 function FlashcardSkeleton({ message }: { message: string }) {
   return (
-    <div>
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-        <p className="text-text-secondary text-sm">{message}</p>
-      </div>
-      <div className="bg-bg-card rounded-xl p-10 border border-border flex items-center justify-center min-h-[220px]">
-        <div className="space-y-3 w-full max-w-md">
-          <div className="h-5 bg-bg-dark rounded animate-pulse w-3/4 mx-auto" />
-          <div className="h-5 bg-bg-dark rounded animate-pulse w-1/2 mx-auto" />
-        </div>
+    <div className="bg-surface rounded-xl p-8 border border-border flex flex-col items-center justify-center gap-4">
+      <ThinkingOrb />
+      <div className="flex items-center gap-2 text-text-secondary text-sm">
+        <span>{message}</span>
+        <ThinkingDots />
       </div>
     </div>
   );
@@ -172,22 +233,11 @@ function FlashcardSkeleton({ message }: { message: string }) {
 
 function QuizSkeleton({ message }: { message: string }) {
   return (
-    <div>
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-        <p className="text-text-secondary text-sm">{message}</p>
-      </div>
-      <div className="space-y-4">
-        {[1, 2, 3].map((n) => (
-          <div key={n} className="bg-bg-card rounded-xl p-6 border border-border">
-            <div className="h-5 bg-bg-dark rounded animate-pulse w-5/6 mb-4" />
-            <div className="space-y-2">
-              {[1, 2, 3, 4].map((o) => (
-                <div key={o} className="h-10 bg-bg-dark rounded-lg animate-pulse" />
-              ))}
-            </div>
-          </div>
-        ))}
+    <div className="bg-surface rounded-xl p-8 border border-border flex flex-col items-center justify-center gap-4">
+      <ThinkingOrb />
+      <div className="flex items-center gap-2 text-text-secondary text-sm">
+        <span>{message}</span>
+        <ThinkingDots />
       </div>
     </div>
   );
@@ -232,16 +282,16 @@ function FlashcardViewer({
     const finalRight = rights;
     const finalWrong = wrongs;
     return (
-      <div className="bg-bg-card rounded-xl p-8 border border-border text-center">
-        <h3 className="text-xl font-bold text-white mb-4">Session Complete</h3>
+      <div className="bg-surface rounded-xl p-8 border border-border text-center">
+        <h3 className="text-xl font-bold text-text mb-4">Session Complete</h3>
         <div className="flex justify-center gap-8 mb-6">
           <div>
-            <p className="text-3xl font-bold text-success">{finalRight}</p>
-            <p className="text-text-muted text-sm">Got it</p>
+            <p className="text-3xl font-bold font-mono text-green">{finalRight}</p>
+            <p className="text-muted text-sm">Got it</p>
           </div>
           <div>
-            <p className="text-3xl font-bold text-error">{finalWrong}</p>
-            <p className="text-text-muted text-sm">Missed</p>
+            <p className="text-3xl font-bold font-mono text-red">{finalWrong}</p>
+            <p className="text-muted text-sm">Missed</p>
           </div>
         </div>
         <p className="text-text-secondary mb-6">
@@ -255,7 +305,7 @@ function FlashcardViewer({
             setWrongs(0);
             setFinished(false);
           }}
-          className="px-6 py-2.5 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/80 transition-colors"
+          className="px-6 py-2.5 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/80 transition-colors cursor-pointer"
         >
           Restart
         </button>
@@ -267,17 +317,17 @@ function FlashcardViewer({
     <div>
       {/* Progress */}
       <div className="flex items-center justify-between mb-4">
-        <p className="text-text-muted text-sm">
+        <p className="text-muted text-sm">
           Card {index + 1} of {total}
         </p>
-        <div className="flex gap-3 text-sm">
-          <span className="text-success">{rights} right</span>
-          <span className="text-error">{wrongs} wrong</span>
+        <div className="flex gap-3 text-sm font-mono">
+          <span className="text-green">{rights} right</span>
+          <span className="text-red">{wrongs} wrong</span>
         </div>
       </div>
 
       {/* Progress bar */}
-      <div className="w-full h-1 bg-bg-dark rounded-full mb-6">
+      <div className="w-full h-1 bg-bg rounded-full mb-6">
         <div
           className="h-1 bg-accent rounded-full transition-all duration-300"
           style={{ width: `${((index) / total) * 100}%` }}
@@ -299,19 +349,19 @@ function FlashcardViewer({
         >
           {/* Front */}
           <div
-            className="absolute inset-0 bg-bg-card rounded-xl p-8 border border-border flex flex-col items-center justify-center"
+            className="absolute inset-0 bg-surface rounded-xl p-8 border border-border flex flex-col items-center justify-center"
             style={{ backfaceVisibility: "hidden" }}
           >
-            <p className="text-xs text-text-muted mb-3 uppercase tracking-wide">Question</p>
-            <p className="text-white text-lg text-center leading-relaxed">{card?.front}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted mb-3">Question</p>
+            <p className="text-text text-lg text-center leading-relaxed">{card?.front}</p>
           </div>
           {/* Back */}
           <div
-            className="absolute inset-0 bg-bg-card rounded-xl p-8 border border-accent/40 flex flex-col items-center justify-center"
+            className="absolute inset-0 bg-surface rounded-xl p-8 border border-accent/40 flex flex-col items-center justify-center"
             style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
           >
-            <p className="text-xs text-accent mb-3 uppercase tracking-wide">Answer</p>
-            <p className="text-white text-lg text-center leading-relaxed">{card?.back}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-accent mb-3">Answer</p>
+            <p className="text-text text-lg text-center leading-relaxed">{card?.back}</p>
           </div>
         </div>
       </div>
@@ -324,7 +374,7 @@ function FlashcardViewer({
               e.stopPropagation();
               setFlipped(true);
             }}
-            className="px-6 py-2.5 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/80 transition-colors"
+            className="px-6 py-2.5 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/80 transition-colors cursor-pointer"
           >
             Flip Card
           </button>
@@ -335,7 +385,7 @@ function FlashcardViewer({
                 e.stopPropagation();
                 markAndNext(false);
               }}
-              className="px-6 py-2.5 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg text-sm font-medium hover:bg-red-500/30 transition-colors"
+              className="px-6 py-2.5 bg-red/20 text-red border border-red/30 rounded-lg text-sm font-medium hover:bg-red/30 transition-colors cursor-pointer"
             >
               Missed It
             </button>
@@ -344,7 +394,7 @@ function FlashcardViewer({
                 e.stopPropagation();
                 markAndNext(true);
               }}
-              className="px-6 py-2.5 bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg text-sm font-medium hover:bg-green-500/30 transition-colors"
+              className="px-6 py-2.5 bg-green/20 text-green border border-green/30 rounded-lg text-sm font-medium hover:bg-green/30 transition-colors cursor-pointer"
             >
               Got It
             </button>
@@ -378,16 +428,16 @@ function QuizViewer({ questions }: { questions: QuizQuestion[] }) {
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-bold text-white">Practice Quiz</h2>
+        <h2 className="text-lg font-bold text-text">Practice Quiz</h2>
         {!submitted ? (
           <div className="flex items-center gap-3">
-            <span className="text-text-muted text-sm">
+            <span className="text-muted text-sm font-mono">
               {answered}/{total} answered
             </span>
             <button
               onClick={() => setSubmitted(true)}
               disabled={answered < total}
-              className="px-5 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-5 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               Submit
             </button>
@@ -396,7 +446,7 @@ function QuizViewer({ questions }: { questions: QuizQuestion[] }) {
           <div className="flex items-center gap-3">
             <span className="text-sm font-medium">
               Score:{" "}
-              <span className={score() >= total * 0.7 ? "text-success" : "text-error"}>
+              <span className={`font-mono ${score() >= total * 0.7 ? "text-green" : "text-red"}`}>
                 {score()}/{total}
               </span>{" "}
               ({Math.round((score() / total) * 100)}%)
@@ -406,7 +456,7 @@ function QuizViewer({ questions }: { questions: QuizQuestion[] }) {
                 setSelected({});
                 setSubmitted(false);
               }}
-              className="px-4 py-2 bg-bg-dark border border-border text-text-secondary rounded-lg text-sm hover:text-white transition-colors"
+              className="px-4 py-2 bg-bg border border-border text-text-secondary rounded-lg text-sm hover:text-text transition-colors cursor-pointer"
             >
               Retry
             </button>
@@ -421,29 +471,29 @@ function QuizViewer({ questions }: { questions: QuizQuestion[] }) {
           const isCorrect = userChoice === q.correct_index;
 
           return (
-            <div key={qi} className="bg-bg-card rounded-xl p-6 border border-border">
-              <p className="text-white font-medium mb-4">
+            <div key={qi} className="bg-surface rounded-xl p-6 border border-border">
+              <p className="text-text font-medium mb-4">
                 {qi + 1}. {q.question}
               </p>
               <div className="space-y-2">
                 {q.options.map((opt, oi) => {
                   let optionClasses =
-                    "w-full text-left px-4 py-3 rounded-lg border transition-colors text-sm ";
+                    "w-full text-left px-4 py-3 rounded-lg border transition-colors text-sm cursor-pointer ";
 
                   if (submitted) {
                     if (oi === q.correct_index) {
-                      optionClasses += "border-green-500 bg-green-500/10 text-green-400 ";
+                      optionClasses += "border-green bg-green/10 text-green ";
                     } else if (oi === userChoice && !isCorrect) {
-                      optionClasses += "border-red-500 bg-red-500/10 text-red-400 ";
+                      optionClasses += "border-red bg-red/10 text-red ";
                     } else {
-                      optionClasses += "border-border text-text-muted ";
+                      optionClasses += "border-border text-muted ";
                     }
                   } else {
                     if (oi === userChoice) {
-                      optionClasses += "border-accent bg-accent/10 text-white ";
+                      optionClasses += "border-accent bg-accent/10 text-text ";
                     } else {
                       optionClasses +=
-                        "border-border text-text-secondary hover:border-accent/50 hover:text-white ";
+                        "border-border text-text-secondary hover:border-border-light hover:text-text ";
                     }
                   }
 
@@ -456,7 +506,7 @@ function QuizViewer({ questions }: { questions: QuizQuestion[] }) {
                       disabled={submitted}
                       className={optionClasses}
                     >
-                      <span className="font-medium mr-2 text-text-muted">
+                      <span className="font-medium mr-2 text-muted font-mono">
                         {String.fromCharCode(65 + oi)}.
                       </span>
                       {opt}
@@ -467,12 +517,12 @@ function QuizViewer({ questions }: { questions: QuizQuestion[] }) {
 
               {/* Explanation after submit */}
               {submitted && (
-                <div className="mt-4 p-3 bg-bg-dark rounded-lg">
+                <div className="mt-4 p-3 bg-bg rounded-lg">
                   <p className="text-sm">
-                    <span className={isCorrect ? "text-success" : "text-error"}>
+                    <span className={isCorrect ? "text-green" : "text-red"}>
                       {isCorrect ? "Correct!" : "Incorrect."}
                     </span>{" "}
-                    <span className="text-text-muted">{q.explanation}</span>
+                    <span className="text-muted">{q.explanation}</span>
                   </p>
                 </div>
               )}
@@ -489,7 +539,6 @@ function QuizViewer({ questions }: { questions: QuizQuestion[] }) {
 // ---------------------------------------------------------------------------
 
 function MarkdownContent({ text }: { text: string }) {
-  // Split into lines, handle headers/bold/lists simply
   const lines = text.split("\n");
 
   return (
@@ -499,19 +548,19 @@ function MarkdownContent({ text }: { text: string }) {
         if (!trimmed) return <div key={i} className="h-2" />;
         if (trimmed.startsWith("### "))
           return (
-            <h4 key={i} className="text-white font-semibold mt-4 mb-1">
+            <h4 key={i} className="text-text font-semibold mt-4 mb-1">
               {trimmed.slice(4)}
             </h4>
           );
         if (trimmed.startsWith("## "))
           return (
-            <h3 key={i} className="text-white font-bold text-lg mt-5 mb-2">
+            <h3 key={i} className="text-text font-bold text-lg mt-5 mb-2">
               {trimmed.slice(3)}
             </h3>
           );
         if (trimmed.startsWith("# "))
           return (
-            <h2 key={i} className="text-white font-bold text-xl mt-6 mb-2">
+            <h2 key={i} className="text-text font-bold text-xl mt-6 mb-2">
               {trimmed.slice(2)}
             </h2>
           );
@@ -540,12 +589,11 @@ function MarkdownContent({ text }: { text: string }) {
 }
 
 function renderInline(text: string): React.ReactNode {
-  // Handle **bold** inline
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return (
-        <strong key={i} className="text-white font-semibold">
+        <strong key={i} className="text-text font-semibold">
           {part.slice(2, -2)}
         </strong>
       );
@@ -570,31 +618,32 @@ function SavedPanel({
   if (items.length === 0) return null;
 
   return (
-    <div className="bg-bg-card rounded-xl p-4 border border-border mb-6">
-      <h3 className="text-sm font-medium text-text-secondary mb-3">Saved Content</h3>
-      <div className="space-y-2 max-h-48 overflow-y-auto">
+    <div className="bg-surface rounded-xl p-4 border border-border mb-6">
+      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted mb-3">Saved Content</h3>
+      <div className="space-y-1 max-h-48 overflow-y-auto">
         {items.map((item, i) => {
           const toolInfo = TOOLS.find((t) => t.key === item.tool);
+          const ToolIcon = toolInfo?.Icon;
           return (
             <div
               key={i}
-              className="flex items-center justify-between p-2 rounded-lg hover:bg-bg-dark transition-colors group"
+              className="flex items-center justify-between p-2 rounded-lg hover:bg-bg transition-colors group"
             >
               <button
                 onClick={() => onLoad(item)}
-                className="flex items-center gap-2 text-sm text-text-secondary hover:text-white transition-colors flex-1 text-left"
+                className="flex items-center gap-2 text-sm text-text-secondary hover:text-text transition-colors flex-1 text-left cursor-pointer"
               >
-                <span>{toolInfo?.icon}</span>
+                {ToolIcon && <ToolIcon className="w-4 h-4 text-dim" />}
                 <span className="truncate">
                   {item.course} &mdash; {item.topic}
                 </span>
-                <span className="text-text-muted text-xs">
+                <span className="text-muted text-xs">
                   ({toolInfo?.label})
                 </span>
               </button>
               <button
                 onClick={() => onDelete(i)}
-                className="text-text-muted hover:text-error text-xs opacity-0 group-hover:opacity-100 transition-opacity ml-2"
+                className="text-muted hover:text-red text-xs opacity-0 group-hover:opacity-100 transition-opacity ml-2 cursor-pointer"
               >
                 Remove
               </button>
@@ -663,6 +712,11 @@ export default function StudyPage() {
         setError("Please enter both a course and a topic.");
         return;
       }
+
+      // Track study tool usage
+      import("@/components/PostHogProvider").then(({ trackEvent }) => {
+        trackEvent("study_tool_used", { tool, course, topic });
+      }).catch(() => {});
 
       // Abort any in-flight request
       abortRef.current?.abort();
@@ -748,24 +802,43 @@ export default function StudyPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-6">
-      <h1 className="text-2xl font-bold text-white mb-6">Study Tools</h1>
+      <h1 className="text-2xl font-bold tracking-tight text-text mb-6">Study Tools</h1>
 
       {/* Saved content */}
       <SavedPanel items={savedItems} onLoad={loadSavedItem} onDelete={deleteSaved} />
 
+      {/* Course picker: horizontal pills */}
+      {!coursesLoading && courses.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          {courses.map((c) => (
+            <button
+              key={c.class_name}
+              onClick={() => setCourse(c.class_name)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                course === c.class_name
+                  ? "bg-accent text-text"
+                  : "border border-border text-text-secondary hover:text-text hover:border-border-light"
+              }`}
+            >
+              {c.class_name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Input Section */}
-      <div className="bg-bg-card rounded-xl p-6 border border-border mb-6">
+      <div className="bg-surface rounded-xl p-6 border border-border mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           {/* Course dropdown/input */}
           <div>
-            <label className="block text-sm text-text-secondary mb-1">Course</label>
+            <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted mb-1.5">Course</label>
             {coursesLoading ? (
-              <div className="w-full h-[42px] bg-bg-dark border border-border rounded-lg animate-pulse" />
+              <div className="w-full h-[42px] bg-bg border border-border rounded-lg" style={{ animation: "skeletonPulse 1.5s ease-in-out infinite" }} />
             ) : courses.length > 0 ? (
               <select
                 value={course}
                 onChange={(e) => setCourse(e.target.value)}
-                className="w-full bg-bg-dark border border-border rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-accent appearance-none cursor-pointer"
+                className="w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-text focus:outline-none focus:border-accent appearance-none cursor-pointer"
               >
                 <option value="" disabled>
                   Select a course
@@ -783,20 +856,20 @@ export default function StudyPage() {
                 value={course}
                 onChange={(e) => setCourse(e.target.value)}
                 placeholder="e.g., AP Biology"
-                className="w-full bg-bg-dark border border-border rounded-lg px-4 py-2.5 text-white placeholder:text-text-muted focus:outline-none focus:border-accent"
+                className="w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-text placeholder:text-muted focus:outline-none focus:border-accent"
               />
             )}
           </div>
 
           {/* Topic input */}
           <div>
-            <label className="block text-sm text-text-secondary mb-1">Topic</label>
+            <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted mb-1.5">Topic</label>
             <input
               type="text"
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
               placeholder="e.g., Cell Division, Chapter 5, Photosynthesis"
-              className="w-full bg-bg-dark border border-border rounded-lg px-4 py-2.5 text-white placeholder:text-text-muted focus:outline-none focus:border-accent"
+              className="w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-text placeholder:text-muted focus:outline-none focus:border-accent"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && activeTool) generate(activeTool);
                 else if (e.key === "Enter") generate("guide");
@@ -805,37 +878,44 @@ export default function StudyPage() {
           </div>
         </div>
 
-        {/* Tool buttons */}
-        <div className="flex flex-wrap gap-2">
-          {TOOLS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => generate(t.key)}
-              disabled={loading}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                activeTool === t.key && !loading
-                  ? "bg-accent text-white shadow-lg shadow-accent/20"
-                  : "bg-bg-dark text-text-secondary hover:text-white hover:bg-bg-dark/80"
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-            >
-              {t.icon} {t.label}
-            </button>
-          ))}
+        {/* Tool cards grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          {TOOLS.map((t) => {
+            const isActive = activeTool === t.key && !loading;
+            return (
+              <button
+                key={t.key}
+                onClick={() => generate(t.key)}
+                disabled={loading}
+                className={`flex flex-col items-center gap-2 p-4 rounded-xl border text-sm font-medium transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                  isActive
+                    ? "bg-accent/10 border-accent text-text shadow-[0_0_12px_rgba(124,58,237,0.15)]"
+                    : "bg-bg border-border text-text-secondary hover:border-border-light hover:text-text hover:-translate-y-0.5"
+                }`}
+              >
+                <t.Icon className={`w-5 h-5 ${isActive ? "text-accent" : "text-dim"}`} />
+                <span>{t.label}</span>
+                <span className="text-[11px] text-muted font-normal hidden sm:block">{t.description}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* Error */}
       {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-6 flex items-start gap-3">
-          <span className="text-red-400 text-lg leading-none mt-0.5">!</span>
+        <div className="bg-red/10 border border-red/30 rounded-lg p-4 mb-6 flex items-start gap-3">
+          <svg className="w-5 h-5 text-red mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+          </svg>
           <div>
-            <p className="text-red-400 text-sm font-medium">Something went wrong</p>
-            <p className="text-red-400/70 text-sm mt-1">{error}</p>
+            <p className="text-red text-sm font-medium">Something went wrong</p>
+            <p className="text-red/70 text-sm mt-1">{error}</p>
           </div>
         </div>
       )}
 
-      {/* Loading skeletons */}
+      {/* Loading states */}
       {loading && activeTool === "flashcards" && (
         <FlashcardSkeleton message={LOADING_MESSAGES.flashcards} />
       )}
@@ -843,7 +923,7 @@ export default function StudyPage() {
         <QuizSkeleton message={LOADING_MESSAGES.quiz} />
       )}
       {loading && activeTool && activeTool !== "flashcards" && activeTool !== "quiz" && (
-        <SkeletonBlock lines={8} message={LOADING_MESSAGES[activeTool]} />
+        <GeneratingLoader message={LOADING_MESSAGES[activeTool]} />
       )}
 
       {/* Results */}
@@ -854,9 +934,9 @@ export default function StudyPage() {
             <button
               onClick={saveResult}
               disabled={!!isSaved}
-              className={`text-sm px-4 py-1.5 rounded-lg transition-colors ${
+              className={`text-sm px-4 py-1.5 rounded-lg transition-colors cursor-pointer ${
                 isSaved
-                  ? "text-text-muted bg-bg-dark cursor-default"
+                  ? "text-muted bg-bg cursor-default"
                   : "text-accent border border-accent/30 hover:bg-accent/10"
               }`}
             >
@@ -866,8 +946,8 @@ export default function StudyPage() {
 
           {/* Guide */}
           {activeTool === "guide" && result.content && (
-            <div className="bg-bg-card rounded-xl p-6 border border-border">
-              <h2 className="text-lg font-bold text-white mb-4">Study Guide</h2>
+            <div className="bg-surface rounded-xl p-6 border border-border">
+              <h2 className="text-lg font-bold text-text mb-4">Study Guide</h2>
               <MarkdownContent text={result.content} />
             </div>
           )}
@@ -887,16 +967,16 @@ export default function StudyPage() {
 
           {/* Explain */}
           {activeTool === "explain" && result.content && (
-            <div className="bg-bg-card rounded-xl p-6 border border-border">
-              <h2 className="text-lg font-bold text-white mb-4">Explanation</h2>
+            <div className="bg-surface rounded-xl p-6 border border-border">
+              <h2 className="text-lg font-bold text-text mb-4">Explanation</h2>
               <MarkdownContent text={result.content} />
             </div>
           )}
 
           {/* Summary */}
           {activeTool === "summary" && result.content && (
-            <div className="bg-bg-card rounded-xl p-6 border border-border">
-              <h2 className="text-lg font-bold text-white mb-4">Summary</h2>
+            <div className="bg-surface rounded-xl p-6 border border-border">
+              <h2 className="text-lg font-bold text-text mb-4">Summary</h2>
               <MarkdownContent text={result.content} />
             </div>
           )}
@@ -906,9 +986,11 @@ export default function StudyPage() {
       {/* Empty state */}
       {!result && !loading && !error && (
         <div className="text-center py-16">
-          <p className="text-4xl mb-4">📚</p>
+          <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-accent/10 flex items-center justify-center">
+            <BookIcon className="w-6 h-6 text-accent" />
+          </div>
           <p className="text-text-secondary text-lg mb-2">Pick a course and topic</p>
-          <p className="text-text-muted text-sm">
+          <p className="text-muted text-sm">
             Choose a study tool above to generate guides, flashcards, quizzes, and more.
           </p>
         </div>

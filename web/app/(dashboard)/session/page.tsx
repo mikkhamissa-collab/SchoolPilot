@@ -7,7 +7,7 @@ import { backendFetch } from "@/lib/api";
 import { createClient } from "@/lib/supabase-client";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useState, useCallback, useRef, Suspense } from "react";
-import Confetti from "@/components/Confetti";
+// Confetti removed (redesign)
 
 // =============================================================================
 // TYPES
@@ -344,7 +344,7 @@ function SessionInner() {
         <div className="text-center py-20">
           <div className="text-4xl mb-4 animate-pulse">📚</div>
           <h2 className="text-xl font-bold text-white mb-2">Preparing your study session...</h2>
-          <p className="text-text-muted text-sm">Analyzing your course materials</p>
+          <p className="text-muted text-sm">Analyzing your course materials</p>
           {error && <p className="text-error text-sm mt-4">{error}</p>}
         </div>
       </div>
@@ -358,25 +358,25 @@ function SessionInner() {
     return (
       <div className="max-w-2xl mx-auto p-6 space-y-6">
         <header className="border-b border-border/50 pb-4">
-          <button onClick={() => router.push("/today")} className="text-text-muted hover:text-white text-sm mb-3 flex items-center gap-1">
+          <button onClick={() => router.push("/today")} className="text-muted hover:text-white text-sm mb-3 flex items-center gap-1">
             ← Back
           </button>
           <h1 className="text-2xl font-bold text-white">{assignment}</h1>
           <p className="text-text-secondary text-sm mt-1">{course} • Quick check before we start</p>
         </header>
 
-        <div className="p-4 rounded-xl bg-bg-card border border-border">
+        <div className="p-4 rounded-xl bg-surface border border-border">
           <p className="text-text-secondary text-sm">{diagnostic.intro_message}</p>
         </div>
 
         <div className="space-y-4">
           {diagnostic.questions.map((q, i) => (
-            <div key={q.id} className="p-5 rounded-xl bg-bg-card border border-border space-y-3">
+            <div key={q.id} className="p-5 rounded-xl bg-surface border border-border space-y-3">
               <div className="flex items-start gap-3">
                 <span className="text-accent font-bold text-sm mt-0.5">{i + 1}</span>
                 <div className="flex-1">
                   <p className="text-white font-medium">{q.question}</p>
-                  <p className="text-text-muted text-xs mt-1">{q.topic} • {q.difficulty}</p>
+                  <p className="text-muted text-xs mt-1">{q.topic} • {q.difficulty}</p>
                 </div>
               </div>
 
@@ -388,7 +388,7 @@ function SessionInner() {
                     className={`text-left px-4 py-2.5 rounded-lg text-sm transition-all ${
                       diagnosticAnswers[q.id] === opt
                         ? "bg-accent/20 text-accent border border-accent/40"
-                        : "bg-bg-hover text-text-secondary hover:text-white border border-transparent"
+                        : "bg-surface-hover text-text-secondary hover:text-white border border-transparent"
                     }`}
                   >
                     {opt}
@@ -416,7 +416,7 @@ function SessionInner() {
       <div className="max-w-2xl mx-auto p-6 text-center py-20">
         <div className="text-4xl mb-4 animate-pulse">🧠</div>
         <h2 className="text-xl font-bold text-white mb-2">Building your personalized study plan...</h2>
-        <p className="text-text-muted text-sm">Analyzing your course materials and weak spots</p>
+        <p className="text-muted text-sm">Analyzing your course materials and weak spots</p>
       </div>
     );
   }
@@ -425,7 +425,7 @@ function SessionInner() {
   if (phase === "complete" && session) {
     return (
       <div className="max-w-2xl mx-auto p-6 space-y-6">
-        <Confetti trigger={showConfetti} />
+        {/* confetti removed */}
 
         <div className="text-center py-12 space-y-4">
           <div className="text-6xl">🎉</div>
@@ -441,7 +441,7 @@ function SessionInner() {
         )}
 
         {session.cheat_sheet && session.cheat_sheet.length > 0 && (
-          <div className="p-5 rounded-xl bg-bg-card border border-border">
+          <div className="p-5 rounded-xl bg-surface border border-border">
             <h3 className="text-white font-medium mb-3">📋 Quick Reference Sheet</h3>
             <ul className="space-y-2">
               {session.cheat_sheet.map((item, i) => (
@@ -457,13 +457,13 @@ function SessionInner() {
         <div className="flex gap-3">
           <button
             onClick={() => router.push("/today")}
-            className="flex-1 py-3 rounded-xl bg-bg-card border border-border text-text-secondary hover:text-white transition-colors"
+            className="flex-1 py-3 rounded-xl bg-surface border border-border text-text-secondary hover:text-white transition-colors"
           >
             Back to Dashboard
           </button>
           <button
             onClick={() => { setPhase("session"); setCurrentChunk(0); setCompletedChunks(new Set()); }}
-            className="flex-1 py-3 rounded-xl bg-accent text-white font-medium hover:bg-accent-hover transition-colors"
+            className="flex-1 py-3 rounded-xl bg-accent text-white font-medium hover:opacity-85 transition-colors"
           >
             Study Again
           </button>
@@ -479,25 +479,25 @@ function SessionInner() {
 
     return (
       <div className="max-w-2xl mx-auto p-6 space-y-6">
-        <Confetti trigger={showConfetti} />
+        {/* confetti removed */}
 
         {/* Header */}
         <header className="flex justify-between items-start">
           <div>
-            <button onClick={() => router.push("/today")} className="text-text-muted hover:text-white text-sm mb-2 flex items-center gap-1">
+            <button onClick={() => router.push("/today")} className="text-muted hover:text-white text-sm mb-2 flex items-center gap-1">
               ← Back
             </button>
             <h1 className="text-xl font-bold text-white">{session.assignment}</h1>
             <p className="text-text-secondary text-sm">{session.course}</p>
           </div>
           <div className="text-right">
-            <p className="text-text-muted text-xs">Step {currentChunk + 1} of {totalChunks}</p>
-            <p className="text-text-muted text-xs">{session.total_time_minutes} min total</p>
+            <p className="text-muted text-xs">Step {currentChunk + 1} of {totalChunks}</p>
+            <p className="text-muted text-xs">{session.total_time_minutes} min total</p>
           </div>
         </header>
 
         {/* Overall progress bar */}
-        <div className="h-1.5 bg-bg-hover rounded-full overflow-hidden">
+        <div className="h-1.5 bg-surface-hover rounded-full overflow-hidden">
           <div
             className="h-full bg-accent rounded-full transition-all duration-500"
             style={{ width: `${overallProgress * 100}%` }}
@@ -505,7 +505,7 @@ function SessionInner() {
         </div>
 
         {/* Current chunk card */}
-        <div className="p-6 rounded-xl bg-bg-card border border-border space-y-5">
+        <div className="p-6 rounded-xl bg-surface border border-border space-y-5">
           {/* Chunk header */}
           <div className="flex justify-between items-start">
             <div>
@@ -513,7 +513,7 @@ function SessionInner() {
                 chunk.type === "deep_review" ? "bg-accent/20 text-accent" :
                 chunk.type === "practice" ? "bg-success/20 text-success" :
                 chunk.type === "review" ? "bg-warning/20 text-warning" :
-                "bg-bg-hover text-text-muted"
+                "bg-surface-hover text-muted"
               }`}>
                 {chunk.type === "deep_review" ? "Deep Review" :
                  chunk.type === "practice" ? "Practice" :
@@ -526,7 +526,7 @@ function SessionInner() {
 
           {/* Explanation (tutor mode) */}
           {chunk.explanation && (
-            <div className="p-4 rounded-lg bg-bg-dark/50 text-text-secondary text-sm leading-relaxed whitespace-pre-wrap">
+            <div className="p-4 rounded-lg bg-bg/50 text-text-secondary text-sm leading-relaxed whitespace-pre-wrap">
               {chunk.explanation}
             </div>
           )}
@@ -541,12 +541,12 @@ function SessionInner() {
             </button>
             <div className="text-center">
               <div className="text-3xl font-mono font-bold text-white">{timer.display}</div>
-              <div className="text-text-muted text-xs mt-1">{chunk.minutes} min target</div>
+              <div className="text-muted text-xs mt-1">{chunk.minutes} min target</div>
             </div>
           </div>
 
           {/* Timer progress */}
-          <div className="h-1 bg-bg-hover rounded-full overflow-hidden">
+          <div className="h-1 bg-surface-hover rounded-full overflow-hidden">
             <div
               className="h-full bg-accent rounded-full transition-all duration-1000"
               style={{ width: `${timer.progress * 100}%` }}
@@ -558,7 +558,7 @@ function SessionInner() {
             <div className="space-y-3 pt-2">
               <h3 className="text-white font-medium text-sm">Practice Problems</h3>
               {chunk.practice_problems.map((p, i) => (
-                <div key={i} className="p-3 rounded-lg bg-bg-dark/50 space-y-2">
+                <div key={i} className="p-3 rounded-lg bg-bg/50 space-y-2">
                   <p className="text-white text-sm font-mono">{p.problem}</p>
                   {showHint === i && (
                     <p className="text-warning text-xs">💡 {p.hint}</p>
@@ -569,13 +569,13 @@ function SessionInner() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => setShowHint(showHint === i ? null : i)}
-                      className="text-xs text-text-muted hover:text-warning transition-colors"
+                      className="text-xs text-muted hover:text-warning transition-colors"
                     >
                       {showHint === i ? "Hide hint" : "Show hint"}
                     </button>
                     <button
                       onClick={() => setShowAnswer(showAnswer === i ? null : i)}
-                      className="text-xs text-text-muted hover:text-success transition-colors"
+                      className="text-xs text-muted hover:text-success transition-colors"
                     >
                       {showAnswer === i ? "Hide answer" : "Show answer"}
                     </button>
@@ -589,7 +589,7 @@ function SessionInner() {
           {chunk.tip && (
             <div className="flex items-start gap-2 text-sm">
               <span className="text-warning">💡</span>
-              <p className="text-text-muted">{chunk.tip}</p>
+              <p className="text-muted">{chunk.tip}</p>
             </div>
           )}
 
@@ -613,7 +613,7 @@ function SessionInner() {
                 setShowHint(null);
                 setShowAnswer(null);
               }}
-              className="px-6 py-3 rounded-xl bg-bg-card border border-border text-text-secondary hover:text-white transition-colors"
+              className="px-6 py-3 rounded-xl bg-surface border border-border text-text-secondary hover:text-white transition-colors"
             >
               ← Previous
             </button>
@@ -628,11 +628,11 @@ function SessionInner() {
 
         {/* Key concepts (if available) */}
         {session.key_concepts && session.key_concepts.length > 0 && (
-          <div className="p-4 rounded-xl bg-bg-card border border-border">
-            <p className="text-text-muted text-xs uppercase tracking-wide mb-2">Key Concepts</p>
+          <div className="p-4 rounded-xl bg-surface border border-border">
+            <p className="text-muted text-xs uppercase tracking-wide mb-2">Key Concepts</p>
             <div className="flex flex-wrap gap-2">
               {session.key_concepts.map((c, i) => (
-                <span key={i} className="px-2 py-1 rounded bg-bg-hover text-text-secondary text-xs">
+                <span key={i} className="px-2 py-1 rounded bg-surface-hover text-text-secondary text-xs">
                   {c}
                 </span>
               ))}

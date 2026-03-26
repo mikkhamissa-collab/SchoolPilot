@@ -3,13 +3,26 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { type ComponentType } from "react";
+import {
+  SunIcon,
+  ChartIcon,
+  BookIcon,
+  ClockIcon,
+  UsersIcon,
+  ChatIcon,
+} from "@/components/icons";
 
-const navItems = [
-  { href: "/today", label: "Today", icon: "🏠" },
-  { href: "/grades", label: "Grades", icon: "📊" },
-  { href: "/study", label: "Study", icon: "📖" },
-  { href: "/focus", label: "Focus", icon: "🕐" },
-  { href: "/buddy", label: "Buddy", icon: "👥" },
+const navItems: {
+  href: string;
+  label: string;
+  Icon: ComponentType<{ className?: string }>;
+}[] = [
+  { href: "/today", label: "Today", Icon: SunIcon },
+  { href: "/grades", label: "Grades", Icon: ChartIcon },
+  { href: "/study", label: "Study", Icon: BookIcon },
+  { href: "/focus", label: "Focus", Icon: ClockIcon },
+  { href: "/buddy", label: "Buddy", Icon: UsersIcon },
 ];
 
 export default function MobileNav() {
@@ -21,10 +34,10 @@ export default function MobileNav() {
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 bg-bg-card border-t border-border z-50"
+      className="md:hidden fixed bottom-0 left-0 right-0 bg-surface border-t border-border z-50"
       aria-label="Mobile navigation"
     >
-      <div className="flex items-center justify-around py-2">
+      <div className="flex items-center justify-around h-14">
         {navItems.map((item) => {
           const active = pathname === item.href;
           return (
@@ -32,12 +45,15 @@ export default function MobileNav() {
               key={item.href}
               href={item.href}
               aria-current={active ? "page" : undefined}
-              className={`flex flex-col items-center gap-0.5 px-2 py-1 text-xs transition-colors ${
-                active ? "text-accent" : "text-text-muted"
+              className={`relative flex flex-col items-center justify-center gap-0.5 px-2 h-full text-xs transition-colors ${
+                active ? "text-accent" : "text-muted"
               }`}
             >
-              <span className="text-lg" aria-hidden="true">{item.icon}</span>
+              <item.Icon className="w-5 h-5" />
               <span>{item.label}</span>
+              {active && (
+                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full bg-accent" />
+              )}
             </Link>
           );
         })}
@@ -46,9 +62,9 @@ export default function MobileNav() {
         <button
           onClick={handleChatToggle}
           aria-label="Toggle chat"
-          className="flex flex-col items-center gap-0.5 px-2 py-1 text-xs text-text-muted hover:text-accent transition-colors cursor-pointer"
+          className="relative flex flex-col items-center justify-center gap-0.5 px-2 h-full text-xs text-muted hover:text-accent transition-colors cursor-pointer"
         >
-          <span className="text-lg" aria-hidden="true">💬</span>
+          <ChatIcon className="w-5 h-5" />
           <span>Chat</span>
         </button>
       </div>

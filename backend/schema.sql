@@ -35,7 +35,8 @@ CREATE TABLE student_profiles (
 CREATE TABLE class_context (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  course_id UUID REFERENCES courses(id) ON DELETE CASCADE,
+  -- NOTE: course_id FK to courses table was removed — that table doesn't
+  -- exist and class_context is the canonical course record.
   -- Class info
   class_name TEXT NOT NULL,
   teacher_name TEXT,
@@ -100,11 +101,12 @@ CREATE TABLE messages (
 CREATE TABLE lms_credentials (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  lms_type TEXT NOT NULL,                -- 'teamie', 'canvas', 'blackboard', 'google_classroom'
+  lms_type TEXT NOT NULL DEFAULT 'teamie', -- Only 'teamie' is supported currently
   lms_url TEXT NOT NULL,                 -- 'https://lms.asl.org'
   -- Encrypted credentials (AES-256 via Fernet)
   encrypted_username TEXT NOT NULL,
   encrypted_password TEXT NOT NULL,
+  encrypted_cookies TEXT,              -- Saved session cookies (cookie-first auth strategy)
   -- Session state
   last_login_success BOOLEAN,
   last_login_at TIMESTAMPTZ,
@@ -209,6 +211,8 @@ CREATE TABLE reminders (
 
 -- =============================================================================
 -- DOCUMENT UPLOADS — Student-uploaded files for analysis
+-- NOTE: Currently unused (v3 does not implement file uploads yet).
+-- Kept for forward-compatibility; safe to DROP if not needed.
 -- =============================================================================
 
 CREATE TABLE document_uploads (
@@ -230,6 +234,8 @@ CREATE TABLE document_uploads (
 
 -- =============================================================================
 -- CROSS-STUDENT ANONYMIZED PATTERNS
+-- NOTE: Currently unused in v3 (PatternDetector exists but is never called).
+-- Kept for forward-compatibility; safe to DROP if not needed.
 -- =============================================================================
 
 CREATE TABLE anonymized_patterns (
@@ -249,6 +255,8 @@ CREATE TABLE anonymized_patterns (
 
 -- =============================================================================
 -- GOOGLE CALENDAR TOKENS
+-- NOTE: Currently unused (v3 does not implement Google Calendar integration).
+-- Kept for forward-compatibility; safe to DROP if not needed.
 -- =============================================================================
 
 CREATE TABLE calendar_tokens (

@@ -266,6 +266,24 @@ class LMSExplorer:
 
     # ── Upsert helpers ────────────────────────────────────────────────
 
+    @staticmethod
+    def _normalize_course_name(name: Optional[str]) -> str:
+        """Normalize a course name by stripping section/period/year suffixes.
+
+        Examples:
+            "Advanced Journalism - S2 P6 LA [25-26]" → "Advanced Journalism - S2"
+            "AP Physics C  P3 [2025-26]" → "AP Physics C"
+            "IB Math HL - S1" → "IB Math HL - S1"
+        """
+        if not name:
+            return ""
+        cleaned = name.strip()
+        # Remove bracketed year like [25-26] or [2025-26]
+        cleaned = re.sub(r'\s*\[\d{2,4}-\d{2,4}\]\s*$', '', cleaned)
+        # Remove trailing period+section like "P6 LA", "P3", "P2 SC"
+        cleaned = re.sub(r'\s+P\d+(?:\s+[A-Z]{1,3})?\s*$', '', cleaned)
+        return cleaned.strip()
+
     def _stable_id(self, *parts: Optional[str]) -> str:
         """Create a deterministic ID from component strings.
 
@@ -276,18 +294,18 @@ class LMSExplorer:
         return hashlib.sha256(combined.encode("utf-8")).hexdigest()[:40]
 
     def _upsert_assignment(self, item: dict) -> None:
-        lms_id = self._stable_id(
-            item.get("course"),
-            item.get("title"),
-            item.get("due_date"),
-        )
+        # Stable ID uses only normalized course + title (NOT due_date)
+        # so re-scraping with a slightly different date or course suffix
+        # doesn't create duplicates.
+        course = self._normalize_course_name(item.get("course"))
+        lms_id = self._stable_id(course, item.get("title"))
         self.db.table("lms_assignments").upsert(
             {
                 "user_id": self.user_id,
                 "lms_id": lms_id,
                 "title": item.get("title", "Untitled"),
                 "description": item.get("description"),
-                "course_name": item.get("course"),
+                "course_name": course or item.get("course"),
                 "assignment_type": item.get("assignment_type"),
                 "due_date": item.get("due_date"),
                 "points_possible": item.get("points"),
@@ -316,10 +334,11 @@ class LMSExplorer:
                 logger.warning("Invalid grade percentage value: %s", overall_pct)
                 overall_pct = None
 
+        grade_course = self._normalize_course_name(item.get("course")) or "Unknown"
         self.db.table("lms_grades").upsert(
             {
                 "user_id": self.user_id,
-                "course_name": item.get("course", "Unknown"),
+                "course_name": grade_course,
                 "overall_grade": item.get("overall_grade"),
                 "overall_percentage": overall_pct,
                 "category_breakdown": item.get("categories", {}),
@@ -330,10 +349,11 @@ class LMSExplorer:
         ).execute()
 
     def _upsert_course(self, item: dict) -> None:
+        class_name = self._normalize_course_name(item.get("name")) or "Unknown"
         self.db.table("class_context").upsert(
             {
                 "user_id": self.user_id,
-                "class_name": item.get("name", "Unknown"),
+                "class_name": class_name,
                 "teacher_name": item.get("teacher"),
                 "period": item.get("period"),
                 "room": item.get("room"),
@@ -343,17 +363,14 @@ class LMSExplorer:
         ).execute()
 
     def _upsert_announcement(self, item: dict) -> None:
-        lms_id = self._stable_id(
-            item.get("course"),
-            item.get("title"),
-            item.get("date"),
-        )
+        ann_course = self._normalize_course_name(item.get("course"))
+        lms_id = self._stable_id(ann_course, item.get("title"), item.get("date"))
         self.db.table("lms_announcements").upsert(
             {
                 "user_id": self.user_id,
                 "lms_id": lms_id,
                 "title": item.get("title", "Untitled"),
-                "course_name": item.get("course"),
+                "course_name": ann_course or item.get("course"),
                 "content": item.get("content"),
                 "posted_date": item.get("date"),
                 "job_id": self.job_id,
@@ -363,17 +380,14 @@ class LMSExplorer:
         ).execute()
 
     def _upsert_calendar(self, item: dict) -> None:
-        lms_id = self._stable_id(
-            item.get("course"),
-            item.get("title"),
-            item.get("date"),
-        )
+        cal_course = self._normalize_course_name(item.get("course"))
+        lms_id = self._stable_id(cal_course, item.get("title"), item.get("date"))
         self.db.table("lms_calendar_events").upsert(
             {
                 "user_id": self.user_id,
                 "lms_id": lms_id,
                 "title": item.get("title", "Untitled"),
-                "course_name": item.get("course"),
+                "course_name": cal_course or item.get("course"),
                 "event_date": item.get("date"),
                 "details": item.get("details"),
                 "job_id": self.job_id,

@@ -52,7 +52,6 @@ interface PersonalityPreset {
   name: string;
   description: string;
   quote: string;
-  emoji: string;
 }
 
 const PERSONALITIES: PersonalityPreset[] = [
@@ -61,28 +60,24 @@ const PERSONALITIES: PersonalityPreset[] = [
     name: "Coach",
     description: "Direct and motivating. Pushes you to be better without sugarcoating.",
     quote: "You bombed circuits last time and haven't touched it yet. Let's fix that tonight.",
-    emoji: "\uD83C\uDFC8",
   },
   {
     id: "friend",
     name: "Friend",
     description: "Chill and supportive. Like texting a smart friend who gets it.",
     quote: "okay that essay is kinda a lot but ngl you got this. start with the intro tonight?",
-    emoji: "\uD83E\uDD1D",
   },
   {
     id: "mentor",
     name: "Mentor",
     description: "Wise and thoughtful. Helps you see the bigger picture.",
     quote: "This physics grade matters for engineering programs, but more importantly you'll actually use this.",
-    emoji: "\uD83E\uDDD1\u200D\uD83C\uDF93",
   },
   {
     id: "drill_sergeant",
     name: "Drill Sergeant",
     description: "No excuses. Maximum accountability. Results only.",
     quote: "You've been 'about to start' for three days. Open the doc. Now.",
-    emoji: "\uD83C\uDF96\uFE0F",
   },
 ];
 
@@ -137,6 +132,28 @@ async function authedFetch(path: string, body: Record<string, unknown>) {
     throw new Error(err.detail || err.error || `Error ${res.status}`);
   }
   return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// Shared styles
+// ---------------------------------------------------------------------------
+
+const inputStyle: React.CSSProperties = {
+  backgroundColor: "#09090b",
+  border: "1px solid #1e1e22",
+};
+
+const cardBg: React.CSSProperties = {
+  backgroundColor: "#111113",
+  border: "1px solid #1e1e22",
+};
+
+function focusBorder(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
+  e.currentTarget.style.borderColor = "rgba(124,58,237,0.4)";
+}
+
+function blurBorder(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
+  e.currentTarget.style.borderColor = "#1e1e22";
 }
 
 // ---------------------------------------------------------------------------
@@ -351,22 +368,21 @@ export default function OnboardingPage() {
     : "opacity-100 translate-x-0";
 
   return (
-    <div className="min-h-screen bg-bg-dark flex flex-col items-center justify-center p-6">
+    <div className="min-h-screen flex flex-col items-center justify-center p-6" style={{ backgroundColor: "#09090b" }}>
       {/* Progress bar */}
       <div className="w-full max-w-lg mb-8">
-        <div className="h-1 bg-border rounded-full overflow-hidden">
+        <div className="h-1 rounded-full overflow-hidden" style={{ backgroundColor: "#1e1e22" }}>
           <div
-            className="h-full bg-accent rounded-full transition-all duration-500 ease-out"
-            style={{ width: `${progress}%` }}
+            className="h-full rounded-full transition-all duration-500 ease-out"
+            style={{ width: `${progress}%`, backgroundColor: "#7c3aed" }}
           />
         </div>
         <div className="flex justify-between mt-2">
           {STEPS.map((s, i) => (
             <div
               key={s}
-              className={`w-2 h-2 rounded-full transition-colors duration-300 ${
-                i <= currentIndex ? "bg-accent" : "bg-border"
-              }`}
+              className="w-2 h-2 rounded-full transition-colors duration-300"
+              style={{ backgroundColor: i <= currentIndex ? "#7c3aed" : "#1e1e22" }}
             />
           ))}
         </div>
@@ -381,34 +397,37 @@ export default function OnboardingPage() {
         {/* ================================================================= */}
         {step === "welcome" && (
           <div className="text-center space-y-6">
-            <div className="w-20 h-20 mx-auto rounded-2xl bg-accent/20 flex items-center justify-center">
-              <svg className="w-10 h-10 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-7.007 11.55A5.981 5.981 0 0 0 6.75 15.75v-1.5" />
-              </svg>
+            <div className="inline-flex items-center gap-2.5 mb-2">
+              <div
+                className="w-[22px] h-[22px] rounded-[6px]"
+                style={{ background: "linear-gradient(135deg, #7c3aed, #a78bfa)" }}
+              />
+              <span className="text-[#fafafa] font-semibold text-base tracking-tight">SchoolPilot</span>
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-white mb-3">
-                Hey! I&apos;m SchoolPilot
+              <h1 className="text-3xl font-bold text-[#fafafa] mb-3">
+                Let&apos;s get you set up
               </h1>
-              <p className="text-text-secondary text-lg leading-relaxed">
+              <p className="text-[#a1a1aa] text-lg leading-relaxed">
                 Your AI study companion. I&apos;ll help you stay on top of
                 assignments, protect your grades, and actually know what to work on
                 each day.
               </p>
             </div>
-            <p className="text-text-muted text-sm">
-              Let&apos;s get you set up in under 2 minutes. No fluff, I promise.
+            <p className="text-[#71717a] text-sm">
+              This takes under 2 minutes.
             </p>
             <button
               onClick={goNext}
-              className="w-full py-4 rounded-xl bg-accent hover:bg-accent-hover text-white font-semibold text-lg transition-colors cursor-pointer"
+              className="w-full py-3.5 rounded-lg font-semibold text-base transition-opacity cursor-pointer"
+              style={{ backgroundColor: "#fafafa", color: "#09090b" }}
             >
-              Let&apos;s go
+              Get started
             </button>
             <button
               onClick={skipOnboarding}
               disabled={saving}
-              className="w-full text-center text-text-muted text-sm hover:text-text-secondary transition-colors cursor-pointer disabled:opacity-50"
+              className="w-full text-center text-[#52525b] text-sm hover:text-[#a1a1aa] transition-colors cursor-pointer disabled:opacity-50"
             >
               Skip setup &mdash; I&apos;ll do this later
             </button>
@@ -421,10 +440,10 @@ export default function OnboardingPage() {
         {step === "basics" && (
           <div className="space-y-6">
             <div className="text-center">
-              <h1 className="text-2xl font-bold text-white mb-2">
+              <h1 className="text-2xl font-bold text-[#fafafa] mb-2">
                 The basics
               </h1>
-              <p className="text-text-secondary">
+              <p className="text-[#a1a1aa]">
                 Tell me a bit about yourself so I can personalize your experience.
               </p>
             </div>
@@ -432,7 +451,7 @@ export default function OnboardingPage() {
             <div className="space-y-4">
               {/* Name */}
               <div>
-                <label htmlFor="onb-name" className="block text-text-secondary text-sm mb-1.5">
+                <label htmlFor="onb-name" className="block text-[#a1a1aa] text-sm mb-1.5">
                   Your first name
                 </label>
                 <input
@@ -441,15 +460,18 @@ export default function OnboardingPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Alex"
-                  className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors"
+                  className="w-full px-3.5 py-2.5 rounded-lg text-[#fafafa] text-sm placeholder:text-[#52525b] focus:outline-none transition-colors"
+                  style={inputStyle}
+                  onFocus={focusBorder}
+                  onBlur={blurBorder}
                   autoFocus
                 />
               </div>
 
               {/* School */}
               <div>
-                <label htmlFor="onb-school" className="block text-text-secondary text-sm mb-1.5">
-                  School name <span className="text-text-muted">(optional)</span>
+                <label htmlFor="onb-school" className="block text-[#a1a1aa] text-sm mb-1.5">
+                  School name <span className="text-[#52525b]">(optional)</span>
                 </label>
                 <input
                   id="onb-school"
@@ -457,20 +479,26 @@ export default function OnboardingPage() {
                   value={schoolName}
                   onChange={(e) => setSchoolName(e.target.value)}
                   placeholder="e.g. American School of London"
-                  className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors"
+                  className="w-full px-3.5 py-2.5 rounded-lg text-[#fafafa] text-sm placeholder:text-[#52525b] focus:outline-none transition-colors"
+                  style={inputStyle}
+                  onFocus={focusBorder}
+                  onBlur={blurBorder}
                 />
               </div>
 
               {/* Grade Level */}
               <div>
-                <label htmlFor="onb-grade" className="block text-text-secondary text-sm mb-1.5">
+                <label htmlFor="onb-grade" className="block text-[#a1a1aa] text-sm mb-1.5">
                   Grade level
                 </label>
                 <select
                   id="onb-grade"
                   value={gradeLevel}
                   onChange={(e) => setGradeLevel(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-white focus:outline-none focus:border-accent transition-colors appearance-none cursor-pointer"
+                  className="w-full px-3.5 py-2.5 rounded-lg text-[#fafafa] text-sm focus:outline-none transition-colors appearance-none cursor-pointer"
+                  style={inputStyle}
+                  onFocus={focusBorder}
+                  onBlur={blurBorder}
                 >
                   <option value="" disabled>
                     Select your grade
@@ -485,14 +513,17 @@ export default function OnboardingPage() {
 
               {/* Timezone */}
               <div>
-                <label htmlFor="onb-tz" className="block text-text-secondary text-sm mb-1.5">
+                <label htmlFor="onb-tz" className="block text-[#a1a1aa] text-sm mb-1.5">
                   Timezone
                 </label>
                 <select
                   id="onb-tz"
                   value={timezone}
                   onChange={(e) => setTimezone(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-white focus:outline-none focus:border-accent transition-colors appearance-none cursor-pointer"
+                  className="w-full px-3.5 py-2.5 rounded-lg text-[#fafafa] text-sm focus:outline-none transition-colors appearance-none cursor-pointer"
+                  style={inputStyle}
+                  onFocus={focusBorder}
+                  onBlur={blurBorder}
                 >
                   {TIMEZONES.map((tz) => (
                     <option key={tz.value} value={tz.value}>
@@ -504,7 +535,7 @@ export default function OnboardingPage() {
             </div>
 
             {error && (
-              <div className="p-3 rounded-lg bg-error/10 text-error text-sm">
+              <div className="p-3 rounded-lg text-red-400 text-sm" style={{ backgroundColor: "rgba(239,68,68,0.1)" }}>
                 {error}
               </div>
             )}
@@ -512,14 +543,16 @@ export default function OnboardingPage() {
             <div className="flex gap-3">
               <button
                 onClick={goBack}
-                className="px-6 py-3 rounded-xl border border-border text-text-secondary hover:text-white hover:border-accent/50 transition-colors cursor-pointer"
+                className="px-6 py-2.5 rounded-lg text-[#a1a1aa] hover:text-[#fafafa] transition-colors cursor-pointer"
+                style={{ border: "1px solid #1e1e22" }}
               >
                 Back
               </button>
               <button
                 onClick={saveBasics}
                 disabled={saving}
-                className="flex-1 py-3 rounded-xl bg-accent hover:bg-accent-hover text-white font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                className="flex-1 py-2.5 rounded-lg font-semibold transition-opacity cursor-pointer disabled:opacity-50"
+                style={{ backgroundColor: "#fafafa", color: "#09090b" }}
               >
                 {saving ? "Saving..." : "Continue"}
               </button>
@@ -533,10 +566,10 @@ export default function OnboardingPage() {
         {step === "personality" && (
           <div className="space-y-6">
             <div className="text-center">
-              <h1 className="text-2xl font-bold text-white mb-2">
-                Pick your AI vibe
+              <h1 className="text-2xl font-bold text-[#fafafa] mb-2">
+                Pick your AI style
               </h1>
-              <p className="text-text-secondary">
+              <p className="text-[#a1a1aa]">
                 How should I talk to you? You can always change this later in Settings.
               </p>
             </div>
@@ -548,30 +581,30 @@ export default function OnboardingPage() {
                   <button
                     key={p.id}
                     onClick={() => setPersonality(p.id)}
-                    className={`text-left p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer ${
-                      selected
-                        ? "border-accent bg-accent/10"
-                        : "border-border bg-bg-card hover:border-accent/30 hover:bg-bg-hover"
-                    }`}
+                    className="text-left p-4 rounded-xl transition-all duration-200 cursor-pointer"
+                    style={{
+                      border: selected ? "2px solid #7c3aed" : "2px solid #1e1e22",
+                      backgroundColor: selected ? "rgba(124,58,237,0.15)" : "#111113",
+                    }}
                   >
-                    <div className="flex items-start gap-3">
-                      <span className="text-2xl mt-0.5">{p.emoji}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-white font-semibold">{p.name}</span>
-                          {selected && (
-                            <span className="px-1.5 py-0.5 rounded bg-accent/20 text-accent text-xs font-medium">
-                              Selected
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-text-secondary text-sm mb-2">
-                          {p.description}
-                        </p>
-                        <p className="text-text-muted text-xs italic leading-relaxed">
-                          &ldquo;{p.quote}&rdquo;
-                        </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[#fafafa] font-semibold">{p.name}</span>
+                        {selected && (
+                          <span
+                            className="px-1.5 py-0.5 rounded text-xs font-medium"
+                            style={{ backgroundColor: "rgba(124,58,237,0.2)", color: "#a78bfa" }}
+                          >
+                            Selected
+                          </span>
+                        )}
                       </div>
+                      <p className="text-[#a1a1aa] text-sm mb-2">
+                        {p.description}
+                      </p>
+                      <p className="text-[#71717a] text-xs italic leading-relaxed">
+                        &ldquo;{p.quote}&rdquo;
+                      </p>
                     </div>
                   </button>
                 );
@@ -579,7 +612,7 @@ export default function OnboardingPage() {
             </div>
 
             {error && (
-              <div className="p-3 rounded-lg bg-error/10 text-error text-sm">
+              <div className="p-3 rounded-lg text-red-400 text-sm" style={{ backgroundColor: "rgba(239,68,68,0.1)" }}>
                 {error}
               </div>
             )}
@@ -587,14 +620,16 @@ export default function OnboardingPage() {
             <div className="flex gap-3">
               <button
                 onClick={goBack}
-                className="px-6 py-3 rounded-xl border border-border text-text-secondary hover:text-white hover:border-accent/50 transition-colors cursor-pointer"
+                className="px-6 py-2.5 rounded-lg text-[#a1a1aa] hover:text-[#fafafa] transition-colors cursor-pointer"
+                style={{ border: "1px solid #1e1e22" }}
               >
                 Back
               </button>
               <button
                 onClick={savePersonality}
                 disabled={saving}
-                className="flex-1 py-3 rounded-xl bg-accent hover:bg-accent-hover text-white font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                className="flex-1 py-2.5 rounded-lg font-semibold transition-opacity cursor-pointer disabled:opacity-50"
+                style={{ backgroundColor: "#fafafa", color: "#09090b" }}
               >
                 {saving ? "Saving..." : "Continue"}
               </button>
@@ -608,10 +643,10 @@ export default function OnboardingPage() {
         {step === "goals" && (
           <div className="space-y-6">
             <div className="text-center">
-              <h1 className="text-2xl font-bold text-white mb-2">
+              <h1 className="text-2xl font-bold text-[#fafafa] mb-2">
                 What are you aiming for?
               </h1>
-              <p className="text-text-secondary">
+              <p className="text-[#a1a1aa]">
                 Pick a few goals or write your own. This helps me prioritize what matters to you.
               </p>
             </div>
@@ -624,11 +659,12 @@ export default function OnboardingPage() {
                   <button
                     key={goal}
                     onClick={() => toggleGoal(goal)}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                      selected
-                        ? "bg-accent/20 border border-accent text-accent"
-                        : "bg-bg-card border border-border text-text-secondary hover:border-accent/30 hover:text-white"
-                    }`}
+                    className="px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer"
+                    style={{
+                      backgroundColor: selected ? "rgba(124,58,237,0.15)" : "#111113",
+                      border: selected ? "1px solid #7c3aed" : "1px solid #1e1e22",
+                      color: selected ? "#a78bfa" : "#a1a1aa",
+                    }}
                   >
                     {selected && (
                       <span className="mr-1.5">&#10003;</span>
@@ -641,7 +677,7 @@ export default function OnboardingPage() {
 
             {/* Custom goal input */}
             <div>
-              <label htmlFor="onb-custom-goal" className="block text-text-secondary text-sm mb-1.5">
+              <label htmlFor="onb-custom-goal" className="block text-[#a1a1aa] text-sm mb-1.5">
                 Or write your own
               </label>
               <textarea
@@ -650,18 +686,21 @@ export default function OnboardingPage() {
                 onChange={(e) => setCustomGoal(e.target.value)}
                 placeholder="e.g. Finish college applications by December..."
                 rows={3}
-                className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors resize-none"
+                className="w-full px-3.5 py-2.5 rounded-lg text-[#fafafa] text-sm placeholder:text-[#52525b] focus:outline-none transition-colors resize-none"
+                style={inputStyle}
+                onFocus={focusBorder}
+                onBlur={blurBorder}
               />
             </div>
 
             {goals.length > 0 && (
-              <p className="text-text-muted text-xs">
+              <p className="text-[#71717a] text-xs">
                 {goals.length} goal{goals.length !== 1 ? "s" : ""} selected
               </p>
             )}
 
             {error && (
-              <div className="p-3 rounded-lg bg-error/10 text-error text-sm">
+              <div className="p-3 rounded-lg text-red-400 text-sm" style={{ backgroundColor: "rgba(239,68,68,0.1)" }}>
                 {error}
               </div>
             )}
@@ -669,14 +708,16 @@ export default function OnboardingPage() {
             <div className="flex gap-3">
               <button
                 onClick={goBack}
-                className="px-6 py-3 rounded-xl border border-border text-text-secondary hover:text-white hover:border-accent/50 transition-colors cursor-pointer"
+                className="px-6 py-2.5 rounded-lg text-[#a1a1aa] hover:text-[#fafafa] transition-colors cursor-pointer"
+                style={{ border: "1px solid #1e1e22" }}
               >
                 Back
               </button>
               <button
                 onClick={saveGoals}
                 disabled={saving}
-                className="flex-1 py-3 rounded-xl bg-accent hover:bg-accent-hover text-white font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                className="flex-1 py-2.5 rounded-lg font-semibold transition-opacity cursor-pointer disabled:opacity-50"
+                style={{ backgroundColor: "#fafafa", color: "#09090b" }}
               >
                 {saving ? "Saving..." : "Continue"}
               </button>
@@ -690,10 +731,10 @@ export default function OnboardingPage() {
         {step === "lms" && (
           <div className="space-y-6">
             <div className="text-center">
-              <h1 className="text-2xl font-bold text-white mb-2">
+              <h1 className="text-2xl font-bold text-[#fafafa] mb-2">
                 Connect your LMS
               </h1>
-              <p className="text-text-secondary">
+              <p className="text-[#a1a1aa]">
                 Log into your school&apos;s learning management system below. We&apos;ll securely save your session.
               </p>
             </div>
@@ -704,7 +745,7 @@ export default function OnboardingPage() {
             />
 
             {error && (
-              <div className="p-3 rounded-lg bg-error/10 text-error text-sm">
+              <div className="p-3 rounded-lg text-red-400 text-sm" style={{ backgroundColor: "rgba(239,68,68,0.1)" }}>
                 {error}
               </div>
             )}
@@ -712,7 +753,8 @@ export default function OnboardingPage() {
             <div className="flex gap-3">
               <button
                 onClick={goBack}
-                className="px-6 py-3 rounded-xl border border-border text-text-secondary hover:text-white hover:border-accent/50 transition-colors cursor-pointer"
+                className="px-6 py-2.5 rounded-lg text-[#a1a1aa] hover:text-[#fafafa] transition-colors cursor-pointer"
+                style={{ border: "1px solid #1e1e22" }}
               >
                 Back
               </button>
@@ -720,7 +762,7 @@ export default function OnboardingPage() {
 
             <button
               onClick={skipLms}
-              className="w-full text-center text-text-muted text-sm hover:text-text-secondary transition-colors cursor-pointer"
+              className="w-full text-center text-[#52525b] text-sm hover:text-[#a1a1aa] transition-colors cursor-pointer"
             >
               Skip for now &mdash; I&apos;ll connect my LMS later in Settings
             </button>
@@ -733,81 +775,81 @@ export default function OnboardingPage() {
         {step === "confirm" && (
           <div className="space-y-6">
             <div className="text-center">
-              <div className="w-16 h-16 mx-auto rounded-2xl bg-success/20 flex items-center justify-center mb-4">
-                <svg className="w-8 h-8 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div
+                className="w-16 h-16 mx-auto rounded-2xl flex items-center justify-center mb-4"
+                style={{ backgroundColor: "rgba(34,197,94,0.15)" }}
+              >
+                <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m4.5 12.75 6 6 9-13.5" />
                 </svg>
               </div>
-              <h1 className="text-2xl font-bold text-white mb-2">
-                Looking good, {name || "there"}!
+              <h1 className="text-2xl font-bold text-[#fafafa] mb-2">
+                You&apos;re all set{name ? `, ${name}` : ""}.
               </h1>
-              <p className="text-text-secondary">
-                Here&apos;s a summary of your setup. Ready to roll?
+              <p className="text-[#a1a1aa]">
+                Here&apos;s a summary of your setup.
               </p>
             </div>
 
             {/* Summary cards */}
             <div className="space-y-3">
               {/* Basics */}
-              <div className="p-4 rounded-xl bg-bg-card border border-border">
+              <div className="p-4 rounded-xl" style={cardBg}>
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-white font-medium text-sm">Profile</h3>
+                  <h3 className="text-[#fafafa] font-medium text-sm">Profile</h3>
                   <button
                     onClick={() => goToStep("basics", "backward")}
-                    className="text-accent text-xs hover:underline cursor-pointer"
+                    className="text-[#7c3aed] text-xs hover:underline cursor-pointer"
                   >
                     Edit
                   </button>
                 </div>
                 <div className="grid grid-cols-2 gap-y-1.5 text-sm">
-                  <span className="text-text-muted">Name</span>
-                  <span className="text-white text-right">{name || "Not set"}</span>
+                  <span className="text-[#71717a]">Name</span>
+                  <span className="text-[#fafafa] text-right">{name || "Not set"}</span>
                   {schoolName && (
                     <>
-                      <span className="text-text-muted">School</span>
-                      <span className="text-white text-right">{schoolName}</span>
+                      <span className="text-[#71717a]">School</span>
+                      <span className="text-[#fafafa] text-right">{schoolName}</span>
                     </>
                   )}
-                  <span className="text-text-muted">Grade</span>
-                  <span className="text-white text-right">{gradeLevel || "Not set"}</span>
-                  <span className="text-text-muted">Timezone</span>
-                  <span className="text-white text-right">
+                  <span className="text-[#71717a]">Grade</span>
+                  <span className="text-[#fafafa] text-right">{gradeLevel || "Not set"}</span>
+                  <span className="text-[#71717a]">Timezone</span>
+                  <span className="text-[#fafafa] text-right">
                     {TIMEZONES.find((t) => t.value === timezone)?.label || timezone}
                   </span>
                 </div>
               </div>
 
               {/* Personality */}
-              <div className="p-4 rounded-xl bg-bg-card border border-border">
+              <div className="p-4 rounded-xl" style={cardBg}>
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-white font-medium text-sm">AI Personality</h3>
+                  <h3 className="text-[#fafafa] font-medium text-sm">AI Personality</h3>
                   <button
                     onClick={() => goToStep("personality", "backward")}
-                    className="text-accent text-xs hover:underline cursor-pointer"
+                    className="text-[#7c3aed] text-xs hover:underline cursor-pointer"
                   >
                     Edit
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-lg">
-                    {PERSONALITIES.find((p) => p.id === personality)?.emoji}
-                  </span>
-                  <span className="text-white text-sm font-medium">
+                  <span className="text-[#fafafa] text-sm font-medium">
                     {PERSONALITIES.find((p) => p.id === personality)?.name}
                   </span>
-                  <span className="text-text-muted text-xs">
+                  <span className="text-[#71717a] text-xs">
                     &mdash; {PERSONALITIES.find((p) => p.id === personality)?.description}
                   </span>
                 </div>
               </div>
 
               {/* Goals */}
-              <div className="p-4 rounded-xl bg-bg-card border border-border">
+              <div className="p-4 rounded-xl" style={cardBg}>
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-white font-medium text-sm">Goals</h3>
+                  <h3 className="text-[#fafafa] font-medium text-sm">Goals</h3>
                   <button
                     onClick={() => goToStep("goals", "backward")}
-                    className="text-accent text-xs hover:underline cursor-pointer"
+                    className="text-[#7c3aed] text-xs hover:underline cursor-pointer"
                   >
                     Edit
                   </button>
@@ -817,40 +859,44 @@ export default function OnboardingPage() {
                     {goals.map((g) => (
                       <span
                         key={g}
-                        className="px-2 py-1 rounded-lg bg-accent/10 text-accent text-xs"
+                        className="px-2 py-1 rounded-lg text-xs"
+                        style={{ backgroundColor: "rgba(124,58,237,0.1)", color: "#a78bfa" }}
                       >
                         {g}
                       </span>
                     ))}
                     {customGoal.trim() && !goals.includes(customGoal.trim()) && (
-                      <span className="px-2 py-1 rounded-lg bg-accent/10 text-accent text-xs">
+                      <span
+                        className="px-2 py-1 rounded-lg text-xs"
+                        style={{ backgroundColor: "rgba(124,58,237,0.1)", color: "#a78bfa" }}
+                      >
                         {customGoal.trim()}
                       </span>
                     )}
                   </div>
                 ) : (
-                  <p className="text-text-muted text-sm">No goals set yet</p>
+                  <p className="text-[#71717a] text-sm">No goals set yet</p>
                 )}
               </div>
 
               {/* LMS */}
-              <div className="p-4 rounded-xl bg-bg-card border border-border">
+              <div className="p-4 rounded-xl" style={cardBg}>
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-white font-medium text-sm">LMS Connection</h3>
+                  <h3 className="text-[#fafafa] font-medium text-sm">LMS Connection</h3>
                   <button
                     onClick={() => goToStep("lms", "backward")}
-                    className="text-accent text-xs hover:underline cursor-pointer"
+                    className="text-[#7c3aed] text-xs hover:underline cursor-pointer"
                   >
                     Edit
                   </button>
                 </div>
                 {lmsConnected ? (
                   <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-success" />
-                    <span className="text-white text-sm">Connected via browser session</span>
+                    <div className="w-2 h-2 rounded-full bg-green-400" />
+                    <span className="text-[#fafafa] text-sm">Connected via browser session</span>
                   </div>
                 ) : (
-                  <p className="text-text-muted text-sm">
+                  <p className="text-[#71717a] text-sm">
                     Not connected &mdash; you can connect your LMS later in Settings.
                   </p>
                 )}
@@ -858,7 +904,7 @@ export default function OnboardingPage() {
             </div>
 
             {error && (
-              <div className="p-3 rounded-lg bg-error/10 text-error text-sm">
+              <div className="p-3 rounded-lg text-red-400 text-sm" style={{ backgroundColor: "rgba(239,68,68,0.1)" }}>
                 {error}
               </div>
             )}
@@ -866,16 +912,18 @@ export default function OnboardingPage() {
             <div className="flex gap-3">
               <button
                 onClick={goBack}
-                className="px-6 py-3 rounded-xl border border-border text-text-secondary hover:text-white hover:border-accent/50 transition-colors cursor-pointer"
+                className="px-6 py-2.5 rounded-lg text-[#a1a1aa] hover:text-[#fafafa] transition-colors cursor-pointer"
+                style={{ border: "1px solid #1e1e22" }}
               >
                 Back
               </button>
               <button
                 onClick={completeOnboarding}
                 disabled={saving}
-                className="flex-1 py-4 rounded-xl bg-accent hover:bg-accent-hover text-white font-bold text-lg transition-colors cursor-pointer disabled:opacity-50"
+                className="flex-1 py-3.5 rounded-lg font-bold text-base transition-opacity cursor-pointer disabled:opacity-50"
+                style={{ backgroundColor: "#fafafa", color: "#09090b" }}
               >
-                {saving ? "Setting up..." : "Looks good \u2014 let\u2019s go!"}
+                {saving ? "Setting up..." : "Go to your dashboard"}
               </button>
             </div>
           </div>

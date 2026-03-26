@@ -38,9 +38,9 @@ interface Assignment {
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const PRESETS = [
-  { label: "Pomodoro", minutes: 25, type: "pomodoro" },
-  { label: "Deep Work", minutes: 45, type: "deep_work" },
-  { label: "Quick", minutes: 15, type: "quick" },
+  { label: "25 min", minutes: 25, type: "pomodoro" },
+  { label: "45 min", minutes: 45, type: "deep_work" },
+  { label: "15 min", minutes: 15, type: "quick" },
 ] as const;
 
 const STORAGE_KEY = "schoolpilot_focus_timer";
@@ -127,6 +127,15 @@ function getLast7DayLabels(): string[] {
   return labels;
 }
 
+function focusTypeLabel(type: string): string {
+  switch (type) {
+    case "pomodoro": return "Pomodoro";
+    case "deep_work": return "Deep Work";
+    case "quick": return "Quick";
+    default: return "Custom";
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Persisted timer state
 // ---------------------------------------------------------------------------
@@ -161,8 +170,8 @@ function clearTimer() {
 // Progress Ring Component
 // ---------------------------------------------------------------------------
 
-function ProgressRing({ progress, size = 220 }: { progress: number; size?: number }) {
-  const strokeWidth = 8;
+function ProgressRing({ progress, size = 240 }: { progress: number; size?: number }) {
+  const strokeWidth = 6;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference * (1 - Math.min(progress, 1));
@@ -180,7 +189,7 @@ function ProgressRing({ progress, size = 220 }: { progress: number; size?: numbe
         cy={size / 2}
         r={radius}
         fill="none"
-        stroke="#1a1a2e"
+        stroke="#1e1e22"
         strokeWidth={strokeWidth}
       />
       {/* Progress arc */}
@@ -213,16 +222,15 @@ function CelebrationModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-bg-card border border-border rounded-2xl p-8 max-w-sm w-full mx-4 text-center animate-in fade-in zoom-in duration-300">
-        <div className="text-5xl mb-4">&#127881;</div>
-        <h2 className="text-2xl font-bold text-white mb-2">Session Complete!</h2>
-        <p className="text-text-secondary mb-6">
-          You focused for <span className="text-accent font-semibold">{minutes} minutes</span>.
-          Great work — keep the streak going!
+      <div className="bg-[#111113] border border-[#1e1e22] rounded-2xl p-8 max-w-sm w-full mx-4 text-center animate-in fade-in zoom-in duration-300">
+        <h2 className="text-2xl font-bold text-[#fafafa] mb-2">Session Complete</h2>
+        <p className="text-[#a1a1aa] mb-6">
+          You focused for <span className="text-[#7c3aed] font-semibold">{minutes} minutes</span>.
+          Great work -- keep the streak going.
         </p>
         <button
           onClick={onClose}
-          className="px-6 py-3 bg-accent hover:bg-accent/80 rounded-xl text-white font-semibold transition-colors"
+          className="px-6 py-3 bg-[#fafafa] hover:bg-[#fafafa]/90 rounded-xl text-[#09090b] font-semibold transition-colors"
         >
           Done
         </button>
@@ -240,24 +248,24 @@ function WeeklyChart({ dailyMinutes }: { dailyMinutes: number[] }) {
   const max = Math.max(...dailyMinutes, 1);
 
   return (
-    <div className="bg-bg-card rounded-xl p-5 border border-border">
-      <h3 className="text-sm font-medium text-text-secondary mb-4">This Week</h3>
+    <div className="bg-[#111113] rounded-xl p-5 border border-[#1e1e22]">
+      <h3 className="text-[11px] uppercase tracking-wider text-[#71717a] font-medium mb-4">This Week</h3>
       <div className="flex items-end justify-between gap-2 h-32">
         {dailyMinutes.map((mins, i) => {
           const heightPct = (mins / max) * 100;
           return (
             <div key={i} className="flex flex-col items-center flex-1 h-full justify-end">
               {mins > 0 && (
-                <span className="text-[10px] text-text-muted mb-1">{mins}m</span>
+                <span className="text-[10px] text-[#52525b] mb-1">{mins}m</span>
               )}
               <div
                 className="w-full max-w-[32px] rounded-t-md transition-all duration-500"
                 style={{
                   height: `${Math.max(heightPct, mins > 0 ? 4 : 0)}%`,
-                  backgroundColor: i === 6 ? "#7c3aed" : "#3b3b5c",
+                  backgroundColor: i === 6 ? "#7c3aed" : "#27272a",
                 }}
               />
-              <span className="text-[10px] text-text-muted mt-2">{labels[i]}</span>
+              <span className="text-[10px] text-[#52525b] mt-2">{labels[i]}</span>
             </div>
           );
         })}
@@ -307,7 +315,7 @@ export default function FocusPage() {
       const data = await apiFetch<Assignment[]>("/api/assignments");
       setAssignments(data);
     } catch {
-      // Not critical — assignments list is optional
+      // Not critical -- assignments list is optional
     }
   }, []);
 
@@ -332,6 +340,14 @@ export default function FocusPage() {
     playChime();
     setShowCelebration(true);
 
+    // Track focus session completion
+    import("@/components/PostHogProvider").then(({ trackEvent }) => {
+      trackEvent("focus_session_completed", {
+        duration_minutes: elapsedMinutes,
+        focus_type: focusType,
+      });
+    }).catch(() => {});
+
     try {
       const body: Record<string, unknown> = {
         duration_minutes: elapsedMinutes,
@@ -351,7 +367,7 @@ export default function FocusPage() {
     }
   }, [focusType, selectedAssignment, loadStats, stopInterval]);
 
-  // Tick function — recalculates from wall clock
+  // Tick function -- recalculates from wall clock
   const tick = useCallback(() => {
     const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
     const remaining = totalSecondsRef.current - elapsed;
@@ -450,11 +466,11 @@ export default function FocusPage() {
 
   return (
     <div className="max-w-2xl mx-auto p-6 pb-20">
-      <h1 className="text-2xl font-bold text-white mb-6">Focus Timer</h1>
+      <h1 className="text-2xl font-bold text-[#fafafa] mb-6">Focus Timer</h1>
 
       {/* Error banner */}
       {error && (
-        <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+        <div className="mb-4 p-3 rounded-lg bg-[#ef4444]/10 border border-[#ef4444]/30 text-[#ef4444] text-sm">
           {error}
           <button onClick={() => setError(null)} className="ml-2 underline">dismiss</button>
         </div>
@@ -463,43 +479,58 @@ export default function FocusPage() {
       {/* Streak & Stats Row */}
       {stats && (
         <div className="grid grid-cols-3 gap-3 mb-6">
-          <div className="bg-bg-card rounded-xl p-4 border border-border text-center">
-            <p className="text-3xl font-bold text-accent">{stats.current_streak}</p>
-            <p className="text-xs text-text-muted mt-1">Day Streak</p>
+          <div className="bg-[#111113] rounded-xl p-4 border border-[#1e1e22] text-center">
+            <p className="text-3xl font-bold text-[#7c3aed]">{stats.current_streak}</p>
+            <p className="text-xs text-[#71717a] mt-1">Day Streak</p>
             {stats.longest_streak > 0 && (
-              <p className="text-[10px] text-text-muted">Best: {stats.longest_streak}</p>
+              <p className="text-[10px] text-[#52525b]">Best: {stats.longest_streak}</p>
             )}
           </div>
-          <div className="bg-bg-card rounded-xl p-4 border border-border text-center">
-            <p className="text-3xl font-bold text-white">{stats.today_minutes}</p>
-            <p className="text-xs text-text-muted mt-1">Minutes Today</p>
+          <div className="bg-[#111113] rounded-xl p-4 border border-[#1e1e22] text-center">
+            <p className="text-3xl font-bold text-[#fafafa]">{stats.today_minutes}</p>
+            <p className="text-xs text-[#71717a] mt-1">Minutes Today</p>
           </div>
-          <div className="bg-bg-card rounded-xl p-4 border border-border text-center">
-            <p className="text-3xl font-bold text-white">{Math.round(stats.week_minutes / 60)}h {stats.week_minutes % 60}m</p>
-            <p className="text-xs text-text-muted mt-1">This Week</p>
+          <div className="bg-[#111113] rounded-xl p-4 border border-[#1e1e22] text-center">
+            <p className="text-3xl font-bold text-[#fafafa]">{Math.round(stats.week_minutes / 60)}h {stats.week_minutes % 60}m</p>
+            <p className="text-xs text-[#71717a] mt-1">This Week</p>
           </div>
         </div>
       )}
 
       {/* Timer Card */}
-      <div className="bg-bg-card rounded-2xl p-8 border border-border text-center mb-6">
+      <div className={`bg-[#111113] rounded-2xl p-8 border border-[#1e1e22] text-center mb-6 relative overflow-hidden ${isRunning ? "" : ""}`}>
+        {/* Subtle radial glow when running */}
+        {isRunning && (
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background: "radial-gradient(circle at 50% 40%, rgba(124,58,237,0.15) 0%, transparent 60%)",
+            }}
+          />
+        )}
+
         {/* Progress Ring + Countdown */}
-        <div className="relative w-[220px] h-[220px] mx-auto mb-6">
-          <ProgressRing progress={progress} size={220} />
-          <div className="absolute inset-0 flex items-center justify-center">
+        <div className="relative w-[240px] h-[240px] mx-auto mb-6">
+          <ProgressRing progress={progress} size={240} />
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
             <span
-              className="text-5xl font-mono font-bold text-white tracking-wider"
+              className="text-5xl font-mono font-bold text-[#fafafa] tracking-tight"
               role="timer"
               aria-live="off"
               aria-label={`${mm} minutes ${ss} seconds remaining`}
             >
               {mm}:{ss}
             </span>
+            {isRunning && (
+              <span className="text-[#52525b] text-xs mt-2">
+                {focusTypeLabel(focusType)}
+              </span>
+            )}
           </div>
         </div>
 
         {!isRunning && timeLeft === 0 ? (
-          <>
+          <div className="relative">
             {/* Presets */}
             <div className="flex flex-wrap justify-center gap-3 mb-4">
               {PRESETS.map((p) => (
@@ -510,13 +541,13 @@ export default function FocusPage() {
                     setCustomMinutes("");
                     setFocusType(p.type);
                   }}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                     selectedMinutes === p.minutes && !customMinutes
-                      ? "bg-accent text-white"
-                      : "bg-bg-dark text-text-secondary hover:text-white border border-border"
+                      ? "border-[#7c3aed] text-[#7c3aed]"
+                      : "border-[#27272a] text-[#a1a1aa] hover:text-[#fafafa] hover:border-[#27272a]"
                   }`}
                 >
-                  {p.label} ({p.minutes}m)
+                  {p.label}
                 </button>
               ))}
             </div>
@@ -538,7 +569,7 @@ export default function FocusPage() {
                   }
                 }}
                 placeholder="Custom min"
-                className="w-28 bg-bg-dark border border-border rounded-lg px-3 py-2 text-center text-white placeholder:text-text-muted focus:outline-none focus:border-accent text-sm"
+                className="w-28 bg-[#09090b] border border-[#1e1e22] rounded-lg px-3 py-2 text-center text-[#fafafa] placeholder:text-[#52525b] focus:outline-none focus:border-[#7c3aed]/40 text-sm"
               />
             </div>
 
@@ -550,7 +581,7 @@ export default function FocusPage() {
                   id="assignment-select"
                   value={selectedAssignment ?? ""}
                   onChange={(e) => setSelectedAssignment(e.target.value || null)}
-                  className="w-64 max-w-full bg-bg-dark border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent appearance-none cursor-pointer"
+                  className="w-64 max-w-full bg-[#09090b] border border-[#1e1e22] rounded-lg px-3 py-2 text-sm text-[#fafafa] focus:outline-none focus:border-[#7c3aed]/40 appearance-none cursor-pointer"
                 >
                   <option value="">No assignment (general focus)</option>
                   {assignments.map((a) => (
@@ -565,19 +596,16 @@ export default function FocusPage() {
             {/* Start button */}
             <button
               onClick={startTimer}
-              className="px-8 py-3 bg-accent hover:bg-accent/80 rounded-xl text-white font-semibold text-lg transition-colors"
+              className="px-8 py-3 bg-[#fafafa] hover:bg-[#fafafa]/90 rounded-xl text-[#09090b] font-semibold text-lg transition-colors"
             >
               Start Focus
             </button>
-          </>
+          </div>
         ) : (
-          <div className="flex flex-col items-center gap-3">
-            <p className="text-sm text-text-muted">
-              {focusType === "pomodoro" ? "Pomodoro" : focusType === "deep_work" ? "Deep Work" : focusType === "quick" ? "Quick" : "Custom"} session
-            </p>
+          <div className="relative flex flex-col items-center gap-3">
             <button
               onClick={stopTimer}
-              className="px-8 py-3 bg-red-500/20 hover:bg-red-500/30 rounded-xl text-red-400 font-semibold text-lg transition-colors border border-red-500/30"
+              className="px-8 py-3 bg-[#ef4444]/10 hover:bg-[#ef4444]/20 rounded-xl text-[#ef4444] font-semibold text-lg transition-colors border border-[#ef4444]/20"
             >
               Stop
             </button>
@@ -592,43 +620,35 @@ export default function FocusPage() {
 
       {/* Today's Sessions */}
       {sessionsToday.length > 0 && (
-        <div className="bg-bg-card rounded-xl p-5 border border-border mb-6">
-          <h3 className="text-sm font-medium text-text-secondary mb-3">Today&apos;s Sessions</h3>
-          <div className="space-y-2">
+        <div className="bg-[#111113] rounded-xl p-5 border border-[#1e1e22] mb-6">
+          <h3 className="text-[11px] uppercase tracking-wider text-[#71717a] font-medium mb-3">Today&apos;s Sessions</h3>
+          <div className="space-y-0">
             {sessionsToday.map((session, idx) => {
               const time = new Date(session.completed_at);
               const hours = time.getHours();
               const minutes = time.getMinutes();
               const ampm = hours >= 12 ? "PM" : "AM";
               const h = hours % 12 || 12;
-              const label =
-                session.focus_type === "pomodoro"
-                  ? "Pomodoro"
-                  : session.focus_type === "deep_work"
-                  ? "Deep Work"
-                  : session.focus_type === "quick"
-                  ? "Quick"
-                  : "Custom";
               return (
                 <div
                   key={session.id || idx}
-                  className="flex items-center justify-between py-2 border-b border-border last:border-b-0"
+                  className="flex items-center justify-between py-2.5 border-b border-[#1e1e22] last:border-b-0"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 rounded-full bg-accent" />
-                    <span className="text-sm text-white">{label}</span>
-                    <span className="text-xs text-text-muted">{session.duration_minutes}m</span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#7c3aed]" />
+                    <span className="text-sm text-[#fafafa]">{focusTypeLabel(session.focus_type)}</span>
+                    <span className="text-xs text-[#52525b]">{session.duration_minutes}m</span>
                   </div>
-                  <span className="text-xs text-text-muted">
+                  <span className="text-xs text-[#52525b]">
                     {h}:{String(minutes).padStart(2, "0")} {ampm}
                   </span>
                 </div>
               );
             })}
           </div>
-          <div className="mt-3 pt-3 border-t border-border flex justify-between text-sm">
-            <span className="text-text-secondary">Total</span>
-            <span className="text-white font-medium">
+          <div className="mt-3 pt-3 border-t border-[#1e1e22] flex justify-between text-sm">
+            <span className="text-[#a1a1aa]">Total</span>
+            <span className="text-[#fafafa] font-medium">
               {sessionsToday.reduce((s, x) => s + x.duration_minutes, 0)} minutes
             </span>
           </div>
@@ -637,7 +657,7 @@ export default function FocusPage() {
 
       {/* Active days note */}
       {stats && stats.total_active_days > 0 && (
-        <p className="text-center text-xs text-text-muted">
+        <p className="text-center text-xs text-[#52525b]">
           {stats.total_active_days} total active day{stats.total_active_days !== 1 ? "s" : ""}
         </p>
       )}

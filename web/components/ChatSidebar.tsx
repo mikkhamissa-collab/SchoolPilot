@@ -7,6 +7,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { backendFetch, apiStream, type SSEEvent } from "@/lib/api";
 import ChatMessage, { type ChatMessageData, type ActionTaken } from "@/components/ChatMessage";
+import { ThinkingOrb, ThinkingDots } from "@/components/ui/Loading";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -23,21 +24,15 @@ interface Personality {
   id: string;
   name: string;
   description: string;
+  color: string; // dot color
 }
 
 const PERSONALITIES: Personality[] = [
-  { id: "coach", name: "Coach", description: "Direct and motivating" },
-  { id: "friend", name: "Friend", description: "Chill and supportive" },
-  { id: "mentor", name: "Mentor", description: "Wise and thoughtful" },
-  { id: "drill_sergeant", name: "Drill Sergeant", description: "No excuses" },
+  { id: "coach", name: "Coach", description: "Direct and motivating", color: "#7c3aed" },
+  { id: "friend", name: "Friend", description: "Chill and supportive", color: "#22c55e" },
+  { id: "mentor", name: "Mentor", description: "Wise and thoughtful", color: "#3b82f6" },
+  { id: "drill_sergeant", name: "Drill Sergeant", description: "No excuses", color: "#ef4444" },
 ];
-
-const PERSONALITY_ICONS: Record<string, string> = {
-  coach: "\u{1F3C8}",
-  friend: "\u{1F91D}",
-  mentor: "\u{1F9D1}\u200D\u{1F393}",
-  drill_sergeant: "\u{1F4AA}",
-};
 
 const QUICK_ACTIONS = [
   "What should I work on?",
@@ -261,6 +256,12 @@ export default function ChatSidebar() {
         inputRef.current.style.height = "auto";
       }
 
+      // Track chat usage
+      try {
+        const { trackEvent } = await import("@/components/PostHogProvider");
+        trackEvent("chat_sent", { message_length: messageText.length });
+      } catch {}
+
       // Optimistically add user message to the list
       const userMessage: ChatMessageData = {
         id: `temp-user-${Date.now()}`,
@@ -369,6 +370,7 @@ export default function ChatSidebar() {
   const currentPersonality = PERSONALITIES.find((p) => p.id === personality) || PERSONALITIES[0];
   const activeConversation = conversations.find((c) => c.id === activeConversationId);
   const conversationTitle = activeConversation?.title || "New Chat";
+  const hasInput = input.trim().length > 0;
 
   // =========================================================================
   // RENDER
@@ -381,8 +383,8 @@ export default function ChatSidebar() {
         onClick={() => setIsExpanded(!isExpanded)}
         className={`fixed right-0 top-1/2 -translate-y-1/2 z-40 w-8 h-16 flex items-center justify-center rounded-l-lg transition-all duration-300 ${
           isExpanded
-            ? "bg-bg-card border border-r-0 border-border hover:bg-bg-hover"
-            : "bg-accent hover:bg-accent-hover shadow-lg shadow-accent/20"
+            ? "bg-surface border border-r-0 border-border hover:bg-surface-hover"
+            : "bg-accent hover:bg-accent/80 shadow-lg shadow-accent/20"
         }`}
         aria-label={isExpanded ? "Collapse chat" : "Open chat"}
         title={isExpanded ? "Collapse chat" : "Open chat"}
@@ -402,7 +404,7 @@ export default function ChatSidebar() {
 
       {/* ---- Sidebar panel ---- */}
       <aside
-        className={`fixed right-0 top-0 h-screen z-30 flex flex-col bg-bg-card border-l border-border transition-all duration-300 ease-in-out ${
+        className={`fixed right-0 top-0 h-screen z-30 flex flex-col bg-bg border-l border-border transition-all duration-300 ease-in-out ${
           isExpanded ? "w-full sm:w-[400px] translate-x-0" : "w-full sm:w-[400px] translate-x-full"
         }`}
         aria-label="Chat sidebar"
@@ -412,25 +414,25 @@ export default function ChatSidebar() {
         {/* HEADER                                                        */}
         {/* ============================================================= */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-2.5 min-w-0">
             {/* Mobile close button */}
             <button
               onClick={() => setIsExpanded(false)}
-              className="sm:hidden p-1 rounded-md hover:bg-bg-hover text-text-muted hover:text-white transition-colors shrink-0 mr-1"
+              className="sm:hidden p-1 rounded-md hover:bg-surface-hover text-muted hover:text-text transition-colors shrink-0 mr-0.5"
               aria-label="Close chat"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
-            {/* Back arrow — shown when viewing a conversation */}
+            {/* Back arrow -- shown when viewing a conversation */}
             {(activeConversationId || messages.length > 0) && !showConversations && (
               <button
                 onClick={() => {
                   setShowConversations(true);
                   loadConversations();
                 }}
-                className="p-1 rounded-md hover:bg-bg-hover text-text-muted hover:text-white transition-colors shrink-0"
+                className="p-1 rounded-md hover:bg-surface-hover text-muted hover:text-text transition-colors shrink-0"
                 aria-label="Back to conversations"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -438,7 +440,11 @@ export default function ChatSidebar() {
                 </svg>
               </button>
             )}
-            <h2 className="text-sm font-semibold text-white truncate">
+            {/* ThinkingOrb + title */}
+            {!showConversations && !(activeConversationId || messages.length > 0) && (
+              <ThinkingOrb />
+            )}
+            <h2 className="text-sm font-semibold text-text truncate">
               {showConversations ? "Conversations" : conversationTitle}
             </h2>
           </div>
@@ -448,18 +454,24 @@ export default function ChatSidebar() {
             <div className="relative" ref={personalityPickerRef}>
               <button
                 onClick={() => setShowPersonalityPicker(!showPersonalityPicker)}
-                className="p-1.5 rounded-md hover:bg-bg-hover text-text-muted hover:text-white transition-colors text-base leading-none"
+                className="p-1.5 rounded-md hover:bg-surface-hover text-muted hover:text-text transition-colors flex items-center gap-1.5"
                 aria-label={`Personality: ${currentPersonality.name}`}
                 title={`Personality: ${currentPersonality.name}`}
               >
-                {PERSONALITY_ICONS[personality] || PERSONALITY_ICONS.coach}
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: currentPersonality.color }}
+                />
+                <span className="text-xs text-text-secondary hidden sm:inline">
+                  {currentPersonality.name}
+                </span>
               </button>
 
               {/* Dropdown */}
               {showPersonalityPicker && (
-                <div className="absolute right-0 top-full mt-1 w-56 bg-bg-card border border-border rounded-xl shadow-2xl shadow-black/40 overflow-hidden z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+                <div className="absolute right-0 top-full mt-1 w-52 bg-surface border border-border rounded-xl shadow-2xl shadow-black/50 overflow-hidden z-50 animate-in fade-in slide-in-from-top-1 duration-150">
                   <div className="px-3 pt-2.5 pb-1.5">
-                    <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider">
+                    <p className="text-[11px] font-medium text-dim uppercase tracking-wider">
                       AI Personality
                     </p>
                   </div>
@@ -472,20 +484,21 @@ export default function ChatSidebar() {
                       }}
                       className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors ${
                         personality === p.id
-                          ? "bg-accent/10 text-accent"
-                          : "text-text-secondary hover:bg-bg-hover hover:text-white"
+                          ? "bg-accent/10 text-accent-light"
+                          : "text-text-secondary hover:bg-surface-hover hover:text-text"
                       }`}
                     >
-                      <span className="text-base shrink-0 leading-none">
-                        {PERSONALITY_ICONS[p.id]}
-                      </span>
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: p.color }}
+                      />
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-medium">{p.name}</p>
-                        <p className="text-[11px] text-text-muted">{p.description}</p>
+                        <p className="text-[11px] text-dim">{p.description}</p>
                       </div>
                       {personality === p.id && (
                         <svg
-                          className="w-3.5 h-3.5 text-accent ml-auto shrink-0"
+                          className="w-3.5 h-3.5 text-accent-light ml-auto shrink-0"
                           fill="currentColor"
                           viewBox="0 0 20 20"
                         >
@@ -505,12 +518,24 @@ export default function ChatSidebar() {
             {/* New chat button */}
             <button
               onClick={startNewChat}
-              className="p-1.5 rounded-md hover:bg-bg-hover text-text-muted hover:text-white transition-colors"
+              className="p-1.5 rounded-md hover:bg-surface-hover text-muted hover:text-text transition-colors"
               aria-label="New chat"
               title="New chat"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+
+            {/* Collapse button (desktop) */}
+            <button
+              onClick={() => setIsExpanded(false)}
+              className="hidden sm:flex p-1.5 rounded-md hover:bg-surface-hover text-muted hover:text-text transition-colors"
+              aria-label="Collapse chat"
+              title="Collapse chat"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7" />
               </svg>
             </button>
           </div>
@@ -523,16 +548,16 @@ export default function ChatSidebar() {
           <div className="flex-1 overflow-y-auto">
             {conversations.length === 0 ? (
               <div className="p-8 text-center">
-                <div className="w-10 h-10 rounded-xl bg-bg-hover flex items-center justify-center mx-auto mb-3">
-                  <svg className="w-5 h-5 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <div className="w-10 h-10 rounded-xl bg-surface-hover flex items-center justify-center mx-auto mb-3">
+                  <svg className="w-5 h-5 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                   </svg>
                 </div>
-                <p className="text-text-muted text-sm mb-1">No conversations yet</p>
-                <p className="text-text-muted text-xs mb-4">Start chatting to create one.</p>
+                <p className="text-text-secondary text-sm mb-1">No conversations yet</p>
+                <p className="text-muted text-xs mb-4">Start chatting to create one.</p>
                 <button
                   onClick={startNewChat}
-                  className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
+                  className="px-4 py-2 rounded-lg bg-accent hover:bg-accent/80 text-white text-sm font-medium transition-colors"
                 >
                   New Chat
                 </button>
@@ -553,21 +578,21 @@ export default function ChatSidebar() {
                     }}
                     className={`group flex items-center justify-between px-4 py-3 cursor-pointer transition-colors ${
                       conv.id === activeConversationId
-                        ? "bg-accent/10 border-r-2 border-accent"
-                        : "hover:bg-bg-hover"
+                        ? "bg-accent-glow border-l-2 border-accent"
+                        : "hover:bg-surface-hover"
                     }`}
                   >
                     <div className="min-w-0 flex-1 mr-2">
-                      <p className="text-sm text-white font-medium truncate">
+                      <p className="text-sm text-text font-medium truncate">
                         {conv.title || "Untitled"}
                       </p>
-                      <p className="text-[11px] text-text-muted mt-0.5">
+                      <p className="text-[11px] text-dim mt-0.5">
                         {formatRelativeDate(conv.updated_at || conv.created_at)}
                       </p>
                     </div>
                     <button
                       onClick={(e) => deleteConversation(conv.id, e)}
-                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-error/20 text-text-muted hover:text-error transition-all shrink-0"
+                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red/10 text-dim hover:text-red transition-all shrink-0"
                       aria-label={`Delete conversation: ${conv.title || "Untitled"}`}
                     >
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -584,29 +609,15 @@ export default function ChatSidebar() {
             {/* ========================================================= */}
             {/* MESSAGES AREA                                              */}
             {/* ========================================================= */}
-            <div className="flex-1 overflow-y-auto bg-bg-dark px-3 py-3">
+            <div className="flex-1 overflow-y-auto px-4 py-4">
               {/* Empty state */}
               {messages.length === 0 && !streamingText && !isLoading && (
                 <div className="flex flex-col items-center justify-center h-full text-center px-4">
-                  <div className="w-12 h-12 rounded-2xl bg-accent/10 flex items-center justify-center mb-3">
-                    <svg
-                      className="w-6 h-6 text-accent"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={1.5}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"
-                      />
-                    </svg>
-                  </div>
-                  <p className="text-white font-medium text-sm mb-1">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-accent to-accent-light mb-4 animate-[breathe_2s_ease-in-out_infinite]" />
+                  <p className="text-text font-medium text-sm mb-1">
                     Hey! I&apos;m SchoolPilot.
                   </p>
-                  <p className="text-text-muted text-xs leading-relaxed max-w-[260px]">
+                  <p className="text-muted text-xs leading-relaxed max-w-[260px]">
                     Your AI study companion. Ask me about your assignments, grades,
                     or anything school-related.
                   </p>
@@ -632,29 +643,23 @@ export default function ChatSidebar() {
                 />
               )}
 
-              {/* Loading dots (shown before the stream starts) */}
+              {/* Thinking state (shown before the stream starts) */}
               {isLoading && !streamingText && streamingActions.length === 0 && (
-                <div className="flex justify-start mb-3">
-                  <div className="bg-bg-card border border-border rounded-2xl rounded-bl-md px-4 py-3">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 bg-text-muted rounded-full animate-[pulse_1.4s_ease-in-out_infinite]" />
-                      <span
-                        className="w-1.5 h-1.5 bg-text-muted rounded-full animate-[pulse_1.4s_ease-in-out_infinite]"
-                        style={{ animationDelay: "0.2s" }}
-                      />
-                      <span
-                        className="w-1.5 h-1.5 bg-text-muted rounded-full animate-[pulse_1.4s_ease-in-out_infinite]"
-                        style={{ animationDelay: "0.4s" }}
-                      />
-                    </div>
+                <div className="flex items-start gap-2.5 mb-4">
+                  <div className="w-7 h-7 shrink-0">
+                    <ThinkingOrb />
+                  </div>
+                  <div className="pt-1.5">
+                    <ThinkingDots />
+                    <p className="text-[11px] text-dim mt-1.5">Thinking...</p>
                   </div>
                 </div>
               )}
 
               {/* Error display */}
               {error && (
-                <div className="mx-1 mb-3 p-2.5 rounded-lg bg-error/10 border border-error/20">
-                  <p className="text-xs text-error">{error}</p>
+                <div className="mx-1 mb-3 p-2.5 rounded-lg bg-red/5 border border-red/20">
+                  <p className="text-xs text-red">{error}</p>
                 </div>
               )}
 
@@ -665,14 +670,14 @@ export default function ChatSidebar() {
             {/* QUICK ACTIONS (prominent when empty, compact otherwise)    */}
             {/* ========================================================= */}
             {messages.length === 0 && !isLoading && (
-              <div className="px-3 py-2 border-t border-border bg-bg-card shrink-0">
+              <div className="px-4 py-2 border-t border-border shrink-0">
                 <div className="flex flex-wrap gap-1.5">
                   {QUICK_ACTIONS.map((action) => (
                     <button
                       key={action}
                       onClick={() => sendMessage(action)}
                       disabled={isLoading}
-                      className="px-2.5 py-1.5 rounded-lg bg-bg-hover text-text-secondary text-xs hover:text-accent hover:bg-accent/10 transition-colors disabled:opacity-50"
+                      className="px-3 py-1.5 rounded-full border border-border text-muted text-xs hover:border-border-light hover:text-text transition-colors disabled:opacity-50"
                     >
                       {action}
                     </button>
@@ -684,7 +689,7 @@ export default function ChatSidebar() {
             {/* ========================================================= */}
             {/* INPUT AREA                                                 */}
             {/* ========================================================= */}
-            <div className="px-3 py-3 border-t border-border bg-bg-card shrink-0">
+            <div className="px-3 py-3 border-t border-border shrink-0">
               <div className="flex items-end gap-2">
                 <textarea
                   ref={inputRef}
@@ -694,12 +699,16 @@ export default function ChatSidebar() {
                   placeholder="Ask me anything..."
                   rows={1}
                   disabled={isLoading}
-                  className="flex-1 resize-none bg-bg-dark border border-border rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-colors disabled:opacity-50 max-h-[120px]"
+                  className="flex-1 resize-none bg-bg border border-border rounded-[10px] px-3 py-2.5 text-sm text-text placeholder:text-dim focus:outline-none focus:border-accent/40 transition-colors disabled:opacity-50 max-h-[120px]"
                 />
                 <button
                   onClick={() => sendMessage()}
-                  disabled={isLoading || !input.trim()}
-                  className="p-2.5 rounded-xl bg-accent hover:bg-accent-hover text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                  disabled={isLoading || !hasInput}
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all shrink-0 ${
+                    hasInput
+                      ? "bg-accent text-text hover:bg-accent/80"
+                      : "bg-transparent border border-border text-dim"
+                  } disabled:opacity-30 disabled:cursor-not-allowed`}
                   aria-label="Send message"
                 >
                   <svg
@@ -712,7 +721,7 @@ export default function ChatSidebar() {
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"
+                      d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18"
                     />
                   </svg>
                 </button>
@@ -726,7 +735,7 @@ export default function ChatSidebar() {
                       key={action}
                       onClick={() => sendMessage(action)}
                       disabled={isLoading}
-                      className="px-2 py-1 rounded-md bg-bg-hover/50 text-text-muted text-[11px] hover:text-accent hover:bg-accent/10 transition-colors disabled:opacity-50"
+                      className="px-2 py-1 rounded-full border border-border/60 text-dim text-[11px] hover:border-border-light hover:text-text-secondary transition-colors disabled:opacity-50"
                     >
                       {action}
                     </button>

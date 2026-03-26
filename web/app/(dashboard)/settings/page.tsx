@@ -7,7 +7,7 @@ import RemoteBrowser from "@/components/RemoteBrowser";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-/* ─── Types ─── */
+/* --- Types --- */
 
 interface StudentProfile {
   display_name: string | null;
@@ -40,14 +40,14 @@ interface Toast {
   text: string;
 }
 
-/* ─── Constants ─── */
+/* --- Constants --- */
 
 const PERSONALITIES = [
   {
     id: "coach",
     label: "Coach",
     icon: (
-      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.25 0 016.038 7.048 8.287 8.287 0 009 9.6a8.983 8.983 0 013.361-6.867 8.21 8.21 0 003 2.48z" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 18a3.75 3.75 0 00.495-7.467 5.99 5.99 0 00-1.925 3.546 5.974 5.974 0 01-2.133-1A3.75 3.75 0 0012 18z" />
       </svg>
@@ -59,7 +59,7 @@ const PERSONALITIES = [
     id: "friend",
     label: "Friend",
     icon: (
-      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M15.182 15.182a4.5 4.5 0 01-6.364 0M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75zm-.375 0h.008v.015h-.008V9.75zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75zm-.375 0h.008v.015h-.008V9.75z" />
       </svg>
     ),
@@ -70,7 +70,7 @@ const PERSONALITIES = [
     id: "mentor",
     label: "Mentor",
     icon: (
-      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
       </svg>
     ),
@@ -81,7 +81,7 @@ const PERSONALITIES = [
     id: "drill_sergeant",
     label: "Drill Sergeant",
     icon: (
-      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
       </svg>
     ),
@@ -118,7 +118,7 @@ const BRIEFING_TIMES = [
   { value: "09:00", label: "9:00 AM" },
 ];
 
-/* ─── Helpers ─── */
+/* --- Helpers --- */
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -131,7 +131,34 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
-/* ─── Component ─── */
+/* --- Toggle Switch --- */
+
+function Toggle({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (val: boolean) => void;
+}) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`w-11 h-6 rounded-full transition-colors cursor-pointer relative flex-shrink-0 ${
+        checked ? "bg-[#7c3aed]" : "bg-[#09090b] border border-[#27272a]"
+      }`}
+    >
+      <span
+        className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
+          checked ? "left-6" : "left-1"
+        }`}
+      />
+    </button>
+  );
+}
+
+/* --- Component --- */
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -174,7 +201,7 @@ export default function SettingsPage() {
     }, 4000);
   }, []);
 
-  /* ─── Load data ─── */
+  /* --- Load data --- */
 
   const fetchCredentials = useCallback(async (accessToken: string) => {
     try {
@@ -235,7 +262,7 @@ export default function SettingsPage() {
     load();
   }, [toast]);
 
-  /* ─── Actions ─── */
+  /* --- Actions --- */
 
   const saveProfile = async () => {
     if (!token) return;
@@ -372,21 +399,21 @@ export default function SettingsPage() {
     router.push("/auth/login");
   };
 
-  /* ─── Loading skeleton ─── */
+  /* --- Loading skeleton --- */
 
   if (loading) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-8 space-y-6 animate-pulse">
-        <div className="h-8 w-40 bg-bg-card rounded-lg" />
-        <div className="h-4 w-64 bg-bg-card rounded" />
+        <div className="h-8 w-40 bg-[#111113] rounded-lg" />
+        <div className="h-4 w-64 bg-[#111113] rounded" />
         {[...Array(5)].map((_, i) => (
-          <div key={i} className="h-44 bg-bg-card rounded-xl" />
+          <div key={i} className="h-44 bg-[#111113] rounded-xl" />
         ))}
       </div>
     );
   }
 
-  /* ─── Render ─── */
+  /* --- Render --- */
 
   const hasConnected = credentials.length > 0;
   const activeCred = credentials[0];
@@ -400,10 +427,10 @@ export default function SettingsPage() {
             key={t.id}
             className={`pointer-events-auto px-4 py-3 rounded-lg text-sm font-medium shadow-lg transition-all animate-slide-in ${
               t.type === "success"
-                ? "bg-success/15 text-success border border-success/20"
+                ? "bg-[#22c55e]/15 text-[#22c55e] border border-[#22c55e]/20"
                 : t.type === "error"
-                ? "bg-error/15 text-error border border-error/20"
-                : "bg-accent/15 text-accent border border-accent/20"
+                ? "bg-[#ef4444]/15 text-[#ef4444] border border-[#ef4444]/20"
+                : "bg-[#7c3aed]/15 text-[#a78bfa] border border-[#7c3aed]/20"
             }`}
           >
             <div className="flex items-center gap-2">
@@ -423,23 +450,23 @@ export default function SettingsPage() {
         ))}
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 py-8 space-y-8">
+      <div className="max-w-2xl mx-auto px-4 py-8">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-white">Settings</h1>
-          <p className="text-text-secondary mt-1 text-sm">
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-[#fafafa]">Settings</h1>
+          <p className="text-[#a1a1aa] mt-1 text-sm">
             Manage your profile, LMS connection, and preferences.
           </p>
         </div>
 
-        {/* ════════ 1. Profile ════════ */}
-        <section className="bg-bg-card border border-border rounded-xl p-5 space-y-5">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Profile</h2>
+        {/* ---- 1. Profile ---- */}
+        <section className="pb-8 mb-8 border-b border-[#1e1e22]">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-[11px] uppercase tracking-wider text-[#71717a] font-medium">Profile</h2>
             <button
               onClick={saveProfile}
               disabled={savingProfile}
-              className="px-4 py-2 rounded-lg bg-accent hover:bg-accent/90 text-white text-sm font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 rounded-lg bg-[#7c3aed] hover:bg-[#7c3aed]/90 text-white text-sm font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {savingProfile ? (
                 <span className="flex items-center gap-2">
@@ -458,7 +485,7 @@ export default function SettingsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Display Name */}
             <div>
-              <label htmlFor="setting-name" className="block text-text-secondary text-sm mb-1.5">
+              <label htmlFor="setting-name" className="block text-[#a1a1aa] text-sm mb-1.5">
                 Display Name
               </label>
               <input
@@ -466,14 +493,14 @@ export default function SettingsPage() {
                 type="text"
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent text-sm transition-colors"
+                className="w-full px-3 py-2.5 rounded-lg bg-[#09090b] border border-[#1e1e22] text-[#fafafa] placeholder:text-[#52525b] focus:outline-none focus:border-[#7c3aed]/40 text-sm transition-colors"
                 placeholder="Your name"
               />
             </div>
 
             {/* Email (read-only) */}
             <div>
-              <label htmlFor="setting-email" className="block text-text-secondary text-sm mb-1.5">
+              <label htmlFor="setting-email" className="block text-[#a1a1aa] text-sm mb-1.5">
                 Email
               </label>
               <input
@@ -481,13 +508,13 @@ export default function SettingsPage() {
                 type="email"
                 value={userEmail}
                 disabled
-                className="w-full px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-text-muted text-sm cursor-not-allowed"
+                className="w-full px-3 py-2.5 rounded-lg bg-[#09090b] border border-[#1e1e22] text-[#52525b] text-sm cursor-not-allowed"
               />
             </div>
 
             {/* School */}
             <div>
-              <label htmlFor="setting-school" className="block text-text-secondary text-sm mb-1.5">
+              <label htmlFor="setting-school" className="block text-[#a1a1aa] text-sm mb-1.5">
                 School
               </label>
               <input
@@ -495,21 +522,21 @@ export default function SettingsPage() {
                 type="text"
                 value={editSchool}
                 onChange={(e) => setEditSchool(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent text-sm transition-colors"
+                className="w-full px-3 py-2.5 rounded-lg bg-[#09090b] border border-[#1e1e22] text-[#fafafa] placeholder:text-[#52525b] focus:outline-none focus:border-[#7c3aed]/40 text-sm transition-colors"
                 placeholder="Your school"
               />
             </div>
 
             {/* Timezone */}
             <div>
-              <label htmlFor="setting-tz" className="block text-text-secondary text-sm mb-1.5">
+              <label htmlFor="setting-tz" className="block text-[#a1a1aa] text-sm mb-1.5">
                 Timezone
               </label>
               <select
                 id="setting-tz"
                 value={editTimezone}
                 onChange={(e) => setEditTimezone(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-white text-sm focus:outline-none focus:border-accent transition-colors"
+                className="w-full px-3 py-2.5 rounded-lg bg-[#09090b] border border-[#1e1e22] text-[#fafafa] text-sm focus:outline-none focus:border-[#7c3aed]/40 transition-colors"
               >
                 {TIMEZONES.map((tz) => (
                   <option key={tz} value={tz}>
@@ -517,21 +544,21 @@ export default function SettingsPage() {
                   </option>
                 ))}
               </select>
-              <p className="text-text-muted text-xs mt-1">
+              <p className="text-[#52525b] text-xs mt-1">
                 Auto-detected: {Intl.DateTimeFormat().resolvedOptions().timeZone.replace(/_/g, " ")}
               </p>
             </div>
           </div>
         </section>
 
-        {/* ════════ 2. LMS Connection ════════ */}
-        <section className="bg-bg-card border border-border rounded-xl p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">LMS Connection</h2>
+        {/* ---- 2. LMS Connection ---- */}
+        <section className="pb-8 mb-8 border-b border-[#1e1e22]">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-[11px] uppercase tracking-wider text-[#71717a] font-medium">LMS Connection</h2>
             {!showRemoteBrowser && (
               <button
                 onClick={() => setShowRemoteBrowser(true)}
-                className="px-4 py-2 rounded-lg bg-accent/10 text-accent text-sm font-medium hover:bg-accent/20 transition-colors cursor-pointer"
+                className="px-4 py-2 rounded-lg border border-[#27272a] text-[#a1a1aa] text-sm font-medium hover:text-[#fafafa] hover:border-[#7c3aed]/30 transition-colors cursor-pointer"
               >
                 {hasConnected ? "Reconnect" : "Connect LMS"}
               </button>
@@ -540,28 +567,28 @@ export default function SettingsPage() {
 
           {/* Connected credential card */}
           {hasConnected && activeCred && !showRemoteBrowser && (
-            <div className="p-4 bg-bg-dark rounded-lg space-y-3">
+            <div className="p-4 bg-[#09090b] rounded-lg border border-[#1e1e22] space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   {/* Status dot */}
                   <span
-                    className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                    className={`w-2 h-2 rounded-full flex-shrink-0 ${
                       activeCred.last_login_success === true
-                        ? "bg-success"
+                        ? "bg-[#22c55e]"
                         : activeCred.last_login_success === false
-                        ? "bg-error"
-                        : "bg-warning"
+                        ? "bg-[#ef4444]"
+                        : "bg-[#f59e0b]"
                     }`}
                   />
                   <div>
-                    <p className="text-white text-sm font-medium">
+                    <p className="text-[#fafafa] text-sm font-medium">
                       {activeCred.last_login_success === true
                         ? "Connected"
                         : activeCred.last_login_success === false
                         ? "Disconnected"
                         : "Unknown"}
                     </p>
-                    <p className="text-text-muted text-xs capitalize">
+                    <p className="text-[#52525b] text-xs capitalize">
                       {activeCred.lms_type} &middot; {activeCred.lms_url}
                     </p>
                   </div>
@@ -569,11 +596,11 @@ export default function SettingsPage() {
               </div>
 
               {/* Sync info */}
-              <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-text-secondary">
+              <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-[#a1a1aa]">
                 {(activeCred.last_sync_at || syncStatus?.last_sync_at) && (
                   <span>
                     Last sync:{" "}
-                    <span className="text-white">
+                    <span className="text-[#fafafa]">
                       {timeAgo(activeCred.last_sync_at || syncStatus?.last_sync_at || "")}
                     </span>
                   </span>
@@ -584,10 +611,10 @@ export default function SettingsPage() {
                     <span
                       className={
                         syncStatus.status === "success"
-                          ? "text-success"
+                          ? "text-[#22c55e]"
                           : syncStatus.status === "error"
-                          ? "text-error"
-                          : "text-warning"
+                          ? "text-[#ef4444]"
+                          : "text-[#f59e0b]"
                       }
                     >
                       {syncStatus.status}
@@ -598,8 +625,8 @@ export default function SettingsPage() {
 
               {/* Last error */}
               {(activeCred.last_error || syncStatus?.error) && (
-                <div className="px-3 py-2 rounded-lg bg-error/5 border border-error/10">
-                  <p className="text-error text-xs">
+                <div className="px-3 py-2 rounded-lg bg-[#ef4444]/5 border border-[#ef4444]/10">
+                  <p className="text-[#ef4444] text-xs">
                     {activeCred.last_error || syncStatus?.error}
                   </p>
                 </div>
@@ -610,13 +637,13 @@ export default function SettingsPage() {
           {/* No LMS connected */}
           {!hasConnected && !showRemoteBrowser && (
             <div className="text-center py-8">
-              <div className="w-12 h-12 rounded-full bg-bg-dark mx-auto flex items-center justify-center mb-3">
-                <svg className="w-6 h-6 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <div className="w-12 h-12 rounded-full bg-[#111113] mx-auto flex items-center justify-center mb-3">
+                <svg className="w-6 h-6 text-[#52525b]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
                 </svg>
               </div>
-              <p className="text-text-muted text-sm">No LMS connected.</p>
-              <p className="text-text-muted text-xs mt-1">
+              <p className="text-[#71717a] text-sm">No LMS connected.</p>
+              <p className="text-[#52525b] text-xs mt-1">
                 Connect your school LMS to sync assignments and grades automatically.
               </p>
             </div>
@@ -626,17 +653,17 @@ export default function SettingsPage() {
           {showRemoteBrowser && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-text-secondary text-sm">
+                <p className="text-[#a1a1aa] text-sm">
                   Log into your LMS below. We will capture the session.
                 </p>
                 <button
                   onClick={() => setShowRemoteBrowser(false)}
-                  className="text-text-muted text-sm hover:text-white transition-colors cursor-pointer"
+                  className="text-[#52525b] text-sm hover:text-[#fafafa] transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
               </div>
-              <div className="rounded-lg overflow-hidden border border-border">
+              <div className="rounded-lg overflow-hidden border border-[#1e1e22]">
                 <RemoteBrowser
                   onComplete={() => {
                     setShowRemoteBrowser(false);
@@ -650,17 +677,17 @@ export default function SettingsPage() {
           )}
         </section>
 
-        {/* ════════ 3. AI Personality ════════ */}
-        <section className="bg-bg-card border border-border rounded-xl p-5 space-y-4">
-          <div className="flex items-center justify-between">
+        {/* ---- 3. AI Personality ---- */}
+        <section className="pb-8 mb-8 border-b border-[#1e1e22]">
+          <div className="flex items-center justify-between mb-5">
             <div>
-              <h2 className="text-lg font-semibold text-white">AI Personality</h2>
-              <p className="text-text-muted text-xs mt-0.5">
+              <h2 className="text-[11px] uppercase tracking-wider text-[#71717a] font-medium">AI Personality</h2>
+              <p className="text-[#52525b] text-xs mt-1">
                 Choose how your AI assistant communicates.
               </p>
             </div>
             {savingPersonality && (
-              <svg className="w-4 h-4 animate-spin text-accent" fill="none" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 animate-spin text-[#7c3aed]" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
@@ -674,19 +701,19 @@ export default function SettingsPage() {
                 <button
                   key={p.id}
                   onClick={() => savePersonality(p.id)}
-                  className={`p-4 rounded-xl text-left transition-all cursor-pointer ${
+                  className={`p-4 rounded-xl text-left transition-all cursor-pointer border ${
                     isActive
-                      ? "bg-accent/10 border-2 border-accent ring-1 ring-accent/20"
-                      : "bg-bg-dark border border-border hover:border-accent/30"
+                      ? "border-[#7c3aed] bg-[rgba(124,58,237,0.15)]"
+                      : "border-[#1e1e22] bg-[#09090b] hover:border-[#27272a]"
                   }`}
                 >
                   <div className="flex items-center gap-2.5 mb-2">
-                    <span className={isActive ? "text-accent" : "text-text-secondary"}>
+                    <span className={isActive ? "text-[#7c3aed]" : "text-[#a1a1aa]"}>
                       {p.icon}
                     </span>
-                    <span className="text-white text-sm font-semibold">{p.label}</span>
+                    <span className="text-[#fafafa] text-sm font-semibold">{p.label}</span>
                     {isActive && (
-                      <span className="ml-auto flex items-center gap-1 text-accent text-xs font-medium">
+                      <span className="ml-auto flex items-center gap-1 text-[#a78bfa] text-xs font-medium">
                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
@@ -694,9 +721,9 @@ export default function SettingsPage() {
                       </span>
                     )}
                   </div>
-                  <p className="text-text-muted text-xs mb-2">{p.desc}</p>
-                  <div className="px-3 py-2 rounded-lg bg-bg-dark/50 border border-border/50">
-                    <p className="text-text-secondary text-xs italic leading-relaxed">
+                  <p className="text-[#71717a] text-xs mb-2">{p.desc}</p>
+                  <div className="px-3 py-2 rounded-lg bg-[#111113] border border-[#1e1e22]">
+                    <p className="text-[#a1a1aa] text-xs italic leading-relaxed">
                       {p.preview}
                     </p>
                   </div>
@@ -706,45 +733,32 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* ════════ 4. Email Preferences ════════ */}
-        <section className="bg-bg-card border border-border rounded-xl p-5 space-y-4">
-          <h2 className="text-lg font-semibold text-white">Email Preferences</h2>
+        {/* ---- 4. Email Preferences ---- */}
+        <section className="pb-8 mb-8 border-b border-[#1e1e22]">
+          <h2 className="text-[11px] uppercase tracking-wider text-[#71717a] font-medium mb-5">Email Preferences</h2>
 
           {/* Briefing toggle */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-white text-sm font-medium">Daily Briefing</p>
-              <p className="text-text-muted text-xs mt-0.5">
+              <p className="text-[#fafafa] text-sm font-medium">Daily Briefing</p>
+              <p className="text-[#52525b] text-xs mt-0.5">
                 Morning email with your plan, grade alerts, and priorities.
               </p>
             </div>
-            <button
-              role="switch"
-              aria-checked={editBriefingEnabled}
-              onClick={() => setEditBriefingEnabled(!editBriefingEnabled)}
-              className={`w-11 h-6 rounded-full transition-colors cursor-pointer relative flex-shrink-0 ${
-                editBriefingEnabled ? "bg-accent" : "bg-bg-dark border border-border"
-              }`}
-            >
-              <span
-                className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
-                  editBriefingEnabled ? "left-6" : "left-1"
-                }`}
-              />
-            </button>
+            <Toggle checked={editBriefingEnabled} onChange={setEditBriefingEnabled} />
           </div>
 
           {/* Briefing time */}
           {editBriefingEnabled && (
-            <div>
-              <label htmlFor="setting-briefing-time" className="block text-text-secondary text-sm mb-1.5">
+            <div className="mb-4">
+              <label htmlFor="setting-briefing-time" className="block text-[#a1a1aa] text-sm mb-1.5">
                 Preferred Time
               </label>
               <select
                 id="setting-briefing-time"
                 value={editBriefingTime}
                 onChange={(e) => setEditBriefingTime(e.target.value)}
-                className="w-full sm:w-48 px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-white text-sm focus:outline-none focus:border-accent transition-colors"
+                className="w-full sm:w-48 px-3 py-2.5 rounded-lg bg-[#09090b] border border-[#1e1e22] text-[#fafafa] text-sm focus:outline-none focus:border-[#7c3aed]/40 transition-colors"
               >
                 {BRIEFING_TIMES.map((bt) => (
                   <option key={bt.value} value={bt.value}>
@@ -758,83 +772,85 @@ export default function SettingsPage() {
           <button
             onClick={saveEmailPreferences}
             disabled={savingEmail}
-            className="px-4 py-2 rounded-lg bg-accent hover:bg-accent/90 text-white text-sm font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 rounded-lg bg-[#7c3aed] hover:bg-[#7c3aed]/90 text-white text-sm font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {savingEmail ? "Saving..." : "Save Email Preferences"}
           </button>
         </section>
 
-        {/* ════════ 5. Danger Zone ════════ */}
-        <section className="bg-bg-card border border-error/20 rounded-xl p-5 space-y-4">
-          <h2 className="text-lg font-semibold text-error">Danger Zone</h2>
+        {/* ---- 5. Danger Zone ---- */}
+        <section className="pb-8">
+          <h2 className="text-[11px] uppercase tracking-wider text-[#ef4444] font-medium mb-5">Danger Zone</h2>
 
-          {/* Disconnect LMS */}
-          {hasConnected && activeCred && (
-            <div className="flex items-center justify-between p-4 bg-bg-dark rounded-lg">
+          <div className="space-y-3">
+            {/* Disconnect LMS */}
+            {hasConnected && activeCred && (
+              <div className="flex items-center justify-between p-4 bg-[#09090b] rounded-lg border border-[#1e1e22]">
+                <div>
+                  <p className="text-[#fafafa] text-sm font-medium">Disconnect LMS</p>
+                  <p className="text-[#52525b] text-xs mt-0.5">
+                    Remove your LMS credentials. You will stop receiving synced data.
+                  </p>
+                </div>
+                {confirmDisconnect === activeCred.id ? (
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => disconnectLMS(activeCred.id)}
+                      className="px-3 py-1.5 rounded-lg bg-[#ef4444] text-white text-xs font-medium hover:bg-[#ef4444]/90 transition-colors cursor-pointer"
+                    >
+                      Confirm
+                    </button>
+                    <button
+                      onClick={() => setConfirmDisconnect(null)}
+                      className="px-3 py-1.5 rounded-lg bg-[#111113] text-[#a1a1aa] text-xs font-medium hover:text-[#fafafa] transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDisconnect(activeCred.id)}
+                    className="px-4 py-2 rounded-lg border border-[#ef4444]/20 text-[#ef4444] text-sm font-medium hover:bg-[#ef4444]/10 transition-colors cursor-pointer flex-shrink-0"
+                  >
+                    Disconnect
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Delete Account */}
+            <div className="flex items-center justify-between p-4 bg-[#09090b] rounded-lg border border-[#1e1e22]">
               <div>
-                <p className="text-white text-sm font-medium">Disconnect LMS</p>
-                <p className="text-text-muted text-xs mt-0.5">
-                  Remove your LMS credentials. You will stop receiving synced data.
+                <p className="text-[#fafafa] text-sm font-medium">Delete Account</p>
+                <p className="text-[#52525b] text-xs mt-0.5">
+                  Permanently delete your account and all associated data. This cannot be undone.
                 </p>
               </div>
-              {confirmDisconnect === activeCred.id ? (
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <button
-                    onClick={() => disconnectLMS(activeCred.id)}
-                    className="px-3 py-1.5 rounded-lg bg-error text-white text-xs font-medium hover:bg-error/90 transition-colors cursor-pointer"
-                  >
-                    Confirm
-                  </button>
-                  <button
-                    onClick={() => setConfirmDisconnect(null)}
-                    className="px-3 py-1.5 rounded-lg bg-bg-card text-text-secondary text-xs font-medium hover:text-white transition-colors cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setConfirmDisconnect(activeCred.id)}
-                  className="px-4 py-2 rounded-lg border border-error/30 text-error text-sm font-medium hover:bg-error/10 transition-colors cursor-pointer flex-shrink-0"
-                >
-                  Disconnect
-                </button>
-              )}
+              <button
+                onClick={() => setConfirmDeleteAccount(true)}
+                className="px-4 py-2 rounded-lg border border-[#ef4444]/20 text-[#ef4444] text-sm font-medium hover:bg-[#ef4444]/10 transition-colors cursor-pointer flex-shrink-0"
+              >
+                Delete Account
+              </button>
             </div>
-          )}
 
-          {/* Delete Account */}
-          <div className="flex items-center justify-between p-4 bg-bg-dark rounded-lg">
-            <div>
-              <p className="text-white text-sm font-medium">Delete Account</p>
-              <p className="text-text-muted text-xs mt-0.5">
-                Permanently delete your account and all associated data. This cannot be undone.
-              </p>
-            </div>
+            {/* Sign Out */}
             <button
-              onClick={() => setConfirmDeleteAccount(true)}
-              className="px-4 py-2 rounded-lg border border-error/30 text-error text-sm font-medium hover:bg-error/10 transition-colors cursor-pointer flex-shrink-0"
+              onClick={handleSignOut}
+              className="w-full py-2.5 rounded-lg bg-[#09090b] border border-[#1e1e22] text-[#a1a1aa] text-sm font-medium hover:text-[#fafafa] hover:border-[#27272a] transition-colors cursor-pointer"
             >
-              Delete Account
+              Sign Out
             </button>
           </div>
-
-          {/* Sign Out */}
-          <button
-            onClick={handleSignOut}
-            className="w-full py-2.5 rounded-lg bg-bg-dark border border-border text-text-secondary text-sm font-medium hover:text-white hover:border-accent/30 transition-colors cursor-pointer"
-          >
-            Sign Out
-          </button>
         </section>
 
         {/* Footer */}
-        <div className="text-center text-text-muted text-xs pb-8">
+        <div className="text-center text-[#52525b] text-xs pb-8">
           SchoolPilot v3.0
         </div>
       </div>
 
-      {/* ════════ Delete Account Confirmation Modal ════════ */}
+      {/* ---- Delete Account Confirmation Modal ---- */}
       {confirmDeleteAccount && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           {/* Backdrop */}
@@ -843,20 +859,20 @@ export default function SettingsPage() {
             onClick={() => setConfirmDeleteAccount(false)}
           />
           {/* Modal */}
-          <div className="relative bg-bg-card border border-error/20 rounded-xl p-6 max-w-md w-full shadow-2xl space-y-4">
+          <div className="relative bg-[#111113] border border-[#ef4444]/20 rounded-xl p-6 max-w-md w-full shadow-2xl space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-error/10 flex items-center justify-center flex-shrink-0">
-                <svg className="w-5 h-5 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <div className="w-10 h-10 rounded-full bg-[#ef4444]/10 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-[#ef4444]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
                 </svg>
               </div>
               <div>
-                <h3 className="text-white font-semibold">Delete Account</h3>
-                <p className="text-text-muted text-sm">This action is permanent.</p>
+                <h3 className="text-[#fafafa] font-semibold">Delete Account</h3>
+                <p className="text-[#71717a] text-sm">This action is permanent.</p>
               </div>
             </div>
 
-            <p className="text-text-secondary text-sm">
+            <p className="text-[#a1a1aa] text-sm">
               All your data -- assignments, grades, study sessions, chat history -- will be permanently
               deleted. This cannot be undone.
             </p>
@@ -864,14 +880,14 @@ export default function SettingsPage() {
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => setConfirmDeleteAccount(false)}
-                className="flex-1 py-2.5 rounded-lg bg-bg-dark border border-border text-text-secondary text-sm font-medium hover:text-white transition-colors cursor-pointer"
+                className="flex-1 py-2.5 rounded-lg bg-[#09090b] border border-[#1e1e22] text-[#a1a1aa] text-sm font-medium hover:text-[#fafafa] transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={deleteAccount}
                 disabled={deletingAccount}
-                className="flex-1 py-2.5 rounded-lg bg-error text-white text-sm font-medium hover:bg-error/90 transition-colors cursor-pointer disabled:opacity-50"
+                className="flex-1 py-2.5 rounded-lg bg-[#ef4444] text-white text-sm font-medium hover:bg-[#ef4444]/90 transition-colors cursor-pointer disabled:opacity-50"
               >
                 {deletingAccount ? "Deleting..." : "Yes, Delete My Account"}
               </button>

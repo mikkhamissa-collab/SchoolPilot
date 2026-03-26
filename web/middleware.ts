@@ -66,7 +66,22 @@ export async function middleware(request: NextRequest) {
   }
 
   if (user) {
-    const onboardingDone = user.user_metadata?.onboarding_completed === true;
+    // Check onboarding status from user metadata first, then fall back to DB.
+    // user_metadata in the JWT can be stale if the token hasn't been refreshed
+    // since onboarding completed, so we also check the student_profiles table.
+    let onboardingDone = user.user_metadata?.onboarding_completed === true;
+
+    if (!onboardingDone) {
+      // JWT metadata might be stale — check the database as fallback
+      const { data: profile } = await supabase
+        .from("student_profiles")
+        .select("onboarding_complete")
+        .eq("user_id", user.id)
+        .single();
+      if (profile?.onboarding_complete === true) {
+        onboardingDone = true;
+      }
+    }
 
     // Authenticated but hasn't finished onboarding → force to /onboarding
     // (but don't intercept /auth/callback — it handles its own redirect)

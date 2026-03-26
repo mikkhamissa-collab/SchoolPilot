@@ -1,5 +1,4 @@
 // React Error Boundary — catches rendering errors and shows a fallback UI.
-// Wraps dashboard routes to prevent full-page crashes from unhandled exceptions.
 "use client";
 
 import React, { Component, type ReactNode } from "react";
@@ -25,7 +24,6 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    // Log error to console in development
     console.error("ErrorBoundary caught:", error, info);
   }
 
@@ -41,9 +39,9 @@ export default class ErrorBoundary extends Component<Props, State> {
 
       return (
         <div className="flex flex-col items-center justify-center min-h-[400px] p-8">
-          <div className="w-16 h-16 rounded-2xl bg-error/10 flex items-center justify-center mb-4">
+          <div className="w-16 h-16 rounded-2xl bg-red/10 flex items-center justify-center mb-4">
             <svg
-              className="w-8 h-8 text-error"
+              className="w-8 h-8 text-red"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -56,32 +54,32 @@ export default class ErrorBoundary extends Component<Props, State> {
               />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-white mb-2">
+          <h2 className="text-xl font-bold text-text mb-2">
             Something went wrong
           </h2>
-          <p className="text-text-muted text-sm mb-6 text-center max-w-md">
+          <p className="text-muted text-sm mb-6 text-center max-w-md">
             An unexpected error occurred. Try refreshing the page or going back.
           </p>
           <div className="flex gap-3">
             <button
               onClick={this.handleReset}
-              className="px-5 py-2.5 rounded-xl bg-bg-card border border-border text-text-secondary hover:text-white text-sm transition-colors"
+              className="px-5 py-2.5 rounded-lg bg-surface border border-border text-text-secondary hover:text-text text-sm transition-colors"
             >
               Try Again
             </button>
             <button
               onClick={() => window.location.reload()}
-              className="px-5 py-2.5 rounded-xl bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
+              className="px-5 py-2.5 rounded-lg bg-text text-bg text-sm font-medium hover:opacity-85 transition-opacity"
             >
               Refresh Page
             </button>
           </div>
           {process.env.NODE_ENV === "development" && this.state.error && (
-            <details className="mt-6 p-4 rounded-xl bg-bg-card border border-border max-w-lg w-full">
-              <summary className="text-text-muted text-xs cursor-pointer">
+            <details className="mt-6 p-4 rounded-xl bg-surface border border-border max-w-lg w-full">
+              <summary className="text-muted text-xs cursor-pointer">
                 Error details (development only)
               </summary>
-              <pre className="mt-2 text-error text-xs overflow-auto whitespace-pre-wrap">
+              <pre className="mt-2 text-red text-xs overflow-auto whitespace-pre-wrap">
                 {this.state.error.message}
                 {"\n"}
                 {this.state.error.stack}

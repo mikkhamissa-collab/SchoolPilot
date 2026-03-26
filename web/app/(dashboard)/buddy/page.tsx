@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { backendFetch } from "@/lib/api";
+import { ThinkingDots } from "@/components/ui/Loading";
 
 interface BuddyStatus {
   has_buddy: boolean;
   pair_id?: string;
   status?: string;
   buddy_name?: string;
+  buddy_email?: string;
   streak_count?: number;
   last_activity_buddy?: string;
 }
@@ -70,79 +72,85 @@ export default function BuddyPage() {
   if (loading) {
     return (
       <div className="max-w-lg mx-auto p-6 text-center">
-        <div className="animate-spin w-8 h-8 border-2 border-accent border-t-transparent rounded-full mx-auto" />
+        <div className="animate-spin w-8 h-8 border-2 border-[#7c3aed] border-t-transparent rounded-full mx-auto" />
       </div>
     );
   }
 
   return (
     <div className="max-w-lg mx-auto p-6">
-      <h1 className="text-2xl font-bold text-text-primary mb-6">Study Buddy</h1>
+      <h1 className="text-2xl font-bold text-[#fafafa] mb-6">Study Buddy</h1>
 
       {message && (
-        <div className="bg-accent/10 border border-accent/30 rounded-lg p-3 mb-4 text-accent text-sm">
+        <div className="bg-[#7c3aed]/10 border border-[#7c3aed]/20 rounded-lg p-3 mb-4 text-[#a78bfa] text-sm">
           {message}
         </div>
       )}
 
       {!buddyStatus?.has_buddy ? (
-        <div className="bg-bg-card rounded-xl p-8 border border-border text-center">
-          <div className="text-6xl mb-4">👥</div>
-          <h2 className="text-xl font-bold text-text-primary mb-2">Find a Study Buddy</h2>
-          <p className="text-text-secondary mb-6">
+        /* ── No buddy: invite form ── */
+        <div className="flex flex-col items-center justify-center py-16">
+          <h2 className="text-xl font-semibold text-[#fafafa] mb-2">Find a study partner</h2>
+          <p className="text-[#a1a1aa] text-sm mb-8 text-center max-w-xs">
             Pair up with a friend. Keep each other accountable. Build a streak together.
           </p>
-          <div className="flex gap-2 max-w-sm mx-auto">
+          <div className="flex gap-2 w-full max-w-sm">
             <input
               type="email"
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
               placeholder="Friend's email"
-              className="flex-1 bg-bg-dark border border-border rounded-lg px-4 py-2.5 text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
+              className="flex-1 bg-[#09090b] border border-[#1e1e22] rounded-lg px-4 py-2.5 text-[#fafafa] placeholder:text-[#52525b] focus:outline-none focus:border-[#7c3aed]/40"
             />
             <button
               onClick={sendInvite}
-              className="px-6 py-2.5 bg-accent hover:bg-accent-hover rounded-lg text-white font-medium transition-colors"
+              className="px-6 py-2.5 bg-[#7c3aed] hover:bg-[#7c3aed]/90 rounded-lg text-white font-medium transition-colors"
             >
-              Invite
+              Send invite
             </button>
           </div>
         </div>
       ) : buddyStatus.status === "pending" ? (
-        <div className="bg-bg-card rounded-xl p-8 border border-border text-center">
-          <div className="text-6xl mb-4">⏳</div>
-          <h2 className="text-xl font-bold text-text-primary mb-2">Pending Invite</h2>
-          <p className="text-text-secondary mb-4">Waiting for your buddy to accept...</p>
+        /* ── Pending invite ── */
+        <div className="flex flex-col items-center justify-center py-16">
+          <h2 className="text-lg font-semibold text-[#fafafa] mb-2">Pending Invite</h2>
+          <div className="flex items-center gap-2 text-[#a1a1aa] text-sm mb-6">
+            <span>Waiting for {buddyStatus.buddy_email || "your buddy"}</span>
+            <ThinkingDots />
+          </div>
           <button
             onClick={acceptInvite}
-            className="px-6 py-2.5 bg-accent hover:bg-accent-hover rounded-lg text-white font-medium transition-colors"
+            className="px-6 py-2.5 bg-[#7c3aed] hover:bg-[#7c3aed]/90 rounded-lg text-white font-medium transition-colors"
           >
             Accept Invite
           </button>
         </div>
       ) : (
+        /* ── Paired: buddy info ── */
         <div className="space-y-4">
-          <div className="bg-bg-card rounded-xl p-6 border border-border text-center">
-            <div className="text-5xl mb-3">🔥</div>
-            <p className="text-4xl font-bold text-accent mb-1">{buddyStatus.streak_count || 0}</p>
-            <p className="text-text-muted text-sm">Day Streak Together</p>
+          {/* Streak */}
+          <div className="bg-[#111113] rounded-xl p-6 border border-[#1e1e22] text-center">
+            <p className="text-4xl font-bold text-[#7c3aed] mb-1">{buddyStatus.streak_count || 0}</p>
+            <p className="text-[#71717a] text-sm">Day Streak Together</p>
           </div>
 
-          <div className="bg-bg-card rounded-xl p-6 border border-border">
-            <h3 className="text-sm text-text-muted mb-2">Your Buddy</h3>
-            <p className="text-xl font-bold text-text-primary">{buddyStatus.buddy_name}</p>
+          {/* Buddy card */}
+          <div className="bg-[#111113] rounded-xl p-5 border border-[#1e1e22]">
+            <p className="text-[11px] uppercase tracking-wider text-[#71717a] font-medium mb-2">Your Buddy</p>
+            <p className="text-lg font-semibold text-[#fafafa]">{buddyStatus.buddy_name}</p>
             {buddyStatus.last_activity_buddy && (
-              <p className="text-text-secondary text-sm mt-1">
+              <p className="text-[#a1a1aa] text-sm mt-1">
                 Last active: {new Date(buddyStatus.last_activity_buddy).toLocaleDateString()}
               </p>
             )}
           </div>
 
+          {/* Nudge button */}
           <button
             onClick={nudgeBuddy}
-            className="w-full py-3 bg-accent/10 hover:bg-accent/20 border border-accent/30 rounded-xl text-accent font-medium transition-colors"
+            className="w-full py-3 border border-[#27272a] hover:border-[#7c3aed]/30 hover:bg-[#18181b] rounded-xl text-[#a1a1aa] hover:text-[#fafafa] font-medium transition-colors"
           >
-            👋 Nudge {buddyStatus.buddy_name}
+            Nudge {buddyStatus.buddy_name}
           </button>
         </div>
       )}

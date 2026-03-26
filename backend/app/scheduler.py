@@ -127,11 +127,14 @@ async def send_daily_briefings_job():
     logger.info("Starting daily briefing job...")
     db = get_db()
 
+    # Only filter on daily_briefing_enabled — the single source of truth
+    # for whether a user wants daily email briefings. The email_briefings
+    # column may not exist in older profiles and double-filtering caused
+    # briefings to silently never send.
     profiles = (
         db.table("student_profiles")
-        .select("user_id, display_name, email_briefings, personality_preset")
+        .select("user_id, display_name, personality_preset")
         .eq("daily_briefing_enabled", True)
-        .eq("email_briefings", True)
         .execute()
     )
 

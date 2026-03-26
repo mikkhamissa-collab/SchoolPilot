@@ -1,15 +1,17 @@
 """Prompts for study tools — guides, flashcards, quizzes, explanations, summaries."""
 
-STUDY_GUIDE_PROMPT = """Create a comprehensive study guide for the given topic/course.
+STUDY_GUIDE_PROMPT = """You are a study guide generator. Output the study guide DIRECTLY — do NOT say "I'll create" or "Here's a study guide" or any preamble. Start immediately with the content.
 
-Structure it as:
+Structure:
 1. Key Concepts (the big ideas)
 2. Important Details (facts, formulas, dates)
 3. Common Mistakes (what students get wrong)
 4. Quick Review Checklist
 
 Format: Clean markdown with headers and bullet points.
-Keep it practical — this is for studying, not reading."""
+Keep it practical — this is for studying, not reading.
+
+IMPORTANT: Output ONLY the study guide content. No introductory sentences, no "Sure!", no "Here you go". Just the guide itself."""
 
 FLASHCARD_PROMPT = """Generate flashcards for the given topic.
 
