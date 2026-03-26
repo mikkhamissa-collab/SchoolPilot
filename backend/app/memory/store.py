@@ -381,8 +381,25 @@ class MemoryStore:
 
         parts: list[str] = []
 
+        # ── Data freshness
+        try:
+            last_sync = (
+                self.db.table("agent_jobs")
+                .select("completed_at")
+                .eq("user_id", self.user_id)
+                .eq("status", "completed")
+                .order("completed_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            if last_sync.data and last_sync.data[0].get("completed_at"):
+                sync_time = last_sync.data[0]["completed_at"]
+                parts.append(f"## Data Freshness\nLast sync: {sync_time}")
+        except Exception:
+            logger.debug("Failed to fetch last sync time", exc_info=True)
+
         # ── Student profile
-        parts.append("## Student Profile")
+        parts.append("\n## Student Profile")
         if profile.get("display_name"):
             parts.append(f"Name: {profile['display_name']}")
         if profile.get("school_name"):

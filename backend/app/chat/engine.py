@@ -331,10 +331,13 @@ class ChatEngine:
             tokens_used=tokens_used,
         )
 
-        # 8. Periodic summarization (every ~10 messages after the first 20)
+        # 8. Auto-title conversation after first exchange
+        await self._maybe_auto_title(conversation_id, user_message)
+
+        # 9. Periodic summarization (every ~10 messages after the first 20)
         await self._maybe_summarize(conversation_id)
 
-        # 9. Done
+        # 10. Done
         yield _sse({"type": "done"})
 
     # ── Streaming internals ──────────────────────────────────────────────
@@ -927,46 +930,97 @@ Today is {today}. Current time: {time_now}.
         if current_pct is None:
             return {"error": f"No percentage grade available for '{course_name}'."}
 
+        breakdown = course_grade.get("category_breakdown") or {}
+
         if scenario == "what_if":
             score = tool_input.get("hypothetical_score", 85)
             total = tool_input.get("hypothetical_total", 100)
-            # Simple weighted average estimate
-            new_pct = (current_pct + (score / total * 100)) / 2
+            category = tool_input.get("category", "")
+            score_pct = score / total * 100
+
+            if breakdown and category:
+                # Weighted calculation using category data
+                cat_data = breakdown.get(category, {})
+                cat_weight = cat_data.get("weight", 0)
+                cat_avg = cat_data.get("average", current_pct)
+                # Estimate new category average (assume equal weight for new assignment)
+                new_cat_avg = (cat_avg + score_pct) / 2
+                # Recompute overall: adjust the category's contribution
+                weight_sum = sum(c.get("weight", 0) for c in breakdown.values())
+                if weight_sum > 0:
+                    new_pct = 0.0
+                    for cat_name, cat_info in breakdown.items():
+                        w = cat_info.get("weight", 0)
+                        avg = new_cat_avg if cat_name == category else cat_info.get("average", 0)
+                        new_pct += avg * w / weight_sum
+                else:
+                    new_pct = (current_pct + score_pct) / 2
+                note = f"Weighted estimate using {category} category ({cat_weight}% weight)."
+            else:
+                # Fallback: simple average
+                new_pct = (current_pct + score_pct) / 2
+                note = "Rough estimate — no category weight data available."
+                if breakdown:
+                    note += f" Available categories: {', '.join(breakdown.keys())}"
+
             return {
                 "course": course_name,
                 "current_grade": current_pct,
                 "hypothetical_score": f"{score}/{total}",
                 "projected_grade": round(new_pct, 1),
-                "note": "This is an estimate. Actual grade depends on category weights.",
+                "note": note,
             }
         elif scenario == "required_score":
             target = tool_input.get("target_grade", 90)
-            # Estimate: what score on a 100-point assignment gets you to target
             needed = 2 * target - current_pct
             return {
                 "course": course_name,
                 "current_grade": current_pct,
                 "target_grade": target,
                 "needed_score": max(0, min(100, round(needed, 1))),
-                "note": "Estimated score needed on a 100-point assignment. Actual depends on weights.",
+                "note": "Estimated score needed on a 100-point assignment.",
             }
 
         return {"error": f"Unknown scenario: {scenario}"}
 
     async def _tool_generate_study_guide(self, tool_input: dict) -> dict:
-        """Trigger study guide generation (returns a brief guide)."""
+        """Generate a concise study guide inline via Claude."""
         course = tool_input.get("course", "").strip()
         topic = tool_input.get("topic", "").strip()
 
         if not course or not topic:
             return {"error": "Both course and topic are required."}
 
-        return {
-            "status": "ready",
-            "course": course,
-            "topic": topic,
-            "message": f"I'll create a study guide for {topic} in {course}. You can also visit the Study page for more detailed guides, flashcards, and practice quizzes.",
-        }
+        try:
+            response = await self.client.messages.create(
+                model=self.settings.claude_model,
+                max_tokens=1024,
+                system=(
+                    "Generate a concise, student-friendly study guide. Include: "
+                    "1) Key concepts (bullet points), 2) Common mistakes to avoid, "
+                    "3) 3 practice questions with answers. Keep it focused and useful."
+                ),
+                messages=[{
+                    "role": "user",
+                    "content": f"Create a study guide for '{topic}' in {course}.",
+                }],
+                timeout=30.0,
+            )
+            guide_text = response.content[0].text.strip()
+            return {
+                "status": "generated",
+                "course": course,
+                "topic": topic,
+                "guide": guide_text,
+            }
+        except Exception as e:
+            logger.warning("Study guide generation failed: %s", str(e)[:200])
+            return {
+                "status": "error",
+                "course": course,
+                "topic": topic,
+                "message": "Couldn't generate the study guide right now. Try the Study page for more options.",
+            }
 
     async def _tool_get_due_soon(self, tool_input: dict) -> dict:
         """Get assignments due in the next 48 hours."""
@@ -995,6 +1049,54 @@ Today is {today}. Current time: {time_now}.
             "due_in_48h": due_soon,
             "count": len(due_soon),
         }
+
+    # ── Auto-titling ──────────────────────────────────────────────────────
+
+    async def _maybe_auto_title(self, conversation_id: str, user_message: str) -> None:
+        """Auto-title a conversation after the first exchange (2 messages: user + assistant).
+
+        Uses Haiku for speed and cost (~0.001 cents per title).
+        """
+        try:
+            db = self.memory.db
+            msgs = (
+                db.table("messages")
+                .select("id", count="exact")
+                .eq("conversation_id", conversation_id)
+                .execute()
+            )
+            if msgs.count != 2:
+                return
+
+            # Check if title is still the default
+            conv = (
+                db.table("conversations")
+                .select("title")
+                .eq("id", conversation_id)
+                .single()
+                .execute()
+            )
+            if not conv.data or conv.data.get("title", "") not in ("New conversation", ""):
+                return
+
+            response = await self.client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=20,
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        "Summarize this conversation in 3-5 words as a title. "
+                        f"User said: {user_message[:200]}. "
+                        "Reply with ONLY the title, no quotes."
+                    ),
+                }],
+            )
+            title = response.content[0].text.strip().strip('"').strip("'")[:60]
+            if title:
+                db.table("conversations").update({"title": title}).eq("id", conversation_id).execute()
+                logger.info("Auto-titled conversation %s: %s", conversation_id, title)
+        except Exception:
+            logger.debug("Auto-title failed for conversation %s", conversation_id, exc_info=True)
 
     # ── Summarization ────────────────────────────────────────────────────
 
