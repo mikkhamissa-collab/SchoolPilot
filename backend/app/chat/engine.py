@@ -17,6 +17,7 @@ import anthropic
 from app.config import get_settings
 from app.memory.store import MemoryStore
 from app.prompts.personalities import get_personality
+from app.prompts.study import STUDY_GUIDE_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -984,7 +985,7 @@ Today is {today}. Current time: {time_now}.
         return {"error": f"Unknown scenario: {scenario}"}
 
     async def _tool_generate_study_guide(self, tool_input: dict) -> dict:
-        """Generate a concise study guide inline via Claude."""
+        """Generate a study guide using Claude."""
         course = tool_input.get("course", "").strip()
         topic = tool_input.get("topic", "").strip()
 
@@ -994,33 +995,25 @@ Today is {today}. Current time: {time_now}.
         try:
             response = await self.client.messages.create(
                 model=self.settings.claude_model,
-                max_tokens=1024,
-                system=(
-                    "Generate a concise, student-friendly study guide. Include: "
-                    "1) Key concepts (bullet points), 2) Common mistakes to avoid, "
-                    "3) 3 practice questions with answers. Keep it focused and useful."
-                ),
-                messages=[{
-                    "role": "user",
-                    "content": f"Create a study guide for '{topic}' in {course}.",
-                }],
-                timeout=30.0,
+                max_tokens=2048,
+                system=STUDY_GUIDE_PROMPT,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": f"Course: {course}\nTopic: {topic}",
+                    }
+                ],
             )
-            guide_text = response.content[0].text.strip()
+            guide_content = response.content[0].text.strip()
             return {
-                "status": "generated",
+                "status": "ready",
                 "course": course,
                 "topic": topic,
-                "guide": guide_text,
+                "guide": guide_content,
             }
         except Exception as e:
-            logger.warning("Study guide generation failed: %s", str(e)[:200])
-            return {
-                "status": "error",
-                "course": course,
-                "topic": topic,
-                "message": "Couldn't generate the study guide right now. Try the Study page for more options.",
-            }
+            logger.error("Study guide generation failed: %s", str(e)[:200])
+            return {"error": "Failed to generate study guide. Please try again."}
 
     async def _tool_get_due_soon(self, tool_input: dict) -> dict:
         """Get assignments due in the next 48 hours."""
