@@ -936,50 +936,26 @@ Today is {today}. Current time: {time_now}.
         if scenario == "what_if":
             score = tool_input.get("hypothetical_score", 85)
             total = tool_input.get("hypothetical_total", 100)
-            category = tool_input.get("category", "")
             score_pct = score / total * 100
-
-            if breakdown and category:
-                # Weighted calculation using category data
-                cat_data = breakdown.get(category, {})
-                cat_weight = cat_data.get("weight", 0)
-                cat_avg = cat_data.get("average", current_pct)
-                # Estimate new category average (assume equal weight for new assignment)
-                new_cat_avg = (cat_avg + score_pct) / 2
-                # Recompute overall: adjust the category's contribution
-                weight_sum = sum(c.get("weight", 0) for c in breakdown.values())
-                if weight_sum > 0:
-                    new_pct = 0.0
-                    for cat_name, cat_info in breakdown.items():
-                        w = cat_info.get("weight", 0)
-                        avg = new_cat_avg if cat_name == category else cat_info.get("average", 0)
-                        new_pct += avg * w / weight_sum
-                else:
-                    new_pct = (current_pct + score_pct) / 2
-                note = f"Weighted estimate using {category} category ({cat_weight}% weight)."
-            else:
-                # Fallback: simple average
-                new_pct = (current_pct + score_pct) / 2
-                note = "Rough estimate — no category weight data available."
-                if breakdown:
-                    note += f" Available categories: {', '.join(breakdown.keys())}"
-
+            # Weighted estimate: new assignment is ~5% of total grade
+            projected = current_pct * 0.95 + score_pct * 0.05
             return {
                 "course": course_name,
                 "current_grade": current_pct,
                 "hypothetical_score": f"{score}/{total}",
-                "projected_grade": round(new_pct, 1),
-                "note": note,
+                "projected_grade": round(projected, 1),
+                "note": "This is an estimate assuming the new assignment is ~5% of the total grade. Actual impact depends on category weights.",
             }
         elif scenario == "required_score":
             target = tool_input.get("target_grade", 90)
-            needed = 2 * target - current_pct
+            # Weighted estimate: what score needed if assignment is ~5% of total
+            needed = (target - current_pct * 0.95) / 0.05
             return {
                 "course": course_name,
                 "current_grade": current_pct,
                 "target_grade": target,
                 "needed_score": max(0, min(100, round(needed, 1))),
-                "note": "Estimated score needed on a 100-point assignment.",
+                "note": "Estimated score needed on a 100-point assignment (~5% weight). Actual depends on category weights.",
             }
 
         return {"error": f"Unknown scenario: {scenario}"}
