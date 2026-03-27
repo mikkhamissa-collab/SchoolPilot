@@ -12,14 +12,6 @@ from typing import Any, Optional
 from cryptography.fernet import Fernet, InvalidToken
 
 from app.agent.browser import BrowserAgent
-from app.agent.sync_utils import (
-    decrypt_credential,
-    encrypt_credential,
-    get_fernet,
-    normalize_course_name,
-    stable_id as _make_stable_id,
-    utcnow as _utcnow,
-)
 from app.config import get_settings
 from app.db import get_db
 
@@ -42,15 +34,26 @@ class LMSExplorer:
         self.settings = get_settings()
         self.db = get_db()
 
-    # ── Credential encryption helpers (delegated to sync_utils) ─────
+    # ── Credential encryption helpers ─────────────────────────────────
+
+    def _fernet(self) -> Fernet:
+        """Build a Fernet instance from the configured encryption key."""
+        key = self.settings.credential_encryption_key
+        if not key:
+            raise RuntimeError("credential_encryption_key is not configured")
+        # Fernet expects bytes
+        return Fernet(key.encode("utf-8") if isinstance(key, str) else key)
 
     def _decrypt(self, encrypted: str) -> str:
         """Decrypt a Fernet-encrypted credential string."""
-        return decrypt_credential(encrypted)
+        try:
+            return self._fernet().decrypt(encrypted.encode("utf-8")).decode("utf-8")
+        except InvalidToken:
+            raise ValueError("Failed to decrypt credential — key may have changed")
 
     def _encrypt(self, plain: str) -> str:
         """Encrypt a plaintext credential string with Fernet."""
-        return encrypt_credential(plain)
+        return self._fernet().encrypt(plain.encode("utf-8")).decode("utf-8")
 
     # ── Main entry point ──────────────────────────────────────────────
 
@@ -86,33 +89,6 @@ class LMSExplorer:
         # 2. Mark job as running
         self._update_job("running", extra={"started_at": _utcnow()})
 
-        # ── Fast path: HTTP API sync (no browser needed) ────────────
-        has_cookies = bool(cred.get("encrypted_cookies"))
-        has_teamie_uid = bool(cred.get("teamie_uid"))
-
-        if has_cookies and has_teamie_uid:
-            logger.info(
-                "Using HTTP API sync (fast path) for user %s (teamie_uid=%s)",
-                self.user_id, cred["teamie_uid"],
-            )
-            try:
-                from app.agent.http_sync import TeamieHTTPSync
-                sync = TeamieHTTPSync(self.user_id, self.job_id)
-                return await sync.run()
-            except Exception as exc:
-                logger.warning(
-                    "HTTP sync failed for user %s, falling back to Playwright: %s",
-                    self.user_id, exc,
-                )
-                # Fall through to Playwright path
-        else:
-            logger.info(
-                "HTTP sync not available for user %s (cookies=%s, teamie_uid=%s), "
-                "using Playwright (DEPRECATED — migrate to HTTP sync)",
-                self.user_id, has_cookies, has_teamie_uid,
-            )
-
-        # ── Legacy path: Playwright browser agent (DEPRECATED) ──────
         agent = BrowserAgent(self.user_id)
 
         try:
@@ -138,22 +114,18 @@ class LMSExplorer:
 
                 if not authenticated:
                     logger.warning("Cookie replay failed (session expired) for user %s", self.user_id)
-                    # DON'T return here — fall through to credential login if available
-                    if not has_creds:
-                        self._update_job("failed", error="session_expired")
-                        self._update_cred_status(cred_id, success=False, error="Session expired")
-                        return {
-                            "status": "session_expired",
-                            "message": "Your LMS session has expired. Please reconnect.",
-                        }
-                    else:
-                        logger.info("Falling back to credential login for user %s", self.user_id)
+                    self._update_job("failed", error="session_expired")
+                    self._update_cred_status(cred_id, success=False, error="Session expired")
+                    return {
+                        "status": "session_expired",
+                        "message": "Your LMS session has expired. Please reconnect.",
+                    }
                 else:
                     logger.info("Cookie replay succeeded for user %s", self.user_id)
                     self._update_cred_status(cred_id, success=True)
 
-            # ── Strategy 2: Username/password login (fallback OR primary) ─
-            if not authenticated and has_creds:
+            # ── Strategy 2: Username/password login (fallback) ─────
+            elif has_creds:
                 try:
                     username = self._decrypt(cred["encrypted_username"])
                     password = self._decrypt(cred["encrypted_password"])
@@ -174,10 +146,6 @@ class LMSExplorer:
                     logger.warning("Login failed for user %s", self.user_id)
                     self._update_job("failed", error=msg)
                     self._update_cred_status(cred_id, success=False, error=msg)
-                    # Mark credential as needing reconnect via browser
-                    self.db.table("lms_credentials").update({
-                        "last_error": "CAPTCHA detected — please reconnect via the app",
-                    }).eq("id", cred_id).execute()
                     return {"status": "login_failed", "message": msg}
 
                 logger.info("Login succeeded for user %s", self.user_id)
@@ -191,7 +159,7 @@ class LMSExplorer:
 
             # 5. Explore & extract (hard 90s timeout — kill browser if stuck)
             try:
-                extracted = await asyncio.wait_for(agent.explore(), timeout=120)
+                extracted = await asyncio.wait_for(agent.explore(), timeout=90)
             except asyncio.TimeoutError:
                 logger.error(
                     "Exploration timed out after 90s for user %s (%d items so far)",
@@ -296,17 +264,16 @@ class LMSExplorer:
         logger.info("Stored data for user %s: %s", self.user_id, counts)
         return counts
 
-    # ── Course name normalization (delegated to sync_utils) ─────────
-
-    @staticmethod
-    def _normalize_course_name(name: str) -> str:
-        return normalize_course_name(name)
-
     # ── Upsert helpers ────────────────────────────────────────────────
 
     def _stable_id(self, *parts: Optional[str]) -> str:
-        """Create a deterministic ID from component strings."""
-        return _make_stable_id(*parts)
+        """Create a deterministic ID from component strings.
+
+        Used as ``lms_id`` so that re-scraping the same assignment doesn't
+        create duplicates.
+        """
+        combined = "__".join(str(p or "") for p in parts)
+        return hashlib.sha256(combined.encode("utf-8")).hexdigest()[:40]
 
     def _upsert_assignment(self, item: dict) -> None:
         lms_id = self._stable_id(
@@ -319,7 +286,7 @@ class LMSExplorer:
                 "lms_id": lms_id,
                 "title": item.get("title", "Untitled"),
                 "description": item.get("description"),
-                "course_name": item.get("course", ""),
+                "course_name": item.get("course"),
                 "assignment_type": item.get("assignment_type"),
                 "due_date": item.get("due_date"),
                 "points_possible": item.get("points"),
@@ -348,11 +315,10 @@ class LMSExplorer:
                 logger.warning("Invalid grade percentage value: %s", overall_pct)
                 overall_pct = None
 
-        course = self._normalize_course_name(item.get("course") or "Unknown")
         self.db.table("lms_grades").upsert(
             {
                 "user_id": self.user_id,
-                "course_name": course,
+                "course_name": item.get("course", "Unknown"),
                 "overall_grade": item.get("overall_grade"),
                 "overall_percentage": overall_pct,
                 "category_breakdown": item.get("categories", {}),
@@ -362,25 +328,9 @@ class LMSExplorer:
             on_conflict="user_id,course_name",
         ).execute()
 
-        # Also insert a daily grade snapshot for trend tracking
-        try:
-            self.db.table("grade_snapshots").upsert(
-                {
-                    "user_id": self.user_id,
-                    "course_name": course,
-                    "overall_percentage": overall_pct,
-                    "overall_grade": item.get("overall_grade"),
-                    "category_breakdown": item.get("categories", {}),
-                    "job_id": self.job_id,
-                },
-                on_conflict="user_id,course_name,snapshot_date",
-            ).execute()
-        except Exception:
-            logger.debug("Failed to insert grade snapshot", exc_info=True)
-
     def _upsert_course(self, item: dict) -> None:
         raw_name = item.get("name", "Unknown")
-        normalized = normalize_course_name(raw_name)
+        normalized = _normalize_course_name(raw_name)
 
         # Check if a course with the same normalized name already exists
         existing = (
@@ -391,7 +341,7 @@ class LMSExplorer:
         )
         canonical = raw_name
         for row in existing.data or []:
-            if normalize_course_name(row["class_name"]) == normalized:
+            if _normalize_course_name(row["class_name"]) == normalized:
                 # Keep the LONGEST version as canonical
                 if len(row["class_name"]) >= len(canonical):
                     canonical = row["class_name"]
@@ -410,14 +360,17 @@ class LMSExplorer:
         ).execute()
 
     def _upsert_announcement(self, item: dict) -> None:
-        course = self._normalize_course_name(item.get("course") or "")
-        lms_id = self._stable_id(course, item.get("title"), item.get("date"))
+        lms_id = self._stable_id(
+            item.get("course"),
+            item.get("title"),
+            item.get("date"),
+        )
         self.db.table("lms_announcements").upsert(
             {
                 "user_id": self.user_id,
                 "lms_id": lms_id,
                 "title": item.get("title", "Untitled"),
-                "course_name": course,
+                "course_name": item.get("course"),
                 "content": item.get("content"),
                 "posted_date": item.get("date"),
                 "job_id": self.job_id,
@@ -427,14 +380,17 @@ class LMSExplorer:
         ).execute()
 
     def _upsert_calendar(self, item: dict) -> None:
-        course = self._normalize_course_name(item.get("course") or "")
-        lms_id = self._stable_id(course, item.get("title"), item.get("date"))
+        lms_id = self._stable_id(
+            item.get("course"),
+            item.get("title"),
+            item.get("date"),
+        )
         self.db.table("lms_calendar_events").upsert(
             {
                 "user_id": self.user_id,
                 "lms_id": lms_id,
                 "title": item.get("title", "Untitled"),
-                "course_name": course,
+                "course_name": item.get("course"),
                 "event_date": item.get("date"),
                 "details": item.get("details"),
                 "job_id": self.job_id,
@@ -550,8 +506,20 @@ class LMSExplorer:
             logger.warning("Failed to update cred status %s", cred_id, exc_info=True)
 
 
-# ── Utility (now imported from sync_utils) ────────────────────────────
-# _utcnow and normalize_course_name are imported at the top of this file.
+# ── Utility ───────────────────────────────────────────────────────────
+
+
+def _normalize_course_name(name: str) -> str:
+    """Strip period codes (e.g. 'P6 LA'), year brackets (e.g. '[25-26]'),
+    and extra whitespace so course names can be compared consistently."""
+    name = re.sub(r'\s*P\d+\s+[A-Z]{1,3}\s*', '', name)   # Strip "P6 LA"
+    name = re.sub(r'\s*\[\d{2}-\d{2}\]\s*$', '', name)     # Strip "[25-26]"
+    return name.strip()
+
+
+def _utcnow() -> str:
+    """Return the current UTC time as an ISO-8601 string."""
+    return datetime.now(timezone.utc).isoformat()
 
 
 # ── Convenience runner (for background tasks / CLI) ───────────────────
