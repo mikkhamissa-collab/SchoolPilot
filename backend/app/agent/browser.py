@@ -800,6 +800,103 @@ class BrowserAgent:
 
             logger.info("Phase 3 complete: %d classrooms (%.1fs)", len(classroom_links), _time.time() - _phase3_start)
 
+            # ── Phase 3b: Visit gradebook pages for each classroom ─────
+            _phase3b_start = _time.time()
+            logger.info("Phase 3b: Checking gradebooks for %d classrooms", len(classroom_links))
+            grade_keywords = ["gradebook", "grades", "assessment", "marks", "results"]
+
+            for i, link in enumerate(classroom_links):
+                href = link.get("href", "")
+                link_text = link.get("text", f"Classroom {i+1}")
+                course_name = link_text.split("[")[0].strip()
+
+                try:
+                    # Navigate to the classroom
+                    await self.page.goto(href, wait_until="domcontentloaded", timeout=15000)
+                    await self._wait_for_stable()
+
+                    # Look for gradebook links/tabs in the page
+                    page_data = await self.get_page_data()
+                    page_links = page_data.get("links", [])
+
+                    gradebook_link = None
+                    for pl in page_links:
+                        pl_href = pl.get("href", "").lower()
+                        pl_text = pl.get("text", "").lower()
+                        if any(kw in pl_href or kw in pl_text for kw in grade_keywords):
+                            gradebook_link = pl
+                            break
+
+                    # Also try clicking tab-like elements with grade keywords
+                    if not gradebook_link:
+                        for kw in grade_keywords:
+                            try:
+                                loc = self.page.get_by_text(kw, exact=False).first
+                                if await loc.is_visible(timeout=2000):
+                                    gradebook_link = {"href": None, "text": kw, "element": loc}
+                                    break
+                            except Exception:
+                                continue
+
+                    if not gradebook_link:
+                        continue
+
+                    logger.info(
+                        "Phase 3b: Found gradebook link for '%s': %s",
+                        course_name[:30],
+                        gradebook_link.get("text", "?")[:40],
+                    )
+
+                    # Click into the gradebook
+                    if gradebook_link.get("element"):
+                        await gradebook_link["element"].click(timeout=5000)
+                    elif gradebook_link.get("href"):
+                        await self.page.goto(
+                            gradebook_link["href"],
+                            wait_until="domcontentloaded",
+                            timeout=15000,
+                        )
+                    else:
+                        continue
+
+                    await self._wait_for_stable()
+                    # Scroll to reveal more grades
+                    for _ in range(2):
+                        await self.page.evaluate("window.scrollBy(0, 600)")
+                        await asyncio.sleep(0.3)
+
+                    # Take screenshot and extract grades via Claude Vision
+                    grade_items = await self._claude_extract_grades_from_screenshot(
+                        course_name=course_name,
+                    )
+
+                    if isinstance(grade_items, list):
+                        grade_count = 0
+                        for item in grade_items:
+                            if isinstance(item, dict):
+                                if not item.get("course"):
+                                    item["course"] = course_name
+                                self._add_extracted(item)
+                                grade_count += 1
+                        if grade_count:
+                            logger.info(
+                                "Phase 3b: Extracted %d grade items for '%s'",
+                                grade_count, course_name[:30],
+                            )
+
+                    # Navigate back before moving to the next class
+                    await self.page.go_back(wait_until="domcontentloaded", timeout=10000)
+                    await self._wait_for_stable()
+
+                except Exception as e:
+                    logger.warning(
+                        "Phase 3b: Failed gradebook for '%s': %s",
+                        link_text[:30], str(e)[:200],
+                    )
+                    continue
+
+            logger.info("Phase 3b complete (%.1fs)", _time.time() - _phase3b_start)
+
             # ── Phase 4: Check overdue/todos (richest data source) ─────
             _phase4_start = _time.time()
             logger.info("Phase 4: Checking overdue/todos")
@@ -1087,5 +1184,117 @@ class BrowserAgent:
 
         except Exception as e:
             logger.error("Claude extraction failed: %s", str(e)[:200])
+            return []
+
+    async def _claude_extract_grades_from_screenshot(
+        self,
+        *,
+        course_name: str,
+    ) -> list:
+        """Take a screenshot of a gradebook page and use Claude Vision to extract grades."""
+        if not self.page:
+            return []
+
+        screenshot_b64 = await self.screenshot()
+
+        prompt = (
+            "You are looking at a gradebook/assessment page in a school LMS (Teamie). "
+            "Extract ALL grade information visible.\n\n"
+            "Return a JSON array of grade objects:\n"
+            "[{\n"
+            '  "type": "grade",\n'
+            '  "course": "' + course_name + '",\n'
+            '  "overall_grade": "letter grade if visible (A, B+, etc.)",\n'
+            '  "overall_percentage": numeric_percentage_if_visible,\n'
+            '  "categories": [{"name": "category name", "weight": weight_number, "grade": percentage}]\n'
+            "}]\n\n"
+            "If you see individual assignment scores, extract them as:\n"
+            "[{\n"
+            '  "type": "assignment",\n'
+            '  "course": "' + course_name + '",\n'
+            '  "title": "assignment title",\n'
+            '  "score": points_earned_number,\n'
+            '  "points": points_possible_number,\n'
+            '  "due_date": "YYYY-MM-DD if visible",\n'
+            '  "graded": true\n'
+            "}]\n\n"
+            "Return ONLY the JSON array. If no grades visible, return []."
+        )
+
+        try:
+            response = await self.client.messages.create(
+                model=self.settings.claude_model,
+                max_tokens=4096,
+                system=(
+                    "You are a data extraction assistant. You extract structured data "
+                    "from LMS screenshots. Return ONLY valid JSON — no markdown fences, "
+                    "no explanation, no prose. Just the JSON array."
+                ),
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/png",
+                                    "data": screenshot_b64,
+                                },
+                            },
+                            {
+                                "type": "text",
+                                "text": prompt,
+                            },
+                        ],
+                    }
+                ],
+            )
+            raw = response.content[0].text.strip()
+            logger.debug("Claude grade extraction response (%.300s)", raw)
+
+            # Parse JSON — same strategies as _claude_extract_from_text
+            try:
+                result = json.loads(raw)
+                if isinstance(result, list):
+                    return result
+                if isinstance(result, dict):
+                    return [result]
+            except json.JSONDecodeError:
+                pass
+
+            # Strip markdown fences
+            cleaned = raw
+            if cleaned.startswith("```"):
+                lines = cleaned.split("\n", 1)
+                if len(lines) > 1:
+                    cleaned = lines[1].rsplit("```", 1)[0].strip()
+                try:
+                    result = json.loads(cleaned)
+                    return result if isinstance(result, list) else [result]
+                except json.JSONDecodeError:
+                    pass
+
+            # Find array brackets
+            bracket_start = raw.find("[")
+            if bracket_start >= 0:
+                depth = 0
+                for i in range(bracket_start, len(raw)):
+                    if raw[i] == "[":
+                        depth += 1
+                    elif raw[i] == "]":
+                        depth -= 1
+                        if depth == 0:
+                            try:
+                                result = json.loads(raw[bracket_start:i + 1])
+                                return result if isinstance(result, list) else [result]
+                            except json.JSONDecodeError:
+                                break
+
+            logger.warning("Could not parse Claude grade extraction response as JSON")
+            return []
+
+        except Exception as e:
+            logger.error("Claude grade extraction failed: %s", str(e)[:200])
             return []
 

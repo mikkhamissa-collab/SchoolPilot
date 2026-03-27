@@ -303,15 +303,17 @@ class LMSExplorer:
         return hashlib.sha256(combined.encode("utf-8")).hexdigest()[:40]
 
     def _upsert_assignment(self, item: dict) -> None:
-        course = self._normalize_course_name(item.get("course") or "")
-        lms_id = self._stable_id(course, item.get("title"))
+        lms_id = self._stable_id(
+            item.get("course"),
+            item.get("title"),
+        )
         self.db.table("lms_assignments").upsert(
             {
                 "user_id": self.user_id,
                 "lms_id": lms_id,
                 "title": item.get("title", "Untitled"),
                 "description": item.get("description"),
-                "course_name": course,
+                "course_name": item.get("course", ""),
                 "assignment_type": item.get("assignment_type"),
                 "due_date": item.get("due_date"),
                 "points_possible": item.get("points"),
@@ -371,11 +373,28 @@ class LMSExplorer:
             logger.debug("Failed to insert grade snapshot", exc_info=True)
 
     def _upsert_course(self, item: dict) -> None:
-        class_name = self._normalize_course_name(item.get("name") or "Unknown")
+        raw_name = item.get("name", "Unknown")
+        normalized = _normalize_course_name(raw_name)
+
+        # Check if a course with the same normalized name already exists
+        existing = (
+            self.db.table("class_context")
+            .select("class_name")
+            .eq("user_id", self.user_id)
+            .execute()
+        )
+        canonical = raw_name
+        for row in existing.data or []:
+            if _normalize_course_name(row["class_name"]) == normalized:
+                # Keep the LONGEST version as canonical
+                if len(row["class_name"]) >= len(canonical):
+                    canonical = row["class_name"]
+                break
+
         self.db.table("class_context").upsert(
             {
                 "user_id": self.user_id,
-                "class_name": class_name,
+                "class_name": canonical,
                 "teacher_name": item.get("teacher"),
                 "period": item.get("period"),
                 "room": item.get("room"),
@@ -526,6 +545,15 @@ class LMSExplorer:
 
 
 # ── Utility ───────────────────────────────────────────────────────────
+
+
+def _normalize_course_name(name: str) -> str:
+    """Strip period codes (e.g. 'P6 LA'), year brackets (e.g. '[25-26]'),
+    and extra whitespace so course names can be compared consistently."""
+    name = re.sub(r'\s*P\d+\s+[A-Z]{1,3}\s*', '', name)   # Strip "P6 LA"
+    name = re.sub(r'\s*\[\d{2}-\d{2}\]\s*$', '', name)     # Strip "[25-26]"
+    return name.strip()
+
 
 def _utcnow() -> str:
     """Return the current UTC time as an ISO-8601 string."""
