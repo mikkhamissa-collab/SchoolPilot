@@ -313,6 +313,22 @@ class MemoryStore:
             )
             return {}
 
+    async def get_conversation(self, conversation_id: str) -> Optional[dict]:
+        """Get a single conversation by ID."""
+        try:
+            result = (
+                self.db.table("conversations")
+                .select("id, title, message_count, last_message_at, summary, created_at")
+                .eq("id", conversation_id)
+                .eq("user_id", self.user_id)
+                .single()
+                .execute()
+            )
+            return result.data
+        except Exception:
+            logger.exception("Failed to get conversation %s for user %s", conversation_id, self.user_id)
+            return None
+
     def _touch_conversation(self, conversation_id: str) -> None:
         """Refresh the conversation's last_message_at and message_count."""
         try:

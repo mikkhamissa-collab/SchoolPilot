@@ -332,7 +332,7 @@ class ChatEngine:
             tokens_used=tokens_used,
         )
 
-        # 8. Auto-title conversation after first exchange
+        # 8. Auto-title: generate a title after the first assistant response
         await self._maybe_auto_title(conversation_id, user_message)
 
         # 9. Periodic summarization (every ~10 messages after the first 20)
@@ -1068,6 +1068,32 @@ Today is {today}. Current time: {time_now}.
             logger.debug("Auto-title failed for conversation %s", conversation_id, exc_info=True)
 
     # ── Summarization ────────────────────────────────────────────────────
+
+    async def _maybe_auto_title(self, conversation_id: str, user_message: str) -> None:
+        """Generate a short title for the conversation after the first exchange.
+
+        Only fires when the conversation still has the default "New conversation"
+        title.  Uses Claude Haiku for speed and cost efficiency.
+        """
+        try:
+            conv = await self.memory.get_conversation(conversation_id)
+            if not conv or conv.get("title", "").lower() != "new conversation":
+                return
+
+            response = await self.client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=20,
+                system="Generate a 3-5 word title for this chat message. Return ONLY the title, no quotes or punctuation.",
+                messages=[{"role": "user", "content": user_message}],
+            )
+            title = response.content[0].text.strip().strip('"\'')
+            if title:
+                self.memory.db.table("conversations").update(
+                    {"title": title}
+                ).eq("id", conversation_id).execute()
+                logger.info("Auto-titled conversation %s: %s", conversation_id, title)
+        except Exception:
+            logger.warning("Auto-title failed for conversation %s (non-critical)", conversation_id)
 
     async def _maybe_summarize(self, conversation_id: str) -> None:
         """Trigger conversation summarization if the message count warrants it.
