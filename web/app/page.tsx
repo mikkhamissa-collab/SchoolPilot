@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 // ---------------------------------------------------------------------------
@@ -162,14 +162,240 @@ function IconRocket() {
 }
 
 // ---------------------------------------------------------------------------
+// Live AI Chat Demo — ported from landing-page-final.jsx
+// ---------------------------------------------------------------------------
+
+const DEMO_CONVERSATIONS = [
+  {
+    question: "What do I need on Friday's calc test to keep my A?",
+    answer:
+      "You're at 91.3% in AP Calculus. With the test weighted at 25%, you need at least an 84% to stay above 90%. Score 90+ and you lock in a solid A going into finals.",
+  },
+  {
+    question: "What should I work on tonight?",
+    answer:
+      "Three things, in order: 1) English essay draft due tomorrow (biggest grade impact \u2014 it's 15% of your grade). 2) Physics problem set (quick win, 30 min). 3) Review your history notes for Thursday's quiz.",
+  },
+  {
+    question: "Am I at risk of dropping in any class?",
+    answer:
+      "Physics is tight \u2014 you're at 89.7%, right on the A/B border. One missed assignment would drop you. Everything else has healthy margins. I'd prioritize Physics submissions this week.",
+  },
+];
+
+function ThinkingDots() {
+  return (
+    <div className="flex items-center gap-[5px]">
+      {[0, 1, 2].map((i) => (
+        <div
+          key={i}
+          className="w-[5px] h-[5px] rounded-full bg-[#a78bfa]"
+          style={{ animation: `pulse3 1.4s ease-in-out ${i * 0.2}s infinite` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function LiveChatDemo() {
+  const [convoIndex, setConvoIndex] = useState(0);
+  const [phase, setPhase] = useState<"idle" | "typing" | "thinking" | "answering" | "done">("idle");
+  const [displayedAnswer, setDisplayedAnswer] = useState("");
+  const [inputValue, setInputValue] = useState("");
+  const answerRef = useRef("");
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const convo = DEMO_CONVERSATIONS[convoIndex];
+
+  const runDemo = useCallback((idx: number) => {
+    const c = DEMO_CONVERSATIONS[idx];
+    setPhase("idle");
+    setDisplayedAnswer("");
+    setInputValue("");
+    answerRef.current = "";
+
+    // Phase 1: type the question
+    let qi = 0;
+    setPhase("typing");
+    const typeInterval = setInterval(() => {
+      qi++;
+      setInputValue(c.question.slice(0, qi));
+      if (qi >= c.question.length) {
+        clearInterval(typeInterval);
+        // Phase 2: thinking
+        setTimeout(() => {
+          setPhase("thinking");
+          // Phase 3: stream the answer
+          setTimeout(() => {
+            setPhase("answering");
+            let ai = 0;
+            intervalRef.current = setInterval(() => {
+              ai++;
+              answerRef.current = c.answer.slice(0, ai);
+              setDisplayedAnswer(answerRef.current);
+              if (ai >= c.answer.length) {
+                if (intervalRef.current) clearInterval(intervalRef.current);
+                setPhase("done");
+                // Cycle to next conversation
+                setTimeout(() => {
+                  const next = (idx + 1) % DEMO_CONVERSATIONS.length;
+                  setConvoIndex(next);
+                  runDemo(next);
+                }, 4000);
+              }
+            }, 18);
+          }, 2000);
+        }, 600);
+      }
+    }, 45);
+
+    return () => {
+      clearInterval(typeInterval);
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    const cleanup = runDemo(0);
+    return cleanup;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className="w-full max-w-[560px] rounded-2xl border border-[#1e1e22] bg-[#111113] overflow-hidden">
+      {/* Window chrome */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[#1e1e22]">
+        <div className="flex items-center gap-2">
+          <div
+            className="w-7 h-7 rounded-full shrink-0"
+            style={{
+              background: "linear-gradient(135deg, #7c3aed, #a78bfa)",
+              animation: "breathe 2s ease-in-out infinite",
+            }}
+          />
+          <span className="text-[13px] font-semibold text-white">SchoolPilot</span>
+        </div>
+        <span className="text-[11px] text-[#52525b]">AI Assistant</span>
+      </div>
+
+      {/* Messages area */}
+      <div className="p-5 min-h-[200px] flex flex-col gap-4">
+        {/* User message */}
+        {(phase === "thinking" || phase === "answering" || phase === "done") && (
+          <div className="flex justify-end" style={{ animation: "fadeUp 0.3s ease" }}>
+            <div className="bg-[#1c1c2e] text-white px-4 py-2.5 rounded-[14px_14px_4px_14px] text-sm leading-relaxed max-w-[85%]">
+              {convo.question}
+            </div>
+          </div>
+        )}
+
+        {/* Thinking state */}
+        {phase === "thinking" && (
+          <div className="flex items-center gap-2.5" style={{ animation: "fadeUp 0.3s ease" }}>
+            <div
+              className="w-7 h-7 rounded-full shrink-0"
+              style={{
+                background: "linear-gradient(135deg, #7c3aed, #a78bfa)",
+                animation: "breathe 2s ease-in-out infinite",
+              }}
+            />
+            <div className="flex flex-col gap-1.5">
+              <ThinkingDots />
+              <span className="text-[11px] text-[#52525b]">Looking at your grades...</span>
+            </div>
+          </div>
+        )}
+
+        {/* Streaming answer */}
+        {(phase === "answering" || phase === "done") && (
+          <div className="flex gap-2.5" style={{ animation: "fadeUp 0.3s ease" }}>
+            <div
+              className="w-7 h-7 rounded-full shrink-0 mt-0.5"
+              style={{ background: "linear-gradient(135deg, #7c3aed, #a78bfa)" }}
+            />
+            <div className="text-[#a1a1aa] text-sm leading-[1.65]">
+              {displayedAnswer}
+              {phase === "answering" && (
+                <span
+                  className="inline-block w-[2px] h-4 bg-[#a78bfa] ml-[2px] align-text-bottom"
+                  style={{ animation: "cursorBlink 0.8s step-end infinite" }}
+                />
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Input bar */}
+      <div className="flex items-center gap-2.5 px-4 py-3 border-t border-[#1e1e22]">
+        <div
+          className="flex-1 rounded-[10px] px-3.5 py-2.5 text-[13px] min-h-[20px] transition-colors duration-300"
+          style={{
+            background: "#09090b",
+            border: `1px solid ${phase === "typing" ? "rgba(124,58,237,0.38)" : "#1e1e22"}`,
+            color: phase === "idle" ? "#52525b" : "#fafafa",
+          }}
+        >
+          {phase === "idle" && "Ask about your classes..."}
+          {phase === "typing" && (
+            <>
+              {inputValue}
+              <span
+                className="inline-block w-[1px] h-3.5 bg-white ml-[1px] align-text-bottom"
+                style={{ animation: "cursorBlink 0.6s step-end infinite" }}
+              />
+            </>
+          )}
+          {(phase === "thinking" || phase === "answering" || phase === "done") && convo.question}
+        </div>
+        <div
+          className="w-9 h-9 rounded-[10px] flex items-center justify-center transition-colors duration-300"
+          style={{ background: phase === "typing" ? "#fafafa" : "#1e1e22" }}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path
+              d="M3 8h10M9 4l4 4-4 4"
+              stroke={phase === "typing" ? "#09090b" : "#52525b"}
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Landing Page
 // ---------------------------------------------------------------------------
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-[#0a0a1f] overflow-x-hidden">
+    <div className="min-h-screen bg-[#09090b] overflow-x-hidden">
+      {/* Keyframe animations for LiveChatDemo */}
+      <style jsx global>{`
+        @keyframes pulse3 {
+          0%, 80%, 100% { opacity: 0.2; transform: scale(0.85); }
+          40% { opacity: 1; transform: scale(1.15); }
+        }
+        @keyframes breathe {
+          0%, 100% { box-shadow: 0 0 8px rgba(124,58,237,0.25); }
+          50% { box-shadow: 0 0 24px rgba(124,58,237,0.5); }
+        }
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes cursorBlink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
+        }
+      `}</style>
+
       {/* Nav */}
-      <nav className="sticky top-0 z-50 backdrop-blur-xl bg-[#0a0a1f]/80 border-b border-white/[0.06]">
+      <nav className="sticky top-0 z-50 backdrop-blur-xl bg-[#09090b]/80 border-b border-white/[0.06]">
         <div className="max-w-5xl mx-auto flex items-center justify-between px-5 py-4">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-[#7c3aed]/20 flex items-center justify-center">
@@ -221,8 +447,8 @@ export default function LandingPage() {
         </FadeIn>
 
         <FadeIn delay={120}>
-          <p className="text-[#a0a0b0] text-lg sm:text-xl max-w-xl leading-relaxed mb-10">
-            SchoolPilot syncs with your LMS, tracks your grades, and builds a
+          <p className="text-[#a1a1aa] text-lg sm:text-xl max-w-xl leading-relaxed mb-10">
+            Connects to your school&apos;s LMS, tracks your grades, and builds a
             personalized daily plan so you can stop stressing and start studying.
           </p>
         </FadeIn>
@@ -234,6 +460,25 @@ export default function LandingPage() {
           >
             Get started free
           </Link>
+        </FadeIn>
+      </section>
+
+      {/* ------------------------------------------------------------------- */}
+      {/* Live Chat Demo */}
+      {/* ------------------------------------------------------------------- */}
+      <section className="px-5 pb-24 md:pb-32 flex flex-col items-center">
+        <FadeIn>
+          <div className="text-center mb-10">
+            <p className="text-[#7c3aed] text-sm font-medium tracking-wide uppercase mb-3">
+              See It In Action
+            </p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tight">
+              AI that knows your classes
+            </h2>
+          </div>
+        </FadeIn>
+        <FadeIn delay={150}>
+          <LiveChatDemo />
         </FadeIn>
       </section>
 
@@ -255,14 +500,14 @@ export default function LandingPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {/* Plan */}
           <FadeIn delay={0}>
-            <div className="group p-7 rounded-2xl border border-white/[0.06] bg-[#1a1a2e] hover:border-[#7c3aed]/30 transition-all duration-300 h-full">
+            <div className="group p-7 rounded-2xl border border-[#1e1e22] bg-[#111113] hover:border-[#7c3aed]/30 transition-all duration-300 h-full">
               <div className="w-14 h-14 rounded-xl bg-[#7c3aed]/10 flex items-center justify-center text-[#7c3aed] mb-5 group-hover:bg-[#7c3aed]/20 transition-colors">
                 <IconPlan />
               </div>
               <h3 className="text-white text-xl font-semibold mb-2">
                 AI Daily Plan
               </h3>
-              <p className="text-[#a0a0b0] text-sm leading-relaxed">
+              <p className="text-[#a1a1aa] text-sm leading-relaxed">
                 Wake up to a prioritized list of what to work on today, built
                 from your real assignments, due dates, and grade weights.
               </p>
@@ -271,14 +516,14 @@ export default function LandingPage() {
 
           {/* Grades */}
           <FadeIn delay={100}>
-            <div className="group p-7 rounded-2xl border border-white/[0.06] bg-[#1a1a2e] hover:border-[#7c3aed]/30 transition-all duration-300 h-full">
+            <div className="group p-7 rounded-2xl border border-[#1e1e22] bg-[#111113] hover:border-[#7c3aed]/30 transition-all duration-300 h-full">
               <div className="w-14 h-14 rounded-xl bg-[#7c3aed]/10 flex items-center justify-center text-[#7c3aed] mb-5 group-hover:bg-[#7c3aed]/20 transition-colors">
                 <IconGrades />
               </div>
               <h3 className="text-white text-xl font-semibold mb-2">
                 Real-Time Grades
               </h3>
-              <p className="text-[#a0a0b0] text-sm leading-relaxed">
+              <p className="text-[#a1a1aa] text-sm leading-relaxed">
                 See every grade in one place. Run what-if scenarios and find out
                 exactly what you need on your next test to hit your target.
               </p>
@@ -287,14 +532,14 @@ export default function LandingPage() {
 
           {/* Focus */}
           <FadeIn delay={200}>
-            <div className="group p-7 rounded-2xl border border-white/[0.06] bg-[#1a1a2e] hover:border-[#7c3aed]/30 transition-all duration-300 h-full">
+            <div className="group p-7 rounded-2xl border border-[#1e1e22] bg-[#111113] hover:border-[#7c3aed]/30 transition-all duration-300 h-full">
               <div className="w-14 h-14 rounded-xl bg-[#7c3aed]/10 flex items-center justify-center text-[#7c3aed] mb-5 group-hover:bg-[#7c3aed]/20 transition-colors">
                 <IconFocus />
               </div>
               <h3 className="text-white text-xl font-semibold mb-2">
                 Study Timer
               </h3>
-              <p className="text-[#a0a0b0] text-sm leading-relaxed">
+              <p className="text-[#a1a1aa] text-sm leading-relaxed">
                 Built-in Pomodoro and deep work timers that track your study
                 streaks. Stay focused and see your consistency grow over time.
               </p>
@@ -321,7 +566,7 @@ export default function LandingPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {/* Step 1 */}
           <FadeIn delay={0}>
-            <div className="relative p-7 rounded-2xl border border-white/[0.06] bg-[#1a1a2e]/60">
+            <div className="relative p-7 rounded-2xl border border-[#1e1e22] bg-[#111113]/60">
               <div className="flex items-center gap-4 mb-4">
                 <div className="w-10 h-10 rounded-full bg-[#7c3aed]/15 flex items-center justify-center text-[#7c3aed] shrink-0">
                   <IconLink />
@@ -333,7 +578,7 @@ export default function LandingPage() {
               <h3 className="text-white text-lg font-semibold mb-2">
                 Connect your LMS
               </h3>
-              <p className="text-[#a0a0b0] text-sm leading-relaxed">
+              <p className="text-[#a1a1aa] text-sm leading-relaxed">
                 Log into your school&apos;s learning platform through SchoolPilot.
                 No API keys, no IT department needed.
               </p>
@@ -342,7 +587,7 @@ export default function LandingPage() {
 
           {/* Step 2 */}
           <FadeIn delay={120}>
-            <div className="relative p-7 rounded-2xl border border-white/[0.06] bg-[#1a1a2e]/60">
+            <div className="relative p-7 rounded-2xl border border-[#1e1e22] bg-[#111113]/60">
               <div className="flex items-center gap-4 mb-4">
                 <div className="w-10 h-10 rounded-full bg-[#7c3aed]/15 flex items-center justify-center text-[#7c3aed] shrink-0">
                   <IconSync />
@@ -354,7 +599,7 @@ export default function LandingPage() {
               <h3 className="text-white text-lg font-semibold mb-2">
                 AI syncs your classes
               </h3>
-              <p className="text-[#a0a0b0] text-sm leading-relaxed">
+              <p className="text-[#a1a1aa] text-sm leading-relaxed">
                 Assignments, due dates, and grades are pulled automatically and
                 kept up to date every day.
               </p>
@@ -363,7 +608,7 @@ export default function LandingPage() {
 
           {/* Step 3 */}
           <FadeIn delay={240}>
-            <div className="relative p-7 rounded-2xl border border-white/[0.06] bg-[#1a1a2e]/60">
+            <div className="relative p-7 rounded-2xl border border-[#1e1e22] bg-[#111113]/60">
               <div className="flex items-center gap-4 mb-4">
                 <div className="w-10 h-10 rounded-full bg-[#7c3aed]/15 flex items-center justify-center text-[#7c3aed] shrink-0">
                   <IconRocket />
@@ -375,7 +620,7 @@ export default function LandingPage() {
               <h3 className="text-white text-lg font-semibold mb-2">
                 Get your daily plan
               </h3>
-              <p className="text-[#a0a0b0] text-sm leading-relaxed">
+              <p className="text-[#a1a1aa] text-sm leading-relaxed">
                 A personalized study plan lands in your inbox and dashboard every
                 morning. Just follow it.
               </p>
@@ -390,14 +635,14 @@ export default function LandingPage() {
       <section className="px-5 py-20 md:py-28">
         <FadeIn>
           <div className="max-w-2xl mx-auto text-center">
-            <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full border border-white/[0.06] bg-[#1a1a2e]/50 text-[#a0a0b0] text-sm mb-8">
-              <span className="inline-block w-2 h-2 rounded-full bg-[#10b981]" />
+            <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full border border-[#1e1e22] bg-[#111113]/50 text-[#a1a1aa] text-sm mb-8">
+              <span className="inline-block w-2 h-2 rounded-full bg-[#22c55e]" />
               100% free. No catch.
             </div>
             <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tight mb-5">
               Built for <span className="text-[#7c3aed]">ASL students</span>
             </h2>
-            <p className="text-[#a0a0b0] text-lg leading-relaxed mb-10 max-w-lg mx-auto">
+            <p className="text-[#a1a1aa] text-lg leading-relaxed mb-10 max-w-lg mx-auto">
               SchoolPilot was built specifically for students at the American
               School of London. It connects directly to Teamie and understands
               your coursework. No cost, no ads, no strings attached.
@@ -417,7 +662,7 @@ export default function LandingPage() {
       {/* ------------------------------------------------------------------- */}
       <footer className="px-5 py-10 border-t border-white/[0.06]">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-[#707080] text-sm">
+          <div className="flex items-center gap-2 text-[#71717a] text-sm">
             <div className="w-5 h-5 rounded bg-[#7c3aed]/20 flex items-center justify-center">
               <svg
                 className="w-3 h-3 text-[#7c3aed]"
@@ -435,11 +680,11 @@ export default function LandingPage() {
             </div>
             <span>SchoolPilot</span>
           </div>
-          <p className="text-[#707080] text-xs">
+          <p className="text-[#71717a] text-xs">
             &copy; {new Date().getFullYear()} SchoolPilot. Built for students,
             by students.
           </p>
-          <div className="flex items-center gap-5 text-[#707080] text-xs">
+          <div className="flex items-center gap-5 text-[#71717a] text-xs">
             <Link
               href="/privacy"
               className="hover:text-white transition-colors"
