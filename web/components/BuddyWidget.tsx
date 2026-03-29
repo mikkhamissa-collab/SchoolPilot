@@ -31,7 +31,7 @@ export default function BuddyWidget({ data }: BuddyWidgetProps) {
   };
 
   return (
-    <div className="p-4 rounded-xl bg-bg-card border border-border">
+    <div className="p-4 rounded-xl bg-surface border border-border">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className="text-lg">👥</span>
@@ -58,7 +58,7 @@ export default function BuddyWidget({ data }: BuddyWidgetProps) {
 
       <div className="flex gap-4 text-sm">
         <div className="flex-1">
-          <div className="text-text-muted text-xs mb-0.5">
+          <div className="text-muted text-xs mb-0.5">
             {data.partner_name}
           </div>
           <div className="flex items-center gap-1.5">
@@ -66,18 +66,18 @@ export default function BuddyWidget({ data }: BuddyWidgetProps) {
             {data.partner_completed_today ? (
               <span className="text-success text-xs">✓ Done</span>
             ) : (
-              <span className="text-text-muted text-xs">Pending</span>
+              <span className="text-muted text-xs">Pending</span>
             )}
           </div>
         </div>
         <div className="flex-1">
-          <div className="text-text-muted text-xs mb-0.5">You</div>
+          <div className="text-muted text-xs mb-0.5">You</div>
           <div className="flex items-center gap-1.5">
             <span>🔥 {data.my_streak || 0}</span>
             {data.my_completed_today ? (
               <span className="text-success text-xs">✓ Done</span>
             ) : (
-              <span className="text-text-muted text-xs">Pending</span>
+              <span className="text-muted text-xs">Pending</span>
             )}
           </div>
         </div>

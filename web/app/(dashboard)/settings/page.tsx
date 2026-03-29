@@ -377,10 +377,10 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-8 space-y-6 animate-pulse">
-        <div className="h-8 w-40 bg-bg-card rounded-lg" />
-        <div className="h-4 w-64 bg-bg-card rounded" />
+        <div className="h-8 w-40 bg-surface rounded-lg" />
+        <div className="h-4 w-64 bg-surface rounded" />
         {[...Array(5)].map((_, i) => (
-          <div key={i} className="h-44 bg-bg-card rounded-xl" />
+          <div key={i} className="h-44 bg-surface rounded-xl" />
         ))}
       </div>
     );
@@ -433,7 +433,7 @@ export default function SettingsPage() {
         </div>
 
         {/* ════════ 1. Profile ════════ */}
-        <section className="bg-bg-card border border-border rounded-xl p-5 space-y-5">
+        <section className="bg-surface border border-border rounded-xl p-5 space-y-5">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-white">Profile</h2>
             <button
@@ -466,7 +466,7 @@ export default function SettingsPage() {
                 type="text"
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent text-sm transition-colors"
+                className="w-full px-3 py-2.5 rounded-lg bg-bg border border-border text-white placeholder:text-muted focus:outline-none focus:border-accent text-sm transition-colors"
                 placeholder="Your name"
               />
             </div>
@@ -481,7 +481,7 @@ export default function SettingsPage() {
                 type="email"
                 value={userEmail}
                 disabled
-                className="w-full px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-text-muted text-sm cursor-not-allowed"
+                className="w-full px-3 py-2.5 rounded-lg bg-bg border border-border text-muted text-sm cursor-not-allowed"
               />
             </div>
 
@@ -495,7 +495,7 @@ export default function SettingsPage() {
                 type="text"
                 value={editSchool}
                 onChange={(e) => setEditSchool(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent text-sm transition-colors"
+                className="w-full px-3 py-2.5 rounded-lg bg-bg border border-border text-white placeholder:text-muted focus:outline-none focus:border-accent text-sm transition-colors"
                 placeholder="Your school"
               />
             </div>
@@ -509,7 +509,7 @@ export default function SettingsPage() {
                 id="setting-tz"
                 value={editTimezone}
                 onChange={(e) => setEditTimezone(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-white text-sm focus:outline-none focus:border-accent transition-colors"
+                className="w-full px-3 py-2.5 rounded-lg bg-bg border border-border text-white text-sm focus:outline-none focus:border-accent transition-colors"
               >
                 {TIMEZONES.map((tz) => (
                   <option key={tz} value={tz}>
@@ -517,7 +517,7 @@ export default function SettingsPage() {
                   </option>
                 ))}
               </select>
-              <p className="text-text-muted text-xs mt-1">
+              <p className="text-muted text-xs mt-1">
                 Auto-detected: {Intl.DateTimeFormat().resolvedOptions().timeZone.replace(/_/g, " ")}
               </p>
             </div>
@@ -525,7 +525,7 @@ export default function SettingsPage() {
         </section>
 
         {/* ════════ 2. LMS Connection ════════ */}
-        <section className="bg-bg-card border border-border rounded-xl p-5 space-y-4">
+        <section className="bg-surface border border-border rounded-xl p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-white">LMS Connection</h2>
             {!showRemoteBrowser && (
@@ -540,7 +540,7 @@ export default function SettingsPage() {
 
           {/* Connected credential card */}
           {hasConnected && activeCred && !showRemoteBrowser && (
-            <div className="p-4 bg-bg-dark rounded-lg space-y-3">
+            <div className="p-4 bg-bg rounded-lg space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   {/* Status dot */}
@@ -561,7 +561,7 @@ export default function SettingsPage() {
                         ? "Disconnected"
                         : "Unknown"}
                     </p>
-                    <p className="text-text-muted text-xs capitalize">
+                    <p className="text-muted text-xs capitalize">
                       {activeCred.lms_type} &middot; {activeCred.lms_url}
                     </p>
                   </div>
@@ -610,13 +610,13 @@ export default function SettingsPage() {
           {/* No LMS connected */}
           {!hasConnected && !showRemoteBrowser && (
             <div className="text-center py-8">
-              <div className="w-12 h-12 rounded-full bg-bg-dark mx-auto flex items-center justify-center mb-3">
-                <svg className="w-6 h-6 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <div className="w-12 h-12 rounded-full bg-bg mx-auto flex items-center justify-center mb-3">
+                <svg className="w-6 h-6 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
                 </svg>
               </div>
-              <p className="text-text-muted text-sm">No LMS connected.</p>
-              <p className="text-text-muted text-xs mt-1">
+              <p className="text-muted text-sm">No LMS connected.</p>
+              <p className="text-muted text-xs mt-1">
                 Connect your school LMS to sync assignments and grades automatically.
               </p>
             </div>
@@ -631,7 +631,7 @@ export default function SettingsPage() {
                 </p>
                 <button
                   onClick={() => setShowRemoteBrowser(false)}
-                  className="text-text-muted text-sm hover:text-white transition-colors cursor-pointer"
+                  className="text-muted text-sm hover:text-white transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -651,11 +651,11 @@ export default function SettingsPage() {
         </section>
 
         {/* ════════ 3. AI Personality ════════ */}
-        <section className="bg-bg-card border border-border rounded-xl p-5 space-y-4">
+        <section className="bg-surface border border-border rounded-xl p-5 space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-white">AI Personality</h2>
-              <p className="text-text-muted text-xs mt-0.5">
+              <p className="text-muted text-xs mt-0.5">
                 Choose how your AI assistant communicates.
               </p>
             </div>
@@ -677,7 +677,7 @@ export default function SettingsPage() {
                   className={`p-4 rounded-xl text-left transition-all cursor-pointer ${
                     isActive
                       ? "bg-accent/10 border-2 border-accent ring-1 ring-accent/20"
-                      : "bg-bg-dark border border-border hover:border-accent/30"
+                      : "bg-bg border border-border hover:border-accent/30"
                   }`}
                 >
                   <div className="flex items-center gap-2.5 mb-2">
@@ -694,8 +694,8 @@ export default function SettingsPage() {
                       </span>
                     )}
                   </div>
-                  <p className="text-text-muted text-xs mb-2">{p.desc}</p>
-                  <div className="px-3 py-2 rounded-lg bg-bg-dark/50 border border-border/50">
+                  <p className="text-muted text-xs mb-2">{p.desc}</p>
+                  <div className="px-3 py-2 rounded-lg bg-bg/50 border border-border/50">
                     <p className="text-text-secondary text-xs italic leading-relaxed">
                       {p.preview}
                     </p>
@@ -707,14 +707,14 @@ export default function SettingsPage() {
         </section>
 
         {/* ════════ 4. Email Preferences ════════ */}
-        <section className="bg-bg-card border border-border rounded-xl p-5 space-y-4">
+        <section className="bg-surface border border-border rounded-xl p-5 space-y-4">
           <h2 className="text-lg font-semibold text-white">Email Preferences</h2>
 
           {/* Briefing toggle */}
           <div className="flex items-center justify-between">
             <div>
               <p className="text-white text-sm font-medium">Daily Briefing</p>
-              <p className="text-text-muted text-xs mt-0.5">
+              <p className="text-muted text-xs mt-0.5">
                 Morning email with your plan, grade alerts, and priorities.
               </p>
             </div>
@@ -723,7 +723,7 @@ export default function SettingsPage() {
               aria-checked={editBriefingEnabled}
               onClick={() => setEditBriefingEnabled(!editBriefingEnabled)}
               className={`w-11 h-6 rounded-full transition-colors cursor-pointer relative flex-shrink-0 ${
-                editBriefingEnabled ? "bg-accent" : "bg-bg-dark border border-border"
+                editBriefingEnabled ? "bg-accent" : "bg-bg border border-border"
               }`}
             >
               <span
@@ -744,7 +744,7 @@ export default function SettingsPage() {
                 id="setting-briefing-time"
                 value={editBriefingTime}
                 onChange={(e) => setEditBriefingTime(e.target.value)}
-                className="w-full sm:w-48 px-3 py-2.5 rounded-lg bg-bg-dark border border-border text-white text-sm focus:outline-none focus:border-accent transition-colors"
+                className="w-full sm:w-48 px-3 py-2.5 rounded-lg bg-bg border border-border text-white text-sm focus:outline-none focus:border-accent transition-colors"
               >
                 {BRIEFING_TIMES.map((bt) => (
                   <option key={bt.value} value={bt.value}>
@@ -765,15 +765,15 @@ export default function SettingsPage() {
         </section>
 
         {/* ════════ 5. Danger Zone ════════ */}
-        <section className="bg-bg-card border border-error/20 rounded-xl p-5 space-y-4">
+        <section className="bg-surface border border-error/20 rounded-xl p-5 space-y-4">
           <h2 className="text-lg font-semibold text-error">Danger Zone</h2>
 
           {/* Disconnect LMS */}
           {hasConnected && activeCred && (
-            <div className="flex items-center justify-between p-4 bg-bg-dark rounded-lg">
+            <div className="flex items-center justify-between p-4 bg-bg rounded-lg">
               <div>
                 <p className="text-white text-sm font-medium">Disconnect LMS</p>
-                <p className="text-text-muted text-xs mt-0.5">
+                <p className="text-muted text-xs mt-0.5">
                   Remove your LMS credentials. You will stop receiving synced data.
                 </p>
               </div>
@@ -787,7 +787,7 @@ export default function SettingsPage() {
                   </button>
                   <button
                     onClick={() => setConfirmDisconnect(null)}
-                    className="px-3 py-1.5 rounded-lg bg-bg-card text-text-secondary text-xs font-medium hover:text-white transition-colors cursor-pointer"
+                    className="px-3 py-1.5 rounded-lg bg-surface text-text-secondary text-xs font-medium hover:text-white transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -804,10 +804,10 @@ export default function SettingsPage() {
           )}
 
           {/* Delete Account */}
-          <div className="flex items-center justify-between p-4 bg-bg-dark rounded-lg">
+          <div className="flex items-center justify-between p-4 bg-bg rounded-lg">
             <div>
               <p className="text-white text-sm font-medium">Delete Account</p>
-              <p className="text-text-muted text-xs mt-0.5">
+              <p className="text-muted text-xs mt-0.5">
                 Permanently delete your account and all associated data. This cannot be undone.
               </p>
             </div>
@@ -822,14 +822,14 @@ export default function SettingsPage() {
           {/* Sign Out */}
           <button
             onClick={handleSignOut}
-            className="w-full py-2.5 rounded-lg bg-bg-dark border border-border text-text-secondary text-sm font-medium hover:text-white hover:border-accent/30 transition-colors cursor-pointer"
+            className="w-full py-2.5 rounded-lg bg-bg border border-border text-text-secondary text-sm font-medium hover:text-white hover:border-accent/30 transition-colors cursor-pointer"
           >
             Sign Out
           </button>
         </section>
 
         {/* Footer */}
-        <div className="text-center text-text-muted text-xs pb-8">
+        <div className="text-center text-muted text-xs pb-8">
           SchoolPilot v3.0
         </div>
       </div>
@@ -843,7 +843,7 @@ export default function SettingsPage() {
             onClick={() => setConfirmDeleteAccount(false)}
           />
           {/* Modal */}
-          <div className="relative bg-bg-card border border-error/20 rounded-xl p-6 max-w-md w-full shadow-2xl space-y-4">
+          <div className="relative bg-surface border border-error/20 rounded-xl p-6 max-w-md w-full shadow-2xl space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-error/10 flex items-center justify-center flex-shrink-0">
                 <svg className="w-5 h-5 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -852,7 +852,7 @@ export default function SettingsPage() {
               </div>
               <div>
                 <h3 className="text-white font-semibold">Delete Account</h3>
-                <p className="text-text-muted text-sm">This action is permanent.</p>
+                <p className="text-muted text-sm">This action is permanent.</p>
               </div>
             </div>
 
@@ -864,7 +864,7 @@ export default function SettingsPage() {
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => setConfirmDeleteAccount(false)}
-                className="flex-1 py-2.5 rounded-lg bg-bg-dark border border-border text-text-secondary text-sm font-medium hover:text-white transition-colors cursor-pointer"
+                className="flex-1 py-2.5 rounded-lg bg-bg border border-border text-text-secondary text-sm font-medium hover:text-white transition-colors cursor-pointer"
               >
                 Cancel
               </button>

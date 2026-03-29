@@ -235,18 +235,18 @@ export default function RemoteBrowser({ onComplete, onError }: RemoteBrowserProp
         <>
           {/* Fake URL bar */}
           {currentUrl && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-t-xl bg-bg-dark border border-border border-b-0">
-              <svg className="w-3.5 h-3.5 text-text-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-t-xl bg-bg border border-border border-b-0">
+              <svg className="w-3.5 h-3.5 text-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0 1 12 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 0 1 3 12c0-1.605.42-3.113 1.157-4.418" />
               </svg>
-              <span className="text-text-muted text-xs truncate">{currentUrl}</span>
+              <span className="text-muted text-xs truncate">{currentUrl}</span>
             </div>
           )}
 
           {/* Screenshot container */}
           <div
             ref={containerRef}
-            className={`relative bg-bg-dark border border-border overflow-hidden ${currentUrl ? "rounded-b-xl" : "rounded-xl"}`}
+            className={`relative bg-bg border border-border overflow-hidden ${currentUrl ? "rounded-b-xl" : "rounded-xl"}`}
             style={{ maxWidth: `${VIEWPORT_W}px`, width: "100%", aspectRatio: `${VIEWPORT_W} / ${VIEWPORT_H}` }}
           >
             {screenshot ? (
@@ -263,7 +263,7 @@ export default function RemoteBrowser({ onComplete, onError }: RemoteBrowserProp
               <div className="w-full h-full flex items-center justify-center">
                 <div className="text-center space-y-3">
                   <div className="w-8 h-8 mx-auto border-2 border-accent border-t-transparent rounded-full animate-spin" />
-                  <p className="text-text-muted text-sm">Loading browser...</p>
+                  <p className="text-muted text-sm">Loading browser...</p>
                 </div>
               </div>
             )}
@@ -279,7 +279,7 @@ export default function RemoteBrowser({ onComplete, onError }: RemoteBrowserProp
                 onChange={(e) => setTypingText(e.target.value)}
                 onKeyDown={handleTextKeyDown}
                 placeholder="Type text here, then press Send..."
-                className="flex-1 px-4 py-2.5 rounded-xl bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent text-sm"
+                className="flex-1 px-4 py-2.5 rounded-xl bg-surface border border-border text-white placeholder:text-muted focus:outline-none focus:border-accent text-sm"
               />
               <button
                 onClick={handleSendText}
@@ -294,31 +294,31 @@ export default function RemoteBrowser({ onComplete, onError }: RemoteBrowserProp
             <div className="flex gap-2 flex-wrap">
               <button
                 onClick={() => handleKeyPress("Enter")}
-                className="px-3 py-2 rounded-lg bg-bg-card border border-border text-text-secondary hover:text-white hover:border-accent/30 text-xs font-medium transition-colors cursor-pointer"
+                className="px-3 py-2 rounded-lg bg-surface border border-border text-text-secondary hover:text-white hover:border-accent/30 text-xs font-medium transition-colors cursor-pointer"
               >
                 Press Enter
               </button>
               <button
                 onClick={() => handleKeyPress("Tab")}
-                className="px-3 py-2 rounded-lg bg-bg-card border border-border text-text-secondary hover:text-white hover:border-accent/30 text-xs font-medium transition-colors cursor-pointer"
+                className="px-3 py-2 rounded-lg bg-surface border border-border text-text-secondary hover:text-white hover:border-accent/30 text-xs font-medium transition-colors cursor-pointer"
               >
                 Press Tab
               </button>
               <button
                 onClick={() => handleKeyPress("Escape")}
-                className="px-3 py-2 rounded-lg bg-bg-card border border-border text-text-secondary hover:text-white hover:border-accent/30 text-xs font-medium transition-colors cursor-pointer"
+                className="px-3 py-2 rounded-lg bg-surface border border-border text-text-secondary hover:text-white hover:border-accent/30 text-xs font-medium transition-colors cursor-pointer"
               >
                 Press Esc
               </button>
               <button
                 onClick={() => sendMessage({ type: "scroll", direction: "down", amount: 300 })}
-                className="px-3 py-2 rounded-lg bg-bg-card border border-border text-text-secondary hover:text-white hover:border-accent/30 text-xs font-medium transition-colors cursor-pointer"
+                className="px-3 py-2 rounded-lg bg-surface border border-border text-text-secondary hover:text-white hover:border-accent/30 text-xs font-medium transition-colors cursor-pointer"
               >
                 Scroll Down
               </button>
               <button
                 onClick={() => sendMessage({ type: "scroll", direction: "up", amount: 300 })}
-                className="px-3 py-2 rounded-lg bg-bg-card border border-border text-text-secondary hover:text-white hover:border-accent/30 text-xs font-medium transition-colors cursor-pointer"
+                className="px-3 py-2 rounded-lg bg-surface border border-border text-text-secondary hover:text-white hover:border-accent/30 text-xs font-medium transition-colors cursor-pointer"
               >
                 Scroll Up
               </button>
@@ -334,11 +334,11 @@ export default function RemoteBrowser({ onComplete, onError }: RemoteBrowserProp
           </div>
 
           {/* Help text */}
-          <div className="flex items-start gap-2 p-3 rounded-xl bg-bg-card/50 border border-border/50">
+          <div className="flex items-start gap-2 p-3 rounded-xl bg-surface/50 border border-border/50">
             <svg className="w-4 h-4 text-accent shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
             </svg>
-            <p className="text-text-muted text-xs leading-relaxed">
+            <p className="text-muted text-xs leading-relaxed">
               Click directly on the browser image to interact. Use the text field below to type passwords or emails.
               Once you see your LMS dashboard, click &quot;I&apos;m logged in&quot; to save your session.
             </p>

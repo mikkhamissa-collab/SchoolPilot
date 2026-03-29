@@ -339,7 +339,7 @@ export default function TodayPage() {
   };
 
   const urgencyColor = (dateStr: string | null) => {
-    if (!dateStr) return "text-text-muted";
+    if (!dateStr) return "text-muted";
     const diffMs = new Date(dateStr).getTime() - Date.now();
     const diffHours = diffMs / (1000 * 60 * 60);
     if (diffHours < 0) return "text-error";
@@ -370,12 +370,12 @@ export default function TodayPage() {
   if (loading && assignments.length === 0 && courses.length === 0) {
     return (
       <div className="max-w-4xl mx-auto animate-pulse space-y-6">
-        <div className="h-8 w-48 bg-bg-card rounded" />
+        <div className="h-8 w-48 bg-surface rounded" />
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map(i => <div key={i} className="h-24 bg-bg-card rounded-xl" />)}
+          {[1, 2, 3, 4].map(i => <div key={i} className="h-24 bg-surface rounded-xl" />)}
         </div>
-        <div className="h-32 bg-bg-card rounded-xl" />
-        <div className="h-64 bg-bg-card rounded-xl" />
+        <div className="h-32 bg-surface rounded-xl" />
+        <div className="h-64 bg-surface rounded-xl" />
       </div>
     );
   }
@@ -393,7 +393,7 @@ export default function TodayPage() {
             className={`px-4 py-3 rounded-lg text-sm font-medium shadow-lg transition-all animate-in fade-in slide-in-from-top-2 ${
               toast.type === "success" ? "bg-success/90 text-white" :
               toast.type === "error" ? "bg-error/90 text-white" :
-              "bg-bg-card border border-border text-white"
+              "bg-surface border border-border text-white"
             }`}
           >
             {toast.message}
@@ -402,7 +402,7 @@ export default function TodayPage() {
       </div>
 
       {/* Header with sticky sync button on mobile */}
-      <div className="flex items-center justify-between sticky top-0 z-10 bg-bg-dark/80 backdrop-blur-sm py-3 -mx-4 px-4 md:static md:bg-transparent md:backdrop-blur-none md:py-0 md:mx-0 md:px-0">
+      <div className="flex items-center justify-between sticky top-0 z-10 bg-bg/80 backdrop-blur-sm py-3 -mx-4 px-4 md:static md:bg-transparent md:backdrop-blur-none md:py-0 md:mx-0 md:px-0">
         <div>
           <h1 className="text-2xl font-bold text-white">
             {greeting()}{profile?.display_name ? `, ${profile.display_name}` : ""}
@@ -440,7 +440,7 @@ export default function TodayPage() {
         <div className="bg-warning/10 border border-warning/20 rounded-xl p-4 flex items-center justify-between">
           <div>
             <p className="text-warning font-medium text-sm">Your LMS session has expired</p>
-            <p className="text-text-muted text-xs mt-1">Log in again to resume automatic syncing.</p>
+            <p className="text-muted text-xs mt-1">Log in again to resume automatic syncing.</p>
           </div>
           <button
             onClick={() => setShowReconnect(true)}
@@ -452,12 +452,12 @@ export default function TodayPage() {
       )}
 
       {showReconnect && (
-        <div className="bg-bg-card border border-border rounded-xl p-5">
+        <div className="bg-surface border border-border rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-white">Reconnect to your LMS</h3>
             <button
               onClick={() => setShowReconnect(false)}
-              className="text-text-muted hover:text-white text-sm cursor-pointer"
+              className="text-muted hover:text-white text-sm cursor-pointer"
             >
               Cancel
             </button>
@@ -480,7 +480,7 @@ export default function TodayPage() {
 
       {/* Smart empty states */}
       {!hasLMS && !loading && (
-        <div className="bg-bg-card border border-border rounded-xl p-8 text-center">
+        <div className="bg-surface border border-border rounded-xl p-8 text-center">
           <div className="text-4xl mb-3">{"\u{1F517}"}</div>
           <h2 className="text-lg font-semibold text-white mb-2">Connect your LMS to get started</h2>
           <p className="text-text-secondary text-sm mb-4">
@@ -496,7 +496,7 @@ export default function TodayPage() {
       )}
 
       {hasLMS && !hasSynced && !syncing && !loading && (
-        <div className="bg-bg-card border border-border rounded-xl p-8 text-center">
+        <div className="bg-surface border border-border rounded-xl p-8 text-center">
           <div className="text-4xl mb-3">{"\u{2705}"}</div>
           <h2 className="text-lg font-semibold text-white mb-2">Your LMS is connected!</h2>
           <p className="text-text-secondary text-sm mb-4">
@@ -514,8 +514,8 @@ export default function TodayPage() {
       {/* Stats Cards — horizontal scroll on mobile */}
       <div className="flex gap-4 overflow-x-auto pb-2 -mx-4 px-4 md:mx-0 md:px-0 md:grid md:grid-cols-4 md:overflow-visible">
         {/* Assignments count */}
-        <div className="bg-bg-card border border-border rounded-xl p-4 min-w-[140px] flex-shrink-0">
-          <p className="text-text-muted text-xs uppercase tracking-wider mb-1">Assignments</p>
+        <div className="bg-surface border border-border rounded-xl p-4 min-w-[140px] flex-shrink-0">
+          <p className="text-muted text-xs uppercase tracking-wider mb-1">Assignments</p>
           <p className="text-3xl font-bold text-white">{assignments.length}</p>
           <p className="text-text-secondary text-sm">
             {(() => {
@@ -526,15 +526,15 @@ export default function TodayPage() {
         </div>
 
         {/* Courses tracked */}
-        <div className="bg-bg-card border border-border rounded-xl p-4 min-w-[140px] flex-shrink-0">
-          <p className="text-text-muted text-xs uppercase tracking-wider mb-1">Courses</p>
+        <div className="bg-surface border border-border rounded-xl p-4 min-w-[140px] flex-shrink-0">
+          <p className="text-muted text-xs uppercase tracking-wider mb-1">Courses</p>
           <p className="text-3xl font-bold text-white">{courses.length}</p>
           <p className="text-text-secondary text-sm">classes tracked</p>
         </div>
 
         {/* Streak counter */}
-        <div className="bg-bg-card border border-border rounded-xl p-4 min-w-[140px] flex-shrink-0">
-          <p className="text-text-muted text-xs uppercase tracking-wider mb-1">Streak</p>
+        <div className="bg-surface border border-border rounded-xl p-4 min-w-[140px] flex-shrink-0">
+          <p className="text-muted text-xs uppercase tracking-wider mb-1">Streak</p>
           <div className="flex items-baseline gap-1">
             <span className="text-2xl">{"\u{1F525}"}</span>
             <p className="text-3xl font-bold text-white">{streak?.current_streak ?? 0}</p>
@@ -545,8 +545,8 @@ export default function TodayPage() {
         </div>
 
         {/* Last sync */}
-        <div className="bg-bg-card border border-border rounded-xl p-4 min-w-[140px] flex-shrink-0">
-          <p className="text-text-muted text-xs uppercase tracking-wider mb-1">Last Sync</p>
+        <div className="bg-surface border border-border rounded-xl p-4 min-w-[140px] flex-shrink-0">
+          <p className="text-muted text-xs uppercase tracking-wider mb-1">Last Sync</p>
           <p className="text-lg font-bold text-white">
             {syncStatus?.last_sync?.completed_at
               ? new Date(syncStatus.last_sync.completed_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
@@ -563,7 +563,7 @@ export default function TodayPage() {
       </div>
 
       {/* Today's Plan */}
-      <div className="bg-bg-card border border-border rounded-xl p-5">
+      <div className="bg-surface border border-border rounded-xl p-5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold text-white">Today&apos;s Plan</h2>
           <button
@@ -576,9 +576,9 @@ export default function TodayPage() {
         </div>
         {planLoading ? (
           <div className="animate-pulse space-y-2">
-            <div className="h-4 bg-bg-dark rounded w-3/4" />
-            <div className="h-4 bg-bg-dark rounded w-1/2" />
-            <div className="h-4 bg-bg-dark rounded w-2/3" />
+            <div className="h-4 bg-bg rounded w-3/4" />
+            <div className="h-4 bg-bg rounded w-1/2" />
+            <div className="h-4 bg-bg rounded w-2/3" />
           </div>
         ) : dailyPlan?.plan ? (
           <div className="text-sm text-text-secondary whitespace-pre-wrap leading-relaxed">
@@ -586,7 +586,7 @@ export default function TodayPage() {
           </div>
         ) : (
           <div className="text-center py-4">
-            <p className="text-text-muted text-sm mb-3">
+            <p className="text-muted text-sm mb-3">
               {assignments.length > 0
                 ? "Get an AI-powered daily plan based on your assignments."
                 : "Sync your LMS first, then generate a personalized daily plan."}
@@ -605,26 +605,26 @@ export default function TodayPage() {
 
       {/* Grade Overview — always show courses */}
       {(courses.length > 0 || grades.length > 0) && (
-        <div className="bg-bg-card border border-border rounded-xl p-5">
+        <div className="bg-surface border border-border rounded-xl p-5">
           <h2 className="text-lg font-semibold text-white mb-4">Grade Overview</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {/* Show grades where available, otherwise show courses */}
             {courses.map((c) => {
               const grade = grades.find(g => g.course_name === c.class_name);
               const pct = grade?.overall_percentage ?? null;
-              const color = pct === null ? "text-text-muted"
+              const color = pct === null ? "text-muted"
                 : pct >= 90 ? "text-success"
                 : pct >= 80 ? "text-accent"
                 : pct >= 70 ? "text-warning"
                 : "text-error";
               return (
-                <div key={c.class_name} className="bg-bg-dark rounded-lg p-3">
+                <div key={c.class_name} className="bg-bg rounded-lg p-3">
                   <p className="text-sm text-text-secondary truncate">{c.class_name}</p>
                   <p className={`text-xl font-bold ${color}`}>
                     {grade?.overall_grade || (pct !== null ? `${pct}%` : "No grade data")}
                   </p>
                   {c.teacher_name && (
-                    <p className="text-xs text-text-muted truncate">{c.teacher_name}</p>
+                    <p className="text-xs text-muted truncate">{c.teacher_name}</p>
                   )}
                 </div>
               );
@@ -634,13 +634,13 @@ export default function TodayPage() {
               .filter(g => !courses.find(c => c.class_name === g.course_name))
               .map(g => {
                 const pct = g.overall_percentage;
-                const color = pct === null ? "text-text-muted"
+                const color = pct === null ? "text-muted"
                   : pct >= 90 ? "text-success"
                   : pct >= 80 ? "text-accent"
                   : pct >= 70 ? "text-warning"
                   : "text-error";
                 return (
-                  <div key={g.course_name} className="bg-bg-dark rounded-lg p-3">
+                  <div key={g.course_name} className="bg-bg rounded-lg p-3">
                     <p className="text-sm text-text-secondary truncate">{g.course_name}</p>
                     <p className={`text-xl font-bold ${color}`}>
                       {g.overall_grade || (pct !== null ? `${pct}%` : "\u2014")}
@@ -654,10 +654,10 @@ export default function TodayPage() {
       )}
 
       {/* Assignments — split into overdue + upcoming */}
-      <div className="bg-bg-card border border-border rounded-xl p-5">
+      <div className="bg-surface border border-border rounded-xl p-5">
         <h2 className="text-lg font-semibold text-white mb-4">Assignments</h2>
         {assignments.length === 0 ? (
-          <p className="text-text-muted text-sm">
+          <p className="text-muted text-sm">
             {!hasLMS
               ? "Connect your LMS to see assignments here."
               : hasSynced
@@ -688,7 +688,7 @@ export default function TodayPage() {
                             <span className="text-lg">{typeIcon(a.assignment_type)}</span>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-white truncate">{a.title}</p>
-                              <p className="text-xs text-text-muted">
+                              <p className="text-xs text-muted">
                                 {a.course_name}
                                 {a.points_possible ? ` \u00B7 ${a.points_possible} pts` : ""}
                                 {a.assignment_type ? ` \u00B7 ${a.assignment_type}` : ""}
@@ -713,12 +713,12 @@ export default function TodayPage() {
                         {upcoming.map((a) => (
                           <div
                             key={a.id}
-                            className="flex items-center gap-3 p-3 bg-bg-dark rounded-lg hover:bg-bg-hover transition-colors min-h-[56px]"
+                            className="flex items-center gap-3 p-3 bg-bg rounded-lg hover:bg-surface-hover transition-colors min-h-[56px]"
                           >
                             <span className="text-lg">{typeIcon(a.assignment_type)}</span>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-white truncate">{a.title}</p>
-                              <p className="text-xs text-text-muted">
+                              <p className="text-xs text-muted">
                                 {a.course_name}
                                 {a.points_possible ? ` \u00B7 ${a.points_possible} pts` : ""}
                                 {a.assignment_type ? ` \u00B7 ${a.assignment_type}` : ""}
@@ -738,26 +738,26 @@ export default function TodayPage() {
 
                   {noDate.length > 0 && (
                     <div>
-                      <p className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-2">
+                      <p className="text-muted text-xs font-semibold uppercase tracking-wider mb-2">
                         No Due Date ({noDate.length})
                       </p>
                       <div className="space-y-2">
                         {noDate.map((a) => (
                           <div
                             key={a.id}
-                            className="flex items-center gap-3 p-3 bg-bg-dark rounded-lg hover:bg-bg-hover transition-colors min-h-[56px]"
+                            className="flex items-center gap-3 p-3 bg-bg rounded-lg hover:bg-surface-hover transition-colors min-h-[56px]"
                           >
                             <span className="text-lg">{typeIcon(a.assignment_type)}</span>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-white truncate">{a.title}</p>
-                              <p className="text-xs text-text-muted">
+                              <p className="text-xs text-muted">
                                 {a.course_name}
                                 {a.points_possible ? ` \u00B7 ${a.points_possible} pts` : ""}
                                 {a.assignment_type ? ` \u00B7 ${a.assignment_type}` : ""}
                               </p>
                             </div>
                             <div className="text-right shrink-0">
-                              <p className="text-sm text-text-muted">No date</p>
+                              <p className="text-sm text-muted">No date</p>
                             </div>
                           </div>
                         ))}
@@ -772,7 +772,7 @@ export default function TodayPage() {
       </div>
 
       {/* Quick Actions */}
-      <div className="bg-bg-card border border-border rounded-xl p-5">
+      <div className="bg-surface border border-border rounded-xl p-5">
         <h2 className="text-lg font-semibold text-white mb-3">Quick Actions</h2>
         <div className="flex flex-wrap gap-2">
           {[
@@ -786,7 +786,7 @@ export default function TodayPage() {
               onClick={() => {
                 window.dispatchEvent(new CustomEvent("open-chat", { detail: { message: action.label } }));
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-bg-dark hover:bg-bg-hover border border-border rounded-lg text-sm text-text-secondary hover:text-white transition-colors cursor-pointer"
+              className="flex items-center gap-2 px-4 py-2 bg-bg hover:bg-surface-hover border border-border rounded-lg text-sm text-text-secondary hover:text-white transition-colors cursor-pointer"
             >
               <span>{action.icon}</span>
               {action.label}

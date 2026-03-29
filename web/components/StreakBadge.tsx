@@ -22,7 +22,7 @@ export default function StreakBadge({
   }
 
   return (
-    <div className="p-4 rounded-xl bg-bg-card border border-border">
+    <div className="p-4 rounded-xl bg-surface border border-border">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="text-2xl">🔥</span>
@@ -30,7 +30,7 @@ export default function StreakBadge({
             <div className="text-white font-bold text-lg">
               {streak} day{streak !== 1 ? "s" : ""}
             </div>
-            <div className="text-text-muted text-xs">
+            <div className="text-muted text-xs">
               {streak === 0
                 ? "Complete your focus task to start a streak"
                 : "Complete today's focus to keep it alive"}

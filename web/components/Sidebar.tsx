@@ -120,7 +120,7 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="hidden md:flex flex-col w-14 h-screen bg-bg-card border-r border-border fixed left-0 top-0 z-40">
+    <aside className="hidden md:flex flex-col w-14 h-screen bg-surface border-r border-border fixed left-0 top-0 z-40">
       {/* Logo */}
       <div className="flex items-center justify-center py-4 border-b border-border">
         <span className="text-lg font-bold text-white" title="SchoolPilot">
@@ -142,7 +142,7 @@ export default function Sidebar() {
               className={`flex items-center justify-center w-10 h-10 rounded-lg text-base transition-colors ${
                 active
                   ? "bg-accent/15 text-accent"
-                  : "text-text-secondary hover:text-white hover:bg-bg-hover"
+                  : "text-text-secondary hover:text-white hover:bg-surface-hover"
               }`}
             >
               <item.icon />
@@ -155,7 +155,7 @@ export default function Sidebar() {
           onClick={handleChatToggle}
           title="Toggle Chat"
           aria-label="Toggle chat sidebar"
-          className="flex items-center justify-center w-10 h-10 rounded-lg text-base text-text-secondary hover:text-white hover:bg-bg-hover transition-colors cursor-pointer"
+          className="flex items-center justify-center w-10 h-10 rounded-lg text-base text-text-secondary hover:text-white hover:bg-surface-hover transition-colors cursor-pointer"
         >
           <IconChat />
         </button>
@@ -181,7 +181,7 @@ export default function Sidebar() {
         <button
           onClick={handleSignOut}
           title="Sign out"
-          className="text-xs text-text-muted hover:text-error transition-colors cursor-pointer"
+          className="text-xs text-muted hover:text-error transition-colors cursor-pointer"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"

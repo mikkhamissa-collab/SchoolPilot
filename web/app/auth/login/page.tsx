@@ -167,7 +167,7 @@ function LoginContent() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg-dark p-6">
+    <div className="min-h-screen flex items-center justify-center bg-bg p-6">
       <div className="w-full max-w-sm">
         {/* Logo and title */}
         <div className="text-center mb-8">
@@ -184,14 +184,14 @@ function LoginContent() {
 
         {/* Login / Sign Up tabs */}
         {mode !== "forgot" && (
-          <div className="flex mb-6 bg-bg-card rounded-xl p-1 border border-border">
+          <div className="flex mb-6 bg-surface rounded-xl p-1 border border-border">
             <button
               type="button"
               onClick={() => { setMode("login"); setError(""); setSuccess(""); }}
               className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
                 mode === "login"
                   ? "bg-accent text-white"
-                  : "text-text-muted hover:text-white"
+                  : "text-muted hover:text-white"
               }`}
             >
               Sign In
@@ -202,7 +202,7 @@ function LoginContent() {
               className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
                 mode === "signup"
                   ? "bg-accent text-white"
-                  : "text-text-muted hover:text-white"
+                  : "text-muted hover:text-white"
               }`}
             >
               Sign Up
@@ -239,7 +239,7 @@ function LoginContent() {
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="Your first name"
                 autoComplete="name"
-                className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors"
+                className="w-full px-4 py-3 rounded-xl bg-surface border border-border text-white placeholder:text-muted focus:outline-none focus:border-accent transition-colors"
                 autoFocus
               />
             </div>
@@ -257,7 +257,7 @@ function LoginContent() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@school.edu"
               autoComplete="email"
-              className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors"
+              className="w-full px-4 py-3 rounded-xl bg-surface border border-border text-white placeholder:text-muted focus:outline-none focus:border-accent transition-colors"
               autoFocus={mode === "login"}
             />
           </div>
@@ -290,7 +290,7 @@ function LoginContent() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder={mode === "signup" ? "At least 8 characters" : "Your password"}
                 autoComplete={mode === "login" ? "current-password" : "new-password"}
-                className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors"
+                className="w-full px-4 py-3 rounded-xl bg-surface border border-border text-white placeholder:text-muted focus:outline-none focus:border-accent transition-colors"
               />
             </div>
           )}
@@ -308,7 +308,7 @@ function LoginContent() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Type your password again"
                 autoComplete="new-password"
-                className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors"
+                className="w-full px-4 py-3 rounded-xl bg-surface border border-border text-white placeholder:text-muted focus:outline-none focus:border-accent transition-colors"
               />
             </div>
           )}
@@ -338,7 +338,7 @@ function LoginContent() {
           <>
             <div className="my-6 flex items-center gap-3">
               <div className="flex-1 h-px bg-border" />
-              <span className="text-text-muted text-xs">or</span>
+              <span className="text-muted text-xs">or</span>
               <div className="flex-1 h-px bg-border" />
             </div>
             <p className="text-center text-text-secondary text-sm">
@@ -354,7 +354,7 @@ function LoginContent() {
         )}
 
         {/* Footer */}
-        <p className="mt-8 text-center text-text-muted text-xs">
+        <p className="mt-8 text-center text-muted text-xs">
           By signing in, you agree to use SchoolPilot responsibly.
         </p>
       </div>
@@ -370,7 +370,7 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-bg-dark">
+        <div className="min-h-screen flex items-center justify-center bg-bg">
           <div className="text-text-secondary">Loading...</div>
         </div>
       }

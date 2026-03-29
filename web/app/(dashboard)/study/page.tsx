@@ -136,7 +136,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
 
 function SkeletonBlock({ lines, message }: { lines: number; message: string }) {
   return (
-    <div className="bg-bg-card rounded-xl p-6 border border-border">
+    <div className="bg-surface rounded-xl p-6 border border-border">
       <div className="flex items-center gap-3 mb-6">
         <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
         <p className="text-text-secondary text-sm">{message}</p>
@@ -145,7 +145,7 @@ function SkeletonBlock({ lines, message }: { lines: number; message: string }) {
         {Array.from({ length: lines }).map((_, i) => (
           <div
             key={i}
-            className="h-4 bg-bg-dark rounded animate-pulse"
+            className="h-4 bg-bg rounded animate-pulse"
             style={{ width: `${70 + Math.random() * 30}%` }}
           />
         ))}
@@ -161,10 +161,10 @@ function FlashcardSkeleton({ message }: { message: string }) {
         <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
         <p className="text-text-secondary text-sm">{message}</p>
       </div>
-      <div className="bg-bg-card rounded-xl p-10 border border-border flex items-center justify-center min-h-[220px]">
+      <div className="bg-surface rounded-xl p-10 border border-border flex items-center justify-center min-h-[220px]">
         <div className="space-y-3 w-full max-w-md">
-          <div className="h-5 bg-bg-dark rounded animate-pulse w-3/4 mx-auto" />
-          <div className="h-5 bg-bg-dark rounded animate-pulse w-1/2 mx-auto" />
+          <div className="h-5 bg-bg rounded animate-pulse w-3/4 mx-auto" />
+          <div className="h-5 bg-bg rounded animate-pulse w-1/2 mx-auto" />
         </div>
       </div>
     </div>
@@ -180,11 +180,11 @@ function QuizSkeleton({ message }: { message: string }) {
       </div>
       <div className="space-y-4">
         {[1, 2, 3].map((n) => (
-          <div key={n} className="bg-bg-card rounded-xl p-6 border border-border">
-            <div className="h-5 bg-bg-dark rounded animate-pulse w-5/6 mb-4" />
+          <div key={n} className="bg-surface rounded-xl p-6 border border-border">
+            <div className="h-5 bg-bg rounded animate-pulse w-5/6 mb-4" />
             <div className="space-y-2">
               {[1, 2, 3, 4].map((o) => (
-                <div key={o} className="h-10 bg-bg-dark rounded-lg animate-pulse" />
+                <div key={o} className="h-10 bg-bg rounded-lg animate-pulse" />
               ))}
             </div>
           </div>
@@ -233,16 +233,16 @@ function FlashcardViewer({
     const finalRight = rights;
     const finalWrong = wrongs;
     return (
-      <div className="bg-bg-card rounded-xl p-8 border border-border text-center">
+      <div className="bg-surface rounded-xl p-8 border border-border text-center">
         <h3 className="text-xl font-bold text-white mb-4">Session Complete</h3>
         <div className="flex justify-center gap-8 mb-6">
           <div>
             <p className="text-3xl font-bold text-success">{finalRight}</p>
-            <p className="text-text-muted text-sm">Got it</p>
+            <p className="text-muted text-sm">Got it</p>
           </div>
           <div>
             <p className="text-3xl font-bold text-error">{finalWrong}</p>
-            <p className="text-text-muted text-sm">Missed</p>
+            <p className="text-muted text-sm">Missed</p>
           </div>
         </div>
         <p className="text-text-secondary mb-6">
@@ -268,7 +268,7 @@ function FlashcardViewer({
     <div>
       {/* Progress */}
       <div className="flex items-center justify-between mb-4">
-        <p className="text-text-muted text-sm">
+        <p className="text-muted text-sm">
           Card {index + 1} of {total}
         </p>
         <div className="flex gap-3 text-sm">
@@ -278,7 +278,7 @@ function FlashcardViewer({
       </div>
 
       {/* Progress bar */}
-      <div className="w-full h-1 bg-bg-dark rounded-full mb-6">
+      <div className="w-full h-1 bg-bg rounded-full mb-6">
         <div
           className="h-1 bg-accent rounded-full transition-all duration-300"
           style={{ width: `${((index) / total) * 100}%` }}
@@ -300,15 +300,15 @@ function FlashcardViewer({
         >
           {/* Front */}
           <div
-            className="absolute inset-0 bg-bg-card rounded-xl p-8 border border-border flex flex-col items-center justify-center"
+            className="absolute inset-0 bg-surface rounded-xl p-8 border border-border flex flex-col items-center justify-center"
             style={{ backfaceVisibility: "hidden" }}
           >
-            <p className="text-xs text-text-muted mb-3 uppercase tracking-wide">Question</p>
+            <p className="text-xs text-muted mb-3 uppercase tracking-wide">Question</p>
             <p className="text-white text-lg text-center leading-relaxed">{card?.front}</p>
           </div>
           {/* Back */}
           <div
-            className="absolute inset-0 bg-bg-card rounded-xl p-8 border border-accent/40 flex flex-col items-center justify-center"
+            className="absolute inset-0 bg-surface rounded-xl p-8 border border-accent/40 flex flex-col items-center justify-center"
             style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
           >
             <p className="text-xs text-accent mb-3 uppercase tracking-wide">Answer</p>
@@ -382,7 +382,7 @@ function QuizViewer({ questions }: { questions: QuizQuestion[] }) {
         <h2 className="text-lg font-bold text-white">Practice Quiz</h2>
         {!submitted ? (
           <div className="flex items-center gap-3">
-            <span className="text-text-muted text-sm">
+            <span className="text-muted text-sm">
               {answered}/{total} answered
             </span>
             <button
@@ -407,7 +407,7 @@ function QuizViewer({ questions }: { questions: QuizQuestion[] }) {
                 setSelected({});
                 setSubmitted(false);
               }}
-              className="px-4 py-2 bg-bg-dark border border-border text-text-secondary rounded-lg text-sm hover:text-white transition-colors"
+              className="px-4 py-2 bg-bg border border-border text-text-secondary rounded-lg text-sm hover:text-white transition-colors"
             >
               Retry
             </button>
@@ -422,7 +422,7 @@ function QuizViewer({ questions }: { questions: QuizQuestion[] }) {
           const isCorrect = userChoice === q.correct_index;
 
           return (
-            <div key={qi} className="bg-bg-card rounded-xl p-6 border border-border">
+            <div key={qi} className="bg-surface rounded-xl p-6 border border-border">
               <p className="text-white font-medium mb-4">
                 {qi + 1}. {q.question}
               </p>
@@ -437,7 +437,7 @@ function QuizViewer({ questions }: { questions: QuizQuestion[] }) {
                     } else if (oi === userChoice && !isCorrect) {
                       optionClasses += "border-red-500 bg-red-500/10 text-red-400 ";
                     } else {
-                      optionClasses += "border-border text-text-muted ";
+                      optionClasses += "border-border text-muted ";
                     }
                   } else {
                     if (oi === userChoice) {
@@ -457,7 +457,7 @@ function QuizViewer({ questions }: { questions: QuizQuestion[] }) {
                       disabled={submitted}
                       className={optionClasses}
                     >
-                      <span className="font-medium mr-2 text-text-muted">
+                      <span className="font-medium mr-2 text-muted">
                         {String.fromCharCode(65 + oi)}.
                       </span>
                       {opt}
@@ -468,12 +468,12 @@ function QuizViewer({ questions }: { questions: QuizQuestion[] }) {
 
               {/* Explanation after submit */}
               {submitted && (
-                <div className="mt-4 p-3 bg-bg-dark rounded-lg">
+                <div className="mt-4 p-3 bg-bg rounded-lg">
                   <p className="text-sm">
                     <span className={isCorrect ? "text-success" : "text-error"}>
                       {isCorrect ? "Correct!" : "Incorrect."}
                     </span>{" "}
-                    <span className="text-text-muted">{q.explanation}</span>
+                    <span className="text-muted">{q.explanation}</span>
                   </p>
                 </div>
               )}
@@ -571,7 +571,7 @@ function SavedPanel({
   if (items.length === 0) return null;
 
   return (
-    <div className="bg-bg-card rounded-xl p-4 border border-border mb-6">
+    <div className="bg-surface rounded-xl p-4 border border-border mb-6">
       <h3 className="text-sm font-medium text-text-secondary mb-3">Saved Content</h3>
       <div className="space-y-2 max-h-48 overflow-y-auto">
         {items.map((item, i) => {
@@ -579,7 +579,7 @@ function SavedPanel({
           return (
             <div
               key={i}
-              className="flex items-center justify-between p-2 rounded-lg hover:bg-bg-dark transition-colors group"
+              className="flex items-center justify-between p-2 rounded-lg hover:bg-bg transition-colors group"
             >
               <button
                 onClick={() => onLoad(item)}
@@ -589,13 +589,13 @@ function SavedPanel({
                 <span className="truncate">
                   {item.course} &mdash; {item.topic}
                 </span>
-                <span className="text-text-muted text-xs">
+                <span className="text-muted text-xs">
                   ({toolInfo?.label})
                 </span>
               </button>
               <button
                 onClick={() => onDelete(i)}
-                className="text-text-muted hover:text-error text-xs opacity-0 group-hover:opacity-100 transition-opacity ml-2"
+                className="text-muted hover:text-error text-xs opacity-0 group-hover:opacity-100 transition-opacity ml-2"
               >
                 Remove
               </button>
@@ -756,18 +756,18 @@ export default function StudyPage() {
       <SavedPanel items={savedItems} onLoad={loadSavedItem} onDelete={deleteSaved} />
 
       {/* Input Section */}
-      <div className="bg-bg-card rounded-xl p-6 border border-border mb-6">
+      <div className="bg-surface rounded-xl p-6 border border-border mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           {/* Course dropdown/input */}
           <div>
             <label className="block text-sm text-text-secondary mb-1">Course</label>
             {coursesLoading ? (
-              <div className="w-full h-[42px] bg-bg-dark border border-border rounded-lg animate-pulse" />
+              <div className="w-full h-[42px] bg-bg border border-border rounded-lg animate-pulse" />
             ) : courses.length > 0 ? (
               <select
                 value={course}
                 onChange={(e) => setCourse(e.target.value)}
-                className="w-full bg-bg-dark border border-border rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-accent appearance-none cursor-pointer"
+                className="w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-accent appearance-none cursor-pointer"
               >
                 <option value="" disabled>
                   Select a course
@@ -785,7 +785,7 @@ export default function StudyPage() {
                 value={course}
                 onChange={(e) => setCourse(e.target.value)}
                 placeholder="e.g., AP Biology"
-                className="w-full bg-bg-dark border border-border rounded-lg px-4 py-2.5 text-white placeholder:text-text-muted focus:outline-none focus:border-accent"
+                className="w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-white placeholder:text-muted focus:outline-none focus:border-accent"
               />
             )}
           </div>
@@ -798,7 +798,7 @@ export default function StudyPage() {
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
               placeholder="e.g., Cell Division, Chapter 5, Photosynthesis"
-              className="w-full bg-bg-dark border border-border rounded-lg px-4 py-2.5 text-white placeholder:text-text-muted focus:outline-none focus:border-accent"
+              className="w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-white placeholder:text-muted focus:outline-none focus:border-accent"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && activeTool) generate(activeTool);
                 else if (e.key === "Enter") generate("guide");
@@ -817,7 +817,7 @@ export default function StudyPage() {
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 activeTool === t.key && !loading
                   ? "bg-accent text-white shadow-lg shadow-accent/20"
-                  : "bg-bg-dark text-text-secondary hover:text-white hover:bg-bg-dark/80"
+                  : "bg-bg text-text-secondary hover:text-white hover:bg-bg/80"
               } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               {t.icon} {t.label}
@@ -858,7 +858,7 @@ export default function StudyPage() {
               disabled={!!isSaved}
               className={`text-sm px-4 py-1.5 rounded-lg transition-colors ${
                 isSaved
-                  ? "text-text-muted bg-bg-dark cursor-default"
+                  ? "text-muted bg-bg cursor-default"
                   : "text-accent border border-accent/30 hover:bg-accent/10"
               }`}
             >
@@ -868,7 +868,7 @@ export default function StudyPage() {
 
           {/* Guide */}
           {activeTool === "guide" && result.content && (
-            <div className="bg-bg-card rounded-xl p-6 border border-border">
+            <div className="bg-surface rounded-xl p-6 border border-border">
               <h2 className="text-lg font-bold text-white mb-4">Study Guide</h2>
               <MarkdownContent text={result.content} />
             </div>
@@ -889,7 +889,7 @@ export default function StudyPage() {
 
           {/* Explain */}
           {activeTool === "explain" && result.content && (
-            <div className="bg-bg-card rounded-xl p-6 border border-border">
+            <div className="bg-surface rounded-xl p-6 border border-border">
               <h2 className="text-lg font-bold text-white mb-4">Explanation</h2>
               <MarkdownContent text={result.content} />
             </div>
@@ -897,7 +897,7 @@ export default function StudyPage() {
 
           {/* Summary */}
           {activeTool === "summary" && result.content && (
-            <div className="bg-bg-card rounded-xl p-6 border border-border">
+            <div className="bg-surface rounded-xl p-6 border border-border">
               <h2 className="text-lg font-bold text-white mb-4">Summary</h2>
               <MarkdownContent text={result.content} />
             </div>
@@ -910,7 +910,7 @@ export default function StudyPage() {
         <div className="text-center py-16">
           <p className="text-4xl mb-4">📚</p>
           <p className="text-text-secondary text-lg mb-2">Pick a course and topic</p>
-          <p className="text-text-muted text-sm">
+          <p className="text-muted text-sm">
             Choose a study tool above to generate guides, flashcards, quizzes, and more.
           </p>
         </div>

@@ -404,22 +404,22 @@ export default function SprintPage() {
 
         {/* Stats bar */}
         <div className="grid grid-cols-3 gap-3">
-          <div className="p-4 rounded-xl bg-bg-card border border-border text-center">
+          <div className="p-4 rounded-xl bg-surface border border-border text-center">
             <p className="text-2xl font-bold text-white">{todayScores.length}</p>
-            <p className="text-text-muted text-xs mt-1">Sprints Today</p>
+            <p className="text-muted text-xs mt-1">Sprints Today</p>
           </div>
-          <div className="p-4 rounded-xl bg-bg-card border border-border text-center">
+          <div className="p-4 rounded-xl bg-surface border border-border text-center">
             <p className="text-2xl font-bold text-white">{totalQuestionsToday}</p>
-            <p className="text-text-muted text-xs mt-1">Questions</p>
+            <p className="text-muted text-xs mt-1">Questions</p>
           </div>
-          <div className="p-4 rounded-xl bg-bg-card border border-border text-center">
+          <div className="p-4 rounded-xl bg-surface border border-border text-center">
             <p className="text-2xl font-bold text-accent">{streak.count}</p>
-            <p className="text-text-muted text-xs mt-1">Day Streak</p>
+            <p className="text-muted text-xs mt-1">Day Streak</p>
           </div>
         </div>
 
         {/* Topic selection */}
-        <div className="p-5 rounded-xl bg-bg-card border border-border space-y-4">
+        <div className="p-5 rounded-xl bg-surface border border-border space-y-4">
           <h3 className="text-white font-medium text-sm">Choose a Topic</h3>
 
           <div className="flex flex-wrap gap-2">
@@ -433,7 +433,7 @@ export default function SprintPage() {
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
                   topic === t
                     ? "bg-accent/20 text-accent border-accent/40"
-                    : "bg-bg-hover text-text-secondary hover:text-white border-transparent"
+                    : "bg-surface-hover text-text-secondary hover:text-white border-transparent"
                 }`}
               >
                 {t}
@@ -450,13 +450,13 @@ export default function SprintPage() {
                 setTopic("");
               }}
               placeholder="Or type a custom topic..."
-              className="w-full px-4 py-2.5 rounded-lg bg-bg-dark border border-border text-white text-sm placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors"
+              className="w-full px-4 py-2.5 rounded-lg bg-bg border border-border text-white text-sm placeholder:text-muted focus:outline-none focus:border-accent transition-colors"
             />
           </div>
         </div>
 
         {/* Difficulty */}
-        <div className="p-5 rounded-xl bg-bg-card border border-border space-y-4">
+        <div className="p-5 rounded-xl bg-surface border border-border space-y-4">
           <h3 className="text-white font-medium text-sm">Difficulty</h3>
           <div className="grid grid-cols-3 gap-3">
             {DIFFICULTY_OPTIONS.map((d) => (
@@ -466,11 +466,11 @@ export default function SprintPage() {
                 className={`p-3 rounded-xl text-center transition-all border ${
                   difficulty === d.key
                     ? d.color
-                    : "bg-bg-hover text-text-secondary border-transparent hover:text-white"
+                    : "bg-surface-hover text-text-secondary border-transparent hover:text-white"
                 }`}
               >
                 <span className="text-sm font-medium block">{d.label}</span>
-                <span className="text-text-muted text-xs block mt-0.5">
+                <span className="text-muted text-xs block mt-0.5">
                   {d.description}
                 </span>
               </button>
@@ -479,7 +479,7 @@ export default function SprintPage() {
         </div>
 
         {/* Duration */}
-        <div className="p-5 rounded-xl bg-bg-card border border-border space-y-4">
+        <div className="p-5 rounded-xl bg-surface border border-border space-y-4">
           <h3 className="text-white font-medium text-sm">Duration</h3>
           <div className="grid grid-cols-3 gap-3">
             {DURATION_OPTIONS.map((d) => (
@@ -489,11 +489,11 @@ export default function SprintPage() {
                 className={`p-3 rounded-xl text-center transition-all border ${
                   durationMinutes === d.minutes
                     ? "bg-accent/20 text-accent border-accent/40"
-                    : "bg-bg-hover text-text-secondary border-transparent hover:text-white"
+                    : "bg-surface-hover text-text-secondary border-transparent hover:text-white"
                 }`}
               >
                 <span className="text-lg font-bold block">{d.label}</span>
-                <span className="text-text-muted text-xs block mt-0.5">
+                <span className="text-muted text-xs block mt-0.5">
                   {d.description}
                 </span>
               </button>
@@ -514,7 +514,7 @@ export default function SprintPage() {
 
         {/* Recent scores */}
         {scores.length > 0 && (
-          <div className="p-5 rounded-xl bg-bg-card border border-border">
+          <div className="p-5 rounded-xl bg-surface border border-border">
             <h3 className="text-white font-medium text-sm mb-4">
               Recent Sprints
             </h3>
@@ -524,7 +524,7 @@ export default function SprintPage() {
                 return (
                   <div
                     key={s.id}
-                    className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-bg-dark/50"
+                    className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-bg/50"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div
@@ -542,7 +542,7 @@ export default function SprintPage() {
                         <p className="text-white text-sm truncate">
                           {s.topic}
                         </p>
-                        <p className="text-text-muted text-xs">
+                        <p className="text-muted text-xs">
                           {s.difficulty} | {s.durationMinutes}m |{" "}
                           {s.correctAnswers}/{s.questionsAnswered} correct
                         </p>
@@ -552,7 +552,7 @@ export default function SprintPage() {
                       <p className={`text-xs font-medium ${grade.color}`}>
                         {grade.label}
                       </p>
-                      <p className="text-text-muted text-xs">
+                      <p className="text-muted text-xs">
                         {new Date(s.completedAt).toLocaleDateString("en-US", {
                           month: "short",
                           day: "numeric",
@@ -585,14 +585,14 @@ export default function SprintPage() {
             <h2 className="text-lg font-bold text-white">
               {topic || customTopic}
             </h2>
-            <p className="text-text-muted text-xs">
+            <p className="text-muted text-xs">
               {difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} |{" "}
               {totalAnswered} answered | {correctSoFar} correct
             </p>
           </div>
           <button
             onClick={endSprint}
-            className="px-4 py-2 rounded-xl bg-bg-card border border-border text-text-secondary hover:text-white text-xs transition-colors"
+            className="px-4 py-2 rounded-xl bg-surface border border-border text-text-secondary hover:text-white text-xs transition-colors"
           >
             End Sprint
           </button>
@@ -606,14 +606,14 @@ export default function SprintPage() {
               <span className="text-3xl font-mono font-bold text-white">
                 {formatTime(secondsLeft)}
               </span>
-              <span className="text-text-muted text-xs mt-1">remaining</span>
+              <span className="text-muted text-xs mt-1">remaining</span>
             </div>
           </div>
         </div>
 
         {/* Score bar */}
         <div className="flex items-center gap-3">
-          <div className="flex-1 h-2 bg-bg-hover rounded-full overflow-hidden">
+          <div className="flex-1 h-2 bg-surface-hover rounded-full overflow-hidden">
             <div
               className="h-full bg-accent rounded-full transition-all duration-300"
               style={{
@@ -621,7 +621,7 @@ export default function SprintPage() {
               }}
             />
           </div>
-          <span className="text-text-muted text-xs shrink-0">
+          <span className="text-muted text-xs shrink-0">
             {totalAnswered > 0
               ? `${Math.round((correctSoFar / totalAnswered) * 100)}%`
               : "0%"}
@@ -630,9 +630,9 @@ export default function SprintPage() {
 
         {/* Question card */}
         {currentQuestion ? (
-          <div className="p-6 rounded-xl bg-bg-card border border-border space-y-5">
+          <div className="p-6 rounded-xl bg-surface border border-border space-y-5">
             <div>
-              <span className="text-text-muted text-xs">
+              <span className="text-muted text-xs">
                 Question {totalAnswered + (showExplanation ? 0 : 1)}
               </span>
               <p className="text-white font-medium mt-2 leading-relaxed">
@@ -644,7 +644,7 @@ export default function SprintPage() {
             <div className="space-y-2">
               {currentQuestion.options.map((opt, idx) => {
                 let optionClass =
-                  "bg-bg-hover text-text-secondary hover:text-white border-transparent";
+                  "bg-surface-hover text-text-secondary hover:text-white border-transparent";
 
                 if (showExplanation) {
                   if (idx === currentQuestion.correctIndex) {
@@ -658,7 +658,7 @@ export default function SprintPage() {
                       "bg-red-500/20 text-red-400 border-red-500/40";
                   } else {
                     optionClass =
-                      "bg-bg-hover text-text-muted border-transparent opacity-50";
+                      "bg-surface-hover text-muted border-transparent opacity-50";
                   }
                 } else if (selectedAnswer === idx) {
                   optionClass =
@@ -674,7 +674,7 @@ export default function SprintPage() {
                     disabled={showExplanation}
                     className={`w-full text-left px-4 py-3 rounded-xl text-sm transition-all border ${optionClass}`}
                   >
-                    <span className="font-medium mr-2 text-text-muted">
+                    <span className="font-medium mr-2 text-muted">
                       {String.fromCharCode(65 + idx)}.
                     </span>
                     {opt}
@@ -685,7 +685,7 @@ export default function SprintPage() {
 
             {/* Explanation */}
             {showExplanation && (
-              <div className="p-4 rounded-lg bg-bg-dark/50 text-text-secondary text-sm">
+              <div className="p-4 rounded-lg bg-bg/50 text-text-secondary text-sm">
                 {currentQuestion.explanation}
               </div>
             )}
@@ -709,11 +709,11 @@ export default function SprintPage() {
             )}
           </div>
         ) : (
-          <div className="p-8 rounded-xl bg-bg-card border border-border text-center space-y-4">
+          <div className="p-8 rounded-xl bg-surface border border-border text-center space-y-4">
             <p className="text-white font-medium">
               No questions loaded yet
             </p>
-            <p className="text-text-muted text-sm">
+            <p className="text-muted text-sm">
               Ask the AI to generate practice questions for your topic
             </p>
           </div>
@@ -761,44 +761,44 @@ export default function SprintPage() {
 
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="p-4 rounded-xl bg-bg-card border border-border text-center">
+          <div className="p-4 rounded-xl bg-surface border border-border text-center">
             <p className="text-xl font-bold text-white">{total}</p>
-            <p className="text-text-muted text-xs mt-1">Questions</p>
+            <p className="text-muted text-xs mt-1">Questions</p>
           </div>
-          <div className="p-4 rounded-xl bg-bg-card border border-border text-center">
+          <div className="p-4 rounded-xl bg-surface border border-border text-center">
             <p className="text-xl font-bold text-emerald-400">{correct}</p>
-            <p className="text-text-muted text-xs mt-1">Correct</p>
+            <p className="text-muted text-xs mt-1">Correct</p>
           </div>
-          <div className="p-4 rounded-xl bg-bg-card border border-border text-center">
+          <div className="p-4 rounded-xl bg-surface border border-border text-center">
             <p className="text-xl font-bold text-red-400">{total - correct}</p>
-            <p className="text-text-muted text-xs mt-1">Wrong</p>
+            <p className="text-muted text-xs mt-1">Wrong</p>
           </div>
-          <div className="p-4 rounded-xl bg-bg-card border border-border text-center">
+          <div className="p-4 rounded-xl bg-surface border border-border text-center">
             <p className="text-xl font-bold text-accent">{streak.count}</p>
-            <p className="text-text-muted text-xs mt-1">Day Streak</p>
+            <p className="text-muted text-xs mt-1">Day Streak</p>
           </div>
         </div>
 
         {/* Topic info */}
-        <div className="p-4 rounded-xl bg-bg-card border border-border flex items-center justify-between">
+        <div className="p-4 rounded-xl bg-surface border border-border flex items-center justify-between">
           <div>
             <p className="text-white text-sm font-medium">
               {topic || customTopic}
             </p>
-            <p className="text-text-muted text-xs">
+            <p className="text-muted text-xs">
               {difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} |{" "}
               {durationMinutes} minutes
             </p>
           </div>
           <div className="text-right">
-            <p className="text-text-muted text-xs">Score</p>
+            <p className="text-muted text-xs">Score</p>
             <p className={`text-lg font-bold ${grade.color}`}>{pct}%</p>
           </div>
         </div>
 
         {/* Answer breakdown */}
         {answers.length > 0 && (
-          <div className="p-5 rounded-xl bg-bg-card border border-border">
+          <div className="p-5 rounded-xl bg-surface border border-border">
             <h3 className="text-white font-medium text-sm mb-3">
               Answer Breakdown
             </h3>
@@ -823,7 +823,7 @@ export default function SprintPage() {
         <div className="flex gap-3">
           <button
             onClick={resetSprint}
-            className="flex-1 py-3 rounded-xl bg-bg-card border border-border text-text-secondary hover:text-white transition-colors text-sm"
+            className="flex-1 py-3 rounded-xl bg-surface border border-border text-text-secondary hover:text-white transition-colors text-sm"
           >
             New Sprint
           </button>

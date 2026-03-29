@@ -166,7 +166,7 @@ export default function ShareCard({
           </button>
           <button
             onClick={copyLink}
-            className="flex-1 py-3 rounded-xl bg-bg-card border border-border text-white font-semibold text-sm hover:bg-bg-hover transition-colors flex items-center justify-center gap-2"
+            className="flex-1 py-3 rounded-xl bg-surface border border-border text-white font-semibold text-sm hover:bg-surface-hover transition-colors flex items-center justify-center gap-2"
           >
             {copied ? (
               <>
@@ -188,7 +188,7 @@ export default function ShareCard({
 
         <button
           onClick={() => setShowCard(false)}
-          className="w-full py-2 text-text-muted text-sm hover:text-white transition-colors"
+          className="w-full py-2 text-muted text-sm hover:text-white transition-colors"
         >
           Close
         </button>

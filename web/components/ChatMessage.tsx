@@ -111,7 +111,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
     if (codeBlock) {
       flushList();
       elements.push(
-        <pre key={`pre-${key++}`} className="bg-bg-dark rounded-lg p-3 my-2 overflow-x-auto">
+        <pre key={`pre-${key++}`} className="bg-bg rounded-lg p-3 my-2 overflow-x-auto">
           <code className="text-xs text-text-secondary font-mono whitespace-pre">
             {codeBlock.code}
           </code>
@@ -241,7 +241,7 @@ function processCode(text: string | React.ReactNode, baseKey: number): React.Rea
     segments.push(
       <code
         key={`code-${baseKey}-${match.index}`}
-        className="px-1 py-0.5 rounded bg-bg-dark text-accent text-xs font-mono"
+        className="px-1 py-0.5 rounded bg-bg text-accent text-xs font-mono"
       >
         {match[1]}
       </code>
@@ -286,7 +286,7 @@ function ReminderCard({ action }: { action: ActionTaken }) {
       </div>
       <div className="min-w-0">
         <p className="text-xs font-medium text-white truncate">{title}</p>
-        {timeStr && <p className="text-xs text-text-muted mt-0.5">{timeStr}</p>}
+        {timeStr && <p className="text-xs text-muted mt-0.5">{timeStr}</p>}
       </div>
     </div>
   );
@@ -304,7 +304,7 @@ function ProfileUpdateCard({ action }: { action: ActionTaken }) {
       </div>
       <div className="min-w-0">
         <p className="text-xs font-medium text-white">Updated {field}</p>
-        <p className="text-xs text-text-muted mt-0.5 truncate" title={display}>
+        <p className="text-xs text-muted mt-0.5 truncate" title={display}>
           {display.length > 80 ? display.slice(0, 80) + "..." : display}
         </p>
       </div>
@@ -327,7 +327,7 @@ function GradeAnalysisCard({ action }: { action: ActionTaken }) {
         <div className="flex items-center gap-2 mt-0.5">
           {grade && <span className="text-xs font-semibold text-warning">{grade}</span>}
           {pct !== undefined && (
-            <span className="text-xs text-text-muted">{Math.round(pct * 10) / 10}%</span>
+            <span className="text-xs text-muted">{Math.round(pct * 10) / 10}%</span>
           )}
         </div>
       </div>
@@ -340,7 +340,7 @@ function StudyPlanCard({ action }: { action: ActionTaken }) {
   const focus = (action.result.focus as string) || "Study Plan";
 
   return (
-    <div className="p-2.5 rounded-lg bg-bg-dark/60 border border-border mt-1.5">
+    <div className="p-2.5 rounded-lg bg-bg/60 border border-border mt-1.5">
       <p className="text-xs font-medium text-white mb-1.5">
         {focus !== "general" ? focus : "Study Plan"}
       </p>
@@ -350,18 +350,18 @@ function StudyPlanCard({ action }: { action: ActionTaken }) {
             <div key={i} className="flex items-center justify-between text-xs">
               <span className="text-text-secondary truncate mr-2">{a.title}</span>
               {a.due && (
-                <span className="text-text-muted shrink-0 text-[11px]">
+                <span className="text-muted shrink-0 text-[11px]">
                   {formatDueDate(a.due)}
                 </span>
               )}
             </div>
           ))}
           {assignments.length > 5 && (
-            <p className="text-[11px] text-text-muted">+{assignments.length - 5} more</p>
+            <p className="text-[11px] text-muted">+{assignments.length - 5} more</p>
           )}
         </div>
       ) : (
-        <p className="text-xs text-text-muted">No upcoming assignments found.</p>
+        <p className="text-xs text-muted">No upcoming assignments found.</p>
       )}
     </div>
   );
@@ -373,12 +373,12 @@ function GenericActionCard({ action }: { action: ActionTaken }) {
   return (
     <div
       className={`flex items-start gap-2.5 p-2.5 rounded-lg mt-1.5 ${
-        hasError ? "bg-error/10 border border-error/20" : "bg-bg-dark/60 border border-border"
+        hasError ? "bg-error/10 border border-error/20" : "bg-bg/60 border border-border"
       }`}
     >
       <div
         className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
-          hasError ? "bg-error/20" : "bg-bg-hover"
+          hasError ? "bg-error/20" : "bg-surface-hover"
         }`}
       >
         {hasError ? <ErrorIcon /> : <ToolIcon />}
@@ -389,7 +389,7 @@ function GenericActionCard({ action }: { action: ActionTaken }) {
           <p className="text-xs text-error mt-0.5">{action.result.error as string}</p>
         )}
         {!hasError && action.result.status != null && (
-          <p className="text-xs text-text-muted mt-0.5">{String(action.result.status)}</p>
+          <p className="text-xs text-muted mt-0.5">{String(action.result.status)}</p>
         )}
       </div>
     </div>
@@ -482,7 +482,7 @@ function ErrorIcon() {
 
 function ToolIcon() {
   return (
-    <svg className="w-3.5 h-3.5 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <svg className="w-3.5 h-3.5 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
@@ -506,7 +506,7 @@ export default function ChatMessage({ message, isStreaming }: ChatMessageProps) 
         className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 ${
           isUser
             ? "bg-accent text-white rounded-br-md"
-            : "bg-bg-card border border-border rounded-bl-md"
+            : "bg-surface border border-border rounded-bl-md"
         }`}
       >
         {/* Message content */}
@@ -530,7 +530,7 @@ export default function ChatMessage({ message, isStreaming }: ChatMessageProps) 
 
         {/* Timestamp */}
         {message.created_at && !isStreaming && (
-          <p className={`text-[10px] mt-1.5 ${isUser ? "text-white/50" : "text-text-muted"}`}>
+          <p className={`text-[10px] mt-1.5 ${isUser ? "text-white/50" : "text-muted"}`}>
             {formatTime(message.created_at)}
           </p>
         )}

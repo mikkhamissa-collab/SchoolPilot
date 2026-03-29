@@ -372,7 +372,7 @@ export default function OnboardingPage() {
     : "opacity-100 translate-x-0";
 
   return (
-    <div className="min-h-screen bg-bg-dark flex flex-col items-center justify-center p-6">
+    <div className="min-h-screen bg-bg flex flex-col items-center justify-center p-6">
       {/* Progress bar */}
       <div className="w-full max-w-lg mb-8">
         <div className="h-1 bg-border rounded-full overflow-hidden">
@@ -417,7 +417,7 @@ export default function OnboardingPage() {
                 each day.
               </p>
             </div>
-            <p className="text-text-muted text-sm">
+            <p className="text-muted text-sm">
               Let&apos;s get you set up in under 2 minutes. No fluff, I promise.
             </p>
             <button
@@ -429,7 +429,7 @@ export default function OnboardingPage() {
             <button
               onClick={skipOnboarding}
               disabled={saving}
-              className="w-full text-center text-text-muted text-sm hover:text-text-secondary transition-colors cursor-pointer disabled:opacity-50"
+              className="w-full text-center text-muted text-sm hover:text-text-secondary transition-colors cursor-pointer disabled:opacity-50"
             >
               Skip setup &mdash; I&apos;ll do this later
             </button>
@@ -462,7 +462,7 @@ export default function OnboardingPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Alex"
-                  className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors"
+                  className="w-full px-4 py-3 rounded-xl bg-surface border border-border text-white placeholder:text-muted focus:outline-none focus:border-accent transition-colors"
                   autoFocus
                 />
               </div>
@@ -470,7 +470,7 @@ export default function OnboardingPage() {
               {/* School */}
               <div>
                 <label htmlFor="onb-school" className="block text-text-secondary text-sm mb-1.5">
-                  School name <span className="text-text-muted">(optional)</span>
+                  School name <span className="text-muted">(optional)</span>
                 </label>
                 <input
                   id="onb-school"
@@ -478,7 +478,7 @@ export default function OnboardingPage() {
                   value={schoolName}
                   onChange={(e) => setSchoolName(e.target.value)}
                   placeholder="e.g. American School of London"
-                  className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors"
+                  className="w-full px-4 py-3 rounded-xl bg-surface border border-border text-white placeholder:text-muted focus:outline-none focus:border-accent transition-colors"
                 />
               </div>
 
@@ -491,7 +491,7 @@ export default function OnboardingPage() {
                   id="onb-grade"
                   value={gradeLevel}
                   onChange={(e) => setGradeLevel(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-white focus:outline-none focus:border-accent transition-colors appearance-none cursor-pointer"
+                  className="w-full px-4 py-3 rounded-xl bg-surface border border-border text-white focus:outline-none focus:border-accent transition-colors appearance-none cursor-pointer"
                 >
                   <option value="" disabled>
                     Select your grade
@@ -513,7 +513,7 @@ export default function OnboardingPage() {
                   id="onb-tz"
                   value={timezone}
                   onChange={(e) => setTimezone(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-white focus:outline-none focus:border-accent transition-colors appearance-none cursor-pointer"
+                  className="w-full px-4 py-3 rounded-xl bg-surface border border-border text-white focus:outline-none focus:border-accent transition-colors appearance-none cursor-pointer"
                 >
                   {TIMEZONES.map((tz) => (
                     <option key={tz.value} value={tz.value}>
@@ -572,7 +572,7 @@ export default function OnboardingPage() {
                     className={`text-left p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer ${
                       selected
                         ? "border-accent bg-accent/10"
-                        : "border-border bg-bg-card hover:border-accent/30 hover:bg-bg-hover"
+                        : "border-border bg-surface hover:border-accent/30 hover:bg-surface-hover"
                     }`}
                   >
                     <div className="flex items-start gap-3">
@@ -589,7 +589,7 @@ export default function OnboardingPage() {
                         <p className="text-text-secondary text-sm mb-2">
                           {p.description}
                         </p>
-                        <p className="text-text-muted text-xs italic leading-relaxed">
+                        <p className="text-muted text-xs italic leading-relaxed">
                           &ldquo;{p.quote}&rdquo;
                         </p>
                       </div>
@@ -648,7 +648,7 @@ export default function OnboardingPage() {
                     className={`px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                       selected
                         ? "bg-accent/20 border border-accent text-accent"
-                        : "bg-bg-card border border-border text-text-secondary hover:border-accent/30 hover:text-white"
+                        : "bg-surface border border-border text-text-secondary hover:border-accent/30 hover:text-white"
                     }`}
                   >
                     {selected && (
@@ -671,12 +671,12 @@ export default function OnboardingPage() {
                 onChange={(e) => setCustomGoal(e.target.value)}
                 placeholder="e.g. Finish college applications by December..."
                 rows={3}
-                className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-white placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors resize-none"
+                className="w-full px-4 py-3 rounded-xl bg-surface border border-border text-white placeholder:text-muted focus:outline-none focus:border-accent transition-colors resize-none"
               />
             </div>
 
             {goals.length > 0 && (
-              <p className="text-text-muted text-xs">
+              <p className="text-muted text-xs">
                 {goals.length} goal{goals.length !== 1 ? "s" : ""} selected
               </p>
             )}
@@ -741,7 +741,7 @@ export default function OnboardingPage() {
 
             <button
               onClick={skipLms}
-              className="w-full text-center text-text-muted text-sm hover:text-text-secondary transition-colors cursor-pointer"
+              className="w-full text-center text-muted text-sm hover:text-text-secondary transition-colors cursor-pointer"
             >
               Skip for now &mdash; I&apos;ll connect my LMS later in Settings
             </button>
@@ -770,7 +770,7 @@ export default function OnboardingPage() {
             {/* Summary cards */}
             <div className="space-y-3">
               {/* Basics */}
-              <div className="p-4 rounded-xl bg-bg-card border border-border">
+              <div className="p-4 rounded-xl bg-surface border border-border">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-white font-medium text-sm">Profile</h3>
                   <button
@@ -781,17 +781,17 @@ export default function OnboardingPage() {
                   </button>
                 </div>
                 <div className="grid grid-cols-2 gap-y-1.5 text-sm">
-                  <span className="text-text-muted">Name</span>
+                  <span className="text-muted">Name</span>
                   <span className="text-white text-right">{name || "Not set"}</span>
                   {schoolName && (
                     <>
-                      <span className="text-text-muted">School</span>
+                      <span className="text-muted">School</span>
                       <span className="text-white text-right">{schoolName}</span>
                     </>
                   )}
-                  <span className="text-text-muted">Grade</span>
+                  <span className="text-muted">Grade</span>
                   <span className="text-white text-right">{gradeLevel || "Not set"}</span>
-                  <span className="text-text-muted">Timezone</span>
+                  <span className="text-muted">Timezone</span>
                   <span className="text-white text-right">
                     {TIMEZONES.find((t) => t.value === timezone)?.label || timezone}
                   </span>
@@ -799,7 +799,7 @@ export default function OnboardingPage() {
               </div>
 
               {/* Personality */}
-              <div className="p-4 rounded-xl bg-bg-card border border-border">
+              <div className="p-4 rounded-xl bg-surface border border-border">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-white font-medium text-sm">AI Personality</h3>
                   <button
@@ -816,14 +816,14 @@ export default function OnboardingPage() {
                   <span className="text-white text-sm font-medium">
                     {PERSONALITIES.find((p) => p.id === personality)?.name}
                   </span>
-                  <span className="text-text-muted text-xs">
+                  <span className="text-muted text-xs">
                     &mdash; {PERSONALITIES.find((p) => p.id === personality)?.description}
                   </span>
                 </div>
               </div>
 
               {/* Goals */}
-              <div className="p-4 rounded-xl bg-bg-card border border-border">
+              <div className="p-4 rounded-xl bg-surface border border-border">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-white font-medium text-sm">Goals</h3>
                   <button
@@ -850,12 +850,12 @@ export default function OnboardingPage() {
                     )}
                   </div>
                 ) : (
-                  <p className="text-text-muted text-sm">No goals set yet</p>
+                  <p className="text-muted text-sm">No goals set yet</p>
                 )}
               </div>
 
               {/* LMS */}
-              <div className="p-4 rounded-xl bg-bg-card border border-border">
+              <div className="p-4 rounded-xl bg-surface border border-border">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-white font-medium text-sm">LMS Connection</h3>
                   <button
@@ -871,7 +871,7 @@ export default function OnboardingPage() {
                     <span className="text-white text-sm">Connected via browser session</span>
                   </div>
                 ) : (
-                  <p className="text-text-muted text-sm">
+                  <p className="text-muted text-sm">
                     Not connected &mdash; you can connect your LMS later in Settings.
                   </p>
                 )}

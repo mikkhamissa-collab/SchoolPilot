@@ -17,7 +17,7 @@ export default function DashboardError({
     <div className="max-w-md mx-auto mt-20 text-center space-y-4">
       <div className="text-4xl">😵</div>
       <h2 className="text-xl font-bold text-white">Something went wrong</h2>
-      <p className="text-text-muted text-sm">
+      <p className="text-muted text-sm">
         An unexpected error occurred. This has been logged.
       </p>
       <button

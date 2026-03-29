@@ -1,7 +1,7 @@
 export function Skeleton({ className = "" }: { className?: string }) {
   return (
     <div
-      className={`animate-pulse bg-bg-hover rounded ${className}`}
+      className={`animate-pulse bg-surface-hover rounded ${className}`}
       aria-hidden="true"
     />
   );
@@ -9,7 +9,7 @@ export function Skeleton({ className = "" }: { className?: string }) {
 
 export function CardSkeleton() {
   return (
-    <div className="bg-bg-card rounded-xl p-6 border border-border">
+    <div className="bg-surface rounded-xl p-6 border border-border">
       <Skeleton className="h-4 w-1/3 mb-3" />
       <Skeleton className="h-3 w-2/3 mb-2" />
       <Skeleton className="h-3 w-1/2" />

@@ -181,7 +181,7 @@ function ProgressRing({ progress, size = 220 }: { progress: number; size?: numbe
         cy={size / 2}
         r={radius}
         fill="none"
-        stroke="#1a1a2e"
+        stroke="#111113"
         strokeWidth={strokeWidth}
       />
       {/* Progress arc */}
@@ -214,7 +214,7 @@ function CelebrationModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-bg-card border border-border rounded-2xl p-8 max-w-sm w-full mx-4 text-center animate-in fade-in zoom-in duration-300">
+      <div className="bg-surface border border-border rounded-2xl p-8 max-w-sm w-full mx-4 text-center animate-in fade-in zoom-in duration-300">
         <div className="text-5xl mb-4">&#127881;</div>
         <h2 className="text-2xl font-bold text-white mb-2">Session Complete!</h2>
         <p className="text-text-secondary mb-6">
@@ -241,7 +241,7 @@ function WeeklyChart({ dailyMinutes }: { dailyMinutes: number[] }) {
   const max = Math.max(...dailyMinutes, 1);
 
   return (
-    <div className="bg-bg-card rounded-xl p-5 border border-border">
+    <div className="bg-surface rounded-xl p-5 border border-border">
       <h3 className="text-sm font-medium text-text-secondary mb-4">This Week</h3>
       <div className="flex items-end justify-between gap-2 h-32">
         {dailyMinutes.map((mins, i) => {
@@ -249,7 +249,7 @@ function WeeklyChart({ dailyMinutes }: { dailyMinutes: number[] }) {
           return (
             <div key={i} className="flex flex-col items-center flex-1 h-full justify-end">
               {mins > 0 && (
-                <span className="text-[10px] text-text-muted mb-1">{mins}m</span>
+                <span className="text-[10px] text-muted mb-1">{mins}m</span>
               )}
               <div
                 className="w-full max-w-[32px] rounded-t-md transition-all duration-500"
@@ -258,7 +258,7 @@ function WeeklyChart({ dailyMinutes }: { dailyMinutes: number[] }) {
                   backgroundColor: i === 6 ? "#7c3aed" : "#3b3b5c",
                 }}
               />
-              <span className="text-[10px] text-text-muted mt-2">{labels[i]}</span>
+              <span className="text-[10px] text-muted mt-2">{labels[i]}</span>
             </div>
           );
         })}
@@ -466,26 +466,26 @@ export default function FocusPage() {
       {/* Streak & Stats Row */}
       {stats && (
         <div className="grid grid-cols-3 gap-3 mb-6">
-          <div className="bg-bg-card rounded-xl p-4 border border-border text-center">
+          <div className="bg-surface rounded-xl p-4 border border-border text-center">
             <p className="text-3xl font-bold text-accent">{stats.current_streak}</p>
-            <p className="text-xs text-text-muted mt-1">Day Streak</p>
+            <p className="text-xs text-muted mt-1">Day Streak</p>
             {stats.longest_streak > 0 && (
-              <p className="text-[10px] text-text-muted">Best: {stats.longest_streak}</p>
+              <p className="text-[10px] text-muted">Best: {stats.longest_streak}</p>
             )}
           </div>
-          <div className="bg-bg-card rounded-xl p-4 border border-border text-center">
+          <div className="bg-surface rounded-xl p-4 border border-border text-center">
             <p className="text-3xl font-bold text-white">{stats.today_minutes}</p>
-            <p className="text-xs text-text-muted mt-1">Minutes Today</p>
+            <p className="text-xs text-muted mt-1">Minutes Today</p>
           </div>
-          <div className="bg-bg-card rounded-xl p-4 border border-border text-center">
+          <div className="bg-surface rounded-xl p-4 border border-border text-center">
             <p className="text-3xl font-bold text-white">{Math.round(stats.week_minutes / 60)}h {stats.week_minutes % 60}m</p>
-            <p className="text-xs text-text-muted mt-1">This Week</p>
+            <p className="text-xs text-muted mt-1">This Week</p>
           </div>
         </div>
       )}
 
       {/* Timer Card */}
-      <div className="bg-bg-card rounded-2xl p-8 border border-border text-center mb-6">
+      <div className="bg-surface rounded-2xl p-8 border border-border text-center mb-6">
         {/* Progress Ring + Countdown */}
         <div className="relative w-[220px] h-[220px] mx-auto mb-6">
           <ProgressRing progress={progress} size={220} />
@@ -516,7 +516,7 @@ export default function FocusPage() {
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     selectedMinutes === p.minutes && !customMinutes
                       ? "bg-accent text-white"
-                      : "bg-bg-dark text-text-secondary hover:text-white border border-border"
+                      : "bg-bg text-text-secondary hover:text-white border border-border"
                   }`}
                 >
                   {p.label} ({p.minutes}m)
@@ -541,7 +541,7 @@ export default function FocusPage() {
                   }
                 }}
                 placeholder="Custom min"
-                className="w-28 bg-bg-dark border border-border rounded-lg px-3 py-2 text-center text-white placeholder:text-text-muted focus:outline-none focus:border-accent text-sm"
+                className="w-28 bg-bg border border-border rounded-lg px-3 py-2 text-center text-white placeholder:text-muted focus:outline-none focus:border-accent text-sm"
               />
             </div>
 
@@ -553,7 +553,7 @@ export default function FocusPage() {
                   id="assignment-select"
                   value={selectedAssignment ?? ""}
                   onChange={(e) => setSelectedAssignment(e.target.value || null)}
-                  className="w-64 max-w-full bg-bg-dark border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent appearance-none cursor-pointer"
+                  className="w-64 max-w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent appearance-none cursor-pointer"
                 >
                   <option value="">No assignment (general focus)</option>
                   {assignments.map((a) => (
@@ -575,7 +575,7 @@ export default function FocusPage() {
           </>
         ) : (
           <div className="flex flex-col items-center gap-3">
-            <p className="text-sm text-text-muted">
+            <p className="text-sm text-muted">
               {focusType === "pomodoro" ? "Pomodoro" : focusType === "deep_work" ? "Deep Work" : focusType === "quick" ? "Quick" : "Custom"} session
             </p>
             <button
@@ -595,7 +595,7 @@ export default function FocusPage() {
 
       {/* Today's Sessions */}
       {sessionsToday.length > 0 && (
-        <div className="bg-bg-card rounded-xl p-5 border border-border mb-6">
+        <div className="bg-surface rounded-xl p-5 border border-border mb-6">
           <h3 className="text-sm font-medium text-text-secondary mb-3">Today&apos;s Sessions</h3>
           <div className="space-y-2">
             {sessionsToday.map((session, idx) => {
@@ -620,9 +620,9 @@ export default function FocusPage() {
                   <div className="flex items-center gap-3">
                     <div className="w-2 h-2 rounded-full bg-accent" />
                     <span className="text-sm text-white">{label}</span>
-                    <span className="text-xs text-text-muted">{session.duration_minutes}m</span>
+                    <span className="text-xs text-muted">{session.duration_minutes}m</span>
                   </div>
-                  <span className="text-xs text-text-muted">
+                  <span className="text-xs text-muted">
                     {h}:{String(minutes).padStart(2, "0")} {ampm}
                   </span>
                 </div>
@@ -640,7 +640,7 @@ export default function FocusPage() {
 
       {/* Active days note */}
       {stats && stats.total_active_days > 0 && (
-        <p className="text-center text-xs text-text-muted">
+        <p className="text-center text-xs text-muted">
           {stats.total_active_days} total active day{stats.total_active_days !== 1 ? "s" : ""}
         </p>
       )}

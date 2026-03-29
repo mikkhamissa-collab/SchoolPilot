@@ -383,7 +383,7 @@ export default function ChatSidebar() {
         onClick={() => setIsExpanded(!isExpanded)}
         className={`fixed right-0 top-1/2 -translate-y-1/2 z-40 w-8 h-16 flex items-center justify-center rounded-l-lg transition-all duration-300 ${
           isExpanded
-            ? "bg-bg-card border border-r-0 border-border hover:bg-bg-hover"
+            ? "bg-surface border border-r-0 border-border hover:bg-surface-hover"
             : "bg-accent hover:bg-accent-hover shadow-lg shadow-accent/20"
         }`}
         aria-label={isExpanded ? "Collapse chat" : "Open chat"}
@@ -404,7 +404,7 @@ export default function ChatSidebar() {
 
       {/* ---- Sidebar panel ---- */}
       <aside
-        className={`fixed right-0 top-0 h-screen z-30 flex flex-col bg-bg-card border-l border-border transition-all duration-300 ease-in-out ${
+        className={`fixed right-0 top-0 h-screen z-30 flex flex-col bg-surface border-l border-border transition-all duration-300 ease-in-out ${
           isExpanded ? "w-full sm:w-[400px] translate-x-0" : "w-full sm:w-[400px] translate-x-full"
         }`}
         aria-label="Chat sidebar"
@@ -418,7 +418,7 @@ export default function ChatSidebar() {
             {/* Mobile close button */}
             <button
               onClick={() => setIsExpanded(false)}
-              className="sm:hidden p-1 rounded-md hover:bg-bg-hover text-text-muted hover:text-white transition-colors shrink-0 mr-1"
+              className="sm:hidden p-1 rounded-md hover:bg-surface-hover text-muted hover:text-white transition-colors shrink-0 mr-1"
               aria-label="Close chat"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -432,7 +432,7 @@ export default function ChatSidebar() {
                   setShowConversations(true);
                   loadConversations();
                 }}
-                className="p-1 rounded-md hover:bg-bg-hover text-text-muted hover:text-white transition-colors shrink-0"
+                className="p-1 rounded-md hover:bg-surface-hover text-muted hover:text-white transition-colors shrink-0"
                 aria-label="Back to conversations"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -450,7 +450,7 @@ export default function ChatSidebar() {
             <div className="relative" ref={personalityPickerRef}>
               <button
                 onClick={() => setShowPersonalityPicker(!showPersonalityPicker)}
-                className="p-1.5 rounded-md hover:bg-bg-hover text-text-muted hover:text-white transition-colors text-base leading-none"
+                className="p-1.5 rounded-md hover:bg-surface-hover text-muted hover:text-white transition-colors text-base leading-none"
                 aria-label={`Personality: ${currentPersonality.name}`}
                 title={`Personality: ${currentPersonality.name}`}
               >
@@ -459,9 +459,9 @@ export default function ChatSidebar() {
 
               {/* Dropdown */}
               {showPersonalityPicker && (
-                <div className="absolute right-0 top-full mt-1 w-56 bg-bg-card border border-border rounded-xl shadow-2xl shadow-black/40 overflow-hidden z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+                <div className="absolute right-0 top-full mt-1 w-56 bg-surface border border-border rounded-xl shadow-2xl shadow-black/40 overflow-hidden z-50 animate-in fade-in slide-in-from-top-1 duration-150">
                   <div className="px-3 pt-2.5 pb-1.5">
-                    <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider">
+                    <p className="text-[11px] font-medium text-muted uppercase tracking-wider">
                       AI Personality
                     </p>
                   </div>
@@ -475,7 +475,7 @@ export default function ChatSidebar() {
                       className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors ${
                         personality === p.id
                           ? "bg-accent/10 text-accent"
-                          : "text-text-secondary hover:bg-bg-hover hover:text-white"
+                          : "text-text-secondary hover:bg-surface-hover hover:text-white"
                       }`}
                     >
                       <span className="text-base shrink-0 leading-none">
@@ -483,7 +483,7 @@ export default function ChatSidebar() {
                       </span>
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-medium">{p.name}</p>
-                        <p className="text-[11px] text-text-muted">{p.description}</p>
+                        <p className="text-[11px] text-muted">{p.description}</p>
                       </div>
                       {personality === p.id && (
                         <svg
@@ -507,7 +507,7 @@ export default function ChatSidebar() {
             {/* New chat button */}
             <button
               onClick={startNewChat}
-              className="p-1.5 rounded-md hover:bg-bg-hover text-text-muted hover:text-white transition-colors"
+              className="p-1.5 rounded-md hover:bg-surface-hover text-muted hover:text-white transition-colors"
               aria-label="New chat"
               title="New chat"
             >
@@ -525,13 +525,13 @@ export default function ChatSidebar() {
           <div className="flex-1 overflow-y-auto">
             {conversations.length === 0 ? (
               <div className="p-8 text-center">
-                <div className="w-10 h-10 rounded-xl bg-bg-hover flex items-center justify-center mx-auto mb-3">
-                  <svg className="w-5 h-5 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <div className="w-10 h-10 rounded-xl bg-surface-hover flex items-center justify-center mx-auto mb-3">
+                  <svg className="w-5 h-5 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                   </svg>
                 </div>
-                <p className="text-text-muted text-sm mb-1">No conversations yet</p>
-                <p className="text-text-muted text-xs mb-4">Start chatting to create one.</p>
+                <p className="text-muted text-sm mb-1">No conversations yet</p>
+                <p className="text-muted text-xs mb-4">Start chatting to create one.</p>
                 <button
                   onClick={startNewChat}
                   className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
@@ -556,20 +556,20 @@ export default function ChatSidebar() {
                     className={`group flex items-center justify-between px-4 py-3 cursor-pointer transition-colors ${
                       conv.id === activeConversationId
                         ? "bg-accent/10 border-r-2 border-accent"
-                        : "hover:bg-bg-hover"
+                        : "hover:bg-surface-hover"
                     }`}
                   >
                     <div className="min-w-0 flex-1 mr-2">
                       <p className="text-sm text-white font-medium truncate">
                         {conv.title || "Untitled"}
                       </p>
-                      <p className="text-[11px] text-text-muted mt-0.5">
+                      <p className="text-[11px] text-muted mt-0.5">
                         {formatRelativeDate(conv.updated_at || conv.created_at)}
                       </p>
                     </div>
                     <button
                       onClick={(e) => deleteConversation(conv.id, e)}
-                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-error/20 text-text-muted hover:text-error transition-all shrink-0"
+                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-error/20 text-muted hover:text-error transition-all shrink-0"
                       aria-label={`Delete conversation: ${conv.title || "Untitled"}`}
                     >
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -586,7 +586,7 @@ export default function ChatSidebar() {
             {/* ========================================================= */}
             {/* MESSAGES AREA                                              */}
             {/* ========================================================= */}
-            <div className="flex-1 overflow-y-auto bg-bg-dark px-3 py-3">
+            <div className="flex-1 overflow-y-auto bg-bg px-3 py-3">
               {/* Empty state */}
               {messages.length === 0 && !streamingText && !isLoading && (
                 <div className="flex flex-col items-center justify-center h-full text-center px-4">
@@ -608,7 +608,7 @@ export default function ChatSidebar() {
                   <p className="text-white font-medium text-sm mb-1">
                     Hey! I&apos;m SchoolPilot.
                   </p>
-                  <p className="text-text-muted text-xs leading-relaxed max-w-[260px]">
+                  <p className="text-muted text-xs leading-relaxed max-w-[260px]">
                     Your AI study companion. Ask me about your assignments, grades,
                     or anything school-related.
                   </p>
@@ -637,7 +637,7 @@ export default function ChatSidebar() {
               {/* Loading dots (shown before the stream starts) */}
               {isLoading && !streamingText && streamingActions.length === 0 && (
                 <div className="flex justify-start mb-3">
-                  <div className="bg-bg-card border border-border rounded-2xl rounded-bl-md px-4 py-3">
+                  <div className="bg-surface border border-border rounded-2xl rounded-bl-md px-4 py-3">
                     <div className="flex items-center gap-1.5">
                       <span className="w-1.5 h-1.5 bg-text-muted rounded-full animate-[pulse_1.4s_ease-in-out_infinite]" />
                       <span
@@ -667,14 +667,14 @@ export default function ChatSidebar() {
             {/* QUICK ACTIONS (prominent when empty, compact otherwise)    */}
             {/* ========================================================= */}
             {messages.length === 0 && !isLoading && (
-              <div className="px-3 py-2 border-t border-border bg-bg-card shrink-0">
+              <div className="px-3 py-2 border-t border-border bg-surface shrink-0">
                 <div className="flex flex-wrap gap-1.5">
                   {QUICK_ACTIONS.map((action) => (
                     <button
                       key={action}
                       onClick={() => sendMessage(action)}
                       disabled={isLoading}
-                      className="px-2.5 py-1.5 rounded-lg bg-bg-hover text-text-secondary text-xs hover:text-accent hover:bg-accent/10 transition-colors disabled:opacity-50"
+                      className="px-2.5 py-1.5 rounded-lg bg-surface-hover text-text-secondary text-xs hover:text-accent hover:bg-accent/10 transition-colors disabled:opacity-50"
                     >
                       {action}
                     </button>
@@ -686,7 +686,7 @@ export default function ChatSidebar() {
             {/* ========================================================= */}
             {/* INPUT AREA                                                 */}
             {/* ========================================================= */}
-            <div className="px-3 py-3 border-t border-border bg-bg-card shrink-0">
+            <div className="px-3 py-3 border-t border-border bg-surface shrink-0">
               <div className="flex items-end gap-2">
                 <textarea
                   ref={inputRef}
@@ -696,7 +696,7 @@ export default function ChatSidebar() {
                   placeholder="Ask me anything..."
                   rows={1}
                   disabled={isLoading}
-                  className="flex-1 resize-none bg-bg-dark border border-border rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-colors disabled:opacity-50 max-h-[120px]"
+                  className="flex-1 resize-none bg-bg border border-border rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-colors disabled:opacity-50 max-h-[120px]"
                 />
                 <button
                   onClick={() => sendMessage()}
@@ -728,7 +728,7 @@ export default function ChatSidebar() {
                       key={action}
                       onClick={() => sendMessage(action)}
                       disabled={isLoading}
-                      className="px-2 py-1 rounded-md bg-bg-hover/50 text-text-muted text-[11px] hover:text-accent hover:bg-accent/10 transition-colors disabled:opacity-50"
+                      className="px-2 py-1 rounded-md bg-surface-hover/50 text-muted text-[11px] hover:text-accent hover:bg-accent/10 transition-colors disabled:opacity-50"
                     >
                       {action}
                     </button>

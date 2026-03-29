@@ -21,7 +21,7 @@ export default function MobileNav() {
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 bg-bg-card border-t border-border z-50"
+      className="md:hidden fixed bottom-0 left-0 right-0 bg-surface border-t border-border z-50"
       aria-label="Mobile navigation"
     >
       <div className="flex items-center justify-around py-2">
@@ -33,7 +33,7 @@ export default function MobileNav() {
               href={item.href}
               aria-current={active ? "page" : undefined}
               className={`flex flex-col items-center gap-0.5 px-2 py-1 text-xs transition-colors ${
-                active ? "text-accent" : "text-text-muted"
+                active ? "text-accent" : "text-muted"
               }`}
             >
               <span className="text-lg" aria-hidden="true">{item.icon}</span>
@@ -46,7 +46,7 @@ export default function MobileNav() {
         <button
           onClick={handleChatToggle}
           aria-label="Toggle chat"
-          className="flex flex-col items-center gap-0.5 px-2 py-1 text-xs text-text-muted hover:text-accent transition-colors cursor-pointer"
+          className="flex flex-col items-center gap-0.5 px-2 py-1 text-xs text-muted hover:text-accent transition-colors cursor-pointer"
         >
           <span className="text-lg" aria-hidden="true">💬</span>
           <span>Chat</span>

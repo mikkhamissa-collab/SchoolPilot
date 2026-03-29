@@ -81,20 +81,20 @@ export default function GradeLogModal({
       <div
         ref={dialogRef}
         tabIndex={-1}
-        className="w-full max-w-sm bg-bg-card border border-border rounded-2xl p-6 space-y-5 outline-none"
+        className="w-full max-w-sm bg-surface border border-border rounded-2xl p-6 space-y-5 outline-none"
       >
         <div className="text-center">
           <div className="text-3xl mb-2">📝</div>
           <h3 className="text-lg font-bold text-white">
             How&apos;d you do?
           </h3>
-          <p className="text-text-muted text-sm mt-1">{taskTitle}</p>
+          <p className="text-muted text-sm mt-1">{taskTitle}</p>
           <p className="text-text-secondary text-xs">{courseName}</p>
         </div>
 
         <div className="flex items-center justify-center gap-3">
           <div className="text-center">
-            <label className="text-text-muted text-xs block mb-1">
+            <label className="text-muted text-xs block mb-1">
               Your score
             </label>
             <input
@@ -104,12 +104,12 @@ export default function GradeLogModal({
               placeholder="85"
               autoFocus
               min={0}
-              className="w-24 px-3 py-3 rounded-xl bg-bg-dark border border-border text-white text-center text-xl font-bold placeholder:text-text-muted focus:outline-none focus:border-accent"
+              className="w-24 px-3 py-3 rounded-xl bg-bg border border-border text-white text-center text-xl font-bold placeholder:text-muted focus:outline-none focus:border-accent"
             />
           </div>
-          <span className="text-text-muted text-2xl mt-5">/</span>
+          <span className="text-muted text-2xl mt-5">/</span>
           <div className="text-center">
-            <label className="text-text-muted text-xs block mb-1">
+            <label className="text-muted text-xs block mb-1">
               Max score
             </label>
             <input
@@ -117,7 +117,7 @@ export default function GradeLogModal({
               value={maxScore}
               onChange={(e) => setMaxScore(e.target.value)}
               min={1}
-              className="w-24 px-3 py-3 rounded-xl bg-bg-dark border border-border text-white text-center text-xl font-bold placeholder:text-text-muted focus:outline-none focus:border-accent"
+              className="w-24 px-3 py-3 rounded-xl bg-bg border border-border text-white text-center text-xl font-bold placeholder:text-muted focus:outline-none focus:border-accent"
             />
           </div>
         </div>
@@ -140,7 +140,7 @@ export default function GradeLogModal({
           </button>
           <button
             onClick={onSkip}
-            className="w-full py-2 text-text-muted text-sm hover:text-white transition-colors cursor-pointer"
+            className="w-full py-2 text-muted text-sm hover:text-white transition-colors cursor-pointer"
           >
             Skip — I&apos;ll add later
           </button>

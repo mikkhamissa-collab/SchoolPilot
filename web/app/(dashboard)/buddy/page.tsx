@@ -77,7 +77,7 @@ export default function BuddyPage() {
 
   return (
     <div className="max-w-lg mx-auto p-6">
-      <h1 className="text-2xl font-bold text-text-primary mb-6">Study Buddy</h1>
+      <h1 className="text-2xl font-bold text-text mb-6">Study Buddy</h1>
 
       {message && (
         <div className="bg-accent/10 border border-accent/30 rounded-lg p-3 mb-4 text-accent text-sm">
@@ -86,9 +86,9 @@ export default function BuddyPage() {
       )}
 
       {!buddyStatus?.has_buddy ? (
-        <div className="bg-bg-card rounded-xl p-8 border border-border text-center">
+        <div className="bg-surface rounded-xl p-8 border border-border text-center">
           <div className="text-6xl mb-4">👥</div>
-          <h2 className="text-xl font-bold text-text-primary mb-2">Find a Study Buddy</h2>
+          <h2 className="text-xl font-bold text-text mb-2">Find a Study Buddy</h2>
           <p className="text-text-secondary mb-6">
             Pair up with a friend. Keep each other accountable. Build a streak together.
           </p>
@@ -98,7 +98,7 @@ export default function BuddyPage() {
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
               placeholder="Friend's email"
-              className="flex-1 bg-bg-dark border border-border rounded-lg px-4 py-2.5 text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
+              className="flex-1 bg-bg border border-border rounded-lg px-4 py-2.5 text-text placeholder:text-muted focus:outline-none focus:border-accent"
             />
             <button
               onClick={sendInvite}
@@ -109,9 +109,9 @@ export default function BuddyPage() {
           </div>
         </div>
       ) : buddyStatus.status === "pending" ? (
-        <div className="bg-bg-card rounded-xl p-8 border border-border text-center">
+        <div className="bg-surface rounded-xl p-8 border border-border text-center">
           <div className="text-6xl mb-4">⏳</div>
-          <h2 className="text-xl font-bold text-text-primary mb-2">Pending Invite</h2>
+          <h2 className="text-xl font-bold text-text mb-2">Pending Invite</h2>
           <p className="text-text-secondary mb-4">Waiting for your buddy to accept...</p>
           <button
             onClick={acceptInvite}
@@ -122,15 +122,15 @@ export default function BuddyPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="bg-bg-card rounded-xl p-6 border border-border text-center">
+          <div className="bg-surface rounded-xl p-6 border border-border text-center">
             <div className="text-5xl mb-3">🔥</div>
             <p className="text-4xl font-bold text-accent mb-1">{buddyStatus.streak_count || 0}</p>
-            <p className="text-text-muted text-sm">Day Streak Together</p>
+            <p className="text-muted text-sm">Day Streak Together</p>
           </div>
 
-          <div className="bg-bg-card rounded-xl p-6 border border-border">
-            <h3 className="text-sm text-text-muted mb-2">Your Buddy</h3>
-            <p className="text-xl font-bold text-text-primary">{buddyStatus.buddy_name}</p>
+          <div className="bg-surface rounded-xl p-6 border border-border">
+            <h3 className="text-sm text-muted mb-2">Your Buddy</h3>
+            <p className="text-xl font-bold text-text">{buddyStatus.buddy_name}</p>
             {buddyStatus.last_activity_buddy && (
               <p className="text-text-secondary text-sm mt-1">
                 Last active: {new Date(buddyStatus.last_activity_buddy).toLocaleDateString()}

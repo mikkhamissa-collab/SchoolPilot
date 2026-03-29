@@ -59,13 +59,13 @@ export default class ErrorBoundary extends Component<Props, State> {
           <h2 className="text-xl font-bold text-white mb-2">
             Something went wrong
           </h2>
-          <p className="text-text-muted text-sm mb-6 text-center max-w-md">
+          <p className="text-muted text-sm mb-6 text-center max-w-md">
             An unexpected error occurred. Try refreshing the page or going back.
           </p>
           <div className="flex gap-3">
             <button
               onClick={this.handleReset}
-              className="px-5 py-2.5 rounded-xl bg-bg-card border border-border text-text-secondary hover:text-white text-sm transition-colors"
+              className="px-5 py-2.5 rounded-xl bg-surface border border-border text-text-secondary hover:text-white text-sm transition-colors"
             >
               Try Again
             </button>
@@ -77,8 +77,8 @@ export default class ErrorBoundary extends Component<Props, State> {
             </button>
           </div>
           {process.env.NODE_ENV === "development" && this.state.error && (
-            <details className="mt-6 p-4 rounded-xl bg-bg-card border border-border max-w-lg w-full">
-              <summary className="text-text-muted text-xs cursor-pointer">
+            <details className="mt-6 p-4 rounded-xl bg-surface border border-border max-w-lg w-full">
+              <summary className="text-muted text-xs cursor-pointer">
                 Error details (development only)
               </summary>
               <pre className="mt-2 text-error text-xs overflow-auto whitespace-pre-wrap">

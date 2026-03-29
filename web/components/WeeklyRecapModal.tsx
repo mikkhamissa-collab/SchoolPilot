@@ -76,7 +76,7 @@ export default function WeeklyRecapModal({
       <div
         ref={dialogRef}
         tabIndex={-1}
-        className="w-full max-w-sm bg-bg-card border border-border rounded-2xl p-6 space-y-5 outline-none"
+        className="w-full max-w-sm bg-surface border border-border rounded-2xl p-6 space-y-5 outline-none"
       >
         <div className="text-center">
           <div className="text-3xl mb-2">📊</div>
@@ -91,19 +91,19 @@ export default function WeeklyRecapModal({
             <div className="text-2xl font-bold text-white">
               {data.tasksCompleted}
             </div>
-            <div className="text-text-muted text-xs">Tasks done</div>
+            <div className="text-muted text-xs">Tasks done</div>
           </div>
           <div>
             <div className="text-2xl font-bold text-warning">
               🔥 {data.streakDays}
             </div>
-            <div className="text-text-muted text-xs">Streak</div>
+            <div className="text-muted text-xs">Streak</div>
           </div>
           <div>
             <div className="text-2xl font-bold text-accent">
               {data.gradesLogged}
             </div>
-            <div className="text-text-muted text-xs">Grades logged</div>
+            <div className="text-muted text-xs">Grades logged</div>
           </div>
         </div>
 
@@ -129,8 +129,8 @@ export default function WeeklyRecapModal({
 
         {/* Preview */}
         {data.preview && (
-          <div className="p-3 rounded-xl bg-bg-dark">
-            <div className="text-text-muted text-xs font-bold uppercase tracking-wide mb-1">
+          <div className="p-3 rounded-xl bg-bg">
+            <div className="text-muted text-xs font-bold uppercase tracking-wide mb-1">
               Next Week
             </div>
             <div className="text-text-secondary text-sm">{data.preview}</div>
@@ -147,7 +147,7 @@ export default function WeeklyRecapModal({
           </button>
           <button
             onClick={onDismiss}
-            className="flex-1 py-3 rounded-xl bg-bg-hover text-text-secondary font-medium text-sm hover:text-white transition-colors cursor-pointer"
+            className="flex-1 py-3 rounded-xl bg-surface-hover text-text-secondary font-medium text-sm hover:text-white transition-colors cursor-pointer"
           >
             Dismiss
           </button>

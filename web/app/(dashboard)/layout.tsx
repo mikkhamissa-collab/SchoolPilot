@@ -59,7 +59,7 @@ export default function DashboardLayout({
   }, []);
 
   return (
-    <div className="min-h-screen bg-bg-dark">
+    <div className="min-h-screen bg-bg">
       <OfflineIndicator />
       {/* Accessibility: skip link */}
       <a
