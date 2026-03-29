@@ -130,9 +130,8 @@ async def send_daily_briefings_job():
 
     profiles = (
         db.table("student_profiles")
-        .select("user_id, display_name, email_briefings, personality_preset, timezone")
+        .select("user_id, display_name, personality_preset, timezone")
         .eq("daily_briefing_enabled", True)
-        .eq("email_briefings", True)
         .execute()
     )
 
