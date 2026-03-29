@@ -304,7 +304,7 @@ export default function OnboardingPage() {
     goNext();
   };
 
-  // Finalize onboarding — always sets metadata even if backend call fails
+  // Finalize onboarding — updates both student_profiles and JWT metadata
   const completeOnboarding = async () => {
     setSaving(true);
     setError("");
@@ -316,8 +316,16 @@ export default function OnboardingPage() {
     } catch {
       // Backend failed but we still mark onboarding complete so user isn't stuck
     }
-    // Always mark in Supabase metadata — this is what the middleware checks
     const supabase = createClient();
+    // Update student_profiles table
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase
+        .from("student_profiles")
+        .update({ onboarding_complete: true })
+        .eq("user_id", user.id);
+    }
+    // Update JWT metadata — this is what the middleware checks
     await supabase.auth.updateUser({
       data: { onboarding_completed: true },
     });
@@ -330,6 +338,15 @@ export default function OnboardingPage() {
   const skipOnboarding = async () => {
     setSaving(true);
     const supabase = createClient();
+    // Update student_profiles table
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase
+        .from("student_profiles")
+        .update({ onboarding_complete: true })
+        .eq("user_id", user.id);
+    }
+    // Update JWT metadata
     await supabase.auth.updateUser({
       data: { onboarding_completed: true },
     });
