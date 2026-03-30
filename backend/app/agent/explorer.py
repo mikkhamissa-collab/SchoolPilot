@@ -89,6 +89,33 @@ class LMSExplorer:
         # 2. Mark job as running
         self._update_job("running", extra={"started_at": _utcnow()})
 
+        # ── Fast path: HTTP API sync (no browser needed) ────────────
+        has_cookies = bool(cred.get("encrypted_cookies"))
+        has_teamie_uid = bool(cred.get("teamie_uid"))
+
+        if has_cookies and has_teamie_uid:
+            logger.info(
+                "Using HTTP API sync (fast path) for user %s (teamie_uid=%s)",
+                self.user_id, cred["teamie_uid"],
+            )
+            try:
+                from app.agent.http_sync import TeamieHTTPSync
+                sync = TeamieHTTPSync(self.user_id, self.job_id)
+                return await sync.run()
+            except Exception as exc:
+                logger.warning(
+                    "HTTP sync failed for user %s, falling back to Playwright: %s",
+                    self.user_id, exc,
+                )
+                # Fall through to Playwright path
+        else:
+            logger.info(
+                "HTTP sync not available for user %s (cookies=%s, teamie_uid=%s), "
+                "using Playwright (DEPRECATED — migrate to HTTP sync)",
+                self.user_id, has_cookies, has_teamie_uid,
+            )
+
+        # ── Legacy path: Playwright browser agent (DEPRECATED) ──────
         agent = BrowserAgent(self.user_id)
 
         try:
