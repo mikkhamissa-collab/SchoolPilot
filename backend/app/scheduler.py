@@ -149,9 +149,8 @@ async def send_daily_briefings_job():
 
     client = anthropic_sdk.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
-    from app.memory.store import MemoryStore
     from app.prompts.personalities import get_personality
-    from app.services.email import render_briefing_html, send_briefing_email
+    from app.services.email import render_daily_tasks_html, send_briefing_email
 
     now_utc = datetime.now(timezone.utc)
     for profile in profiles.data:
@@ -169,37 +168,47 @@ async def send_daily_briefings_job():
                     continue
 
             user_id = profile["user_id"]
-            memory = MemoryStore(user_id)
-            context = await memory.build_context()
-
-            personality = get_personality(profile.get("personality_preset", "coach"))
             today = datetime.now(timezone.utc).strftime("%A, %B %d, %Y")
 
-            # Ask Claude to generate structured data (NOT raw HTML)
+            # Pull REAL data from database — no hallucination
+            grades_data = db.table("lms_grades").select("course_name, overall_grade, overall_percentage").eq("user_id", user_id).execute()
+            assignments_data = db.table("lms_assignments").select("title, course_name, due_date, is_submitted").eq("user_id", user_id).eq("is_submitted", False).order("due_date").limit(10).execute()
+
+            grades_list = grades_data.data or []
+            assignments_list = assignments_data.data or []
+
+            # Build context from real data
+            grade_lines = "\n".join([f"- {g['course_name']}: {g.get('overall_grade', 'N/A')} ({g.get('overall_percentage', 'N/A')}%)" for g in grades_list])
+            assignment_lines = "\n".join([f"- {a['title']} ({a['course_name']}) — due {a.get('due_date', 'TBD')}" for a in assignments_list])
+
+            real_context = f"GRADES:\n{grade_lines or 'No grades synced yet.'}\n\nUPCOMING ASSIGNMENTS:\n{assignment_lines or 'No upcoming assignments.'}"
+
+            personality = get_personality(profile.get("personality_preset", "coach"))
+
+            # Ask Claude to pick the 3 most important things to do today
             response = await client.messages.create(
                 model=settings.claude_model,
-                max_tokens=1024,
+                max_tokens=512,
                 system=f"""{personality['system_prompt']}
 
-You are generating a daily briefing for a student. Return ONLY valid JSON with this structure:
+You are generating a short daily email for a high school student. Return ONLY valid JSON with this structure:
 {{
-  "grades": [{{"course": "...", "grade": "A (93%)", "at_risk": false}}],
-  "priorities": [{{"text": "...", "urgency": "overdue|today|this_week"}}],
-  "quick_wins": [{{"text": "..."}}],
-  "streak": 0,
-  "motivation": "One short motivational line that fits the student's personality"
+  "tasks": [
+    {{"text": "Short actionable task description", "course": "Course name", "why": "One sentence on why this matters"}}
+  ],
+  "motivation": "One short line — not cheesy, match the personality"
 }}
 
 Rules:
-- grades: list courses with grade info. Mark at_risk=true if grade is below 75% or near a grade boundary
-- priorities: sort by urgency (overdue first, then today, then this week). Max 5 items
-- quick_wins: assignments under 30 min. Max 3 items
-- motivation: match the personality style, NOT cheesy
-- Return ONLY the JSON, no markdown fences, no explanation
+- tasks: EXACTLY 3 items. Pick the 3 most impactful things to do TODAY based on upcoming assignments and grade situation.
+- Sort by urgency and grade impact (things due soonest + courses where grade is lowest = highest priority)
+- Each task text should be specific and actionable (not "study for test" but "Review chapters 5-6 for AP Stats cumulative MC test")
+- motivation: short, real, matches the personality style
+- Return ONLY the JSON, no markdown, no explanation
 """,
                 messages=[{
                     "role": "user",
-                    "content": f"Today is {today}.\n\n{context}\n\nGenerate the briefing JSON.",
+                    "content": f"Today is {today}.\n\n{real_context}\n\nWhat are my 3 most important things to do today?",
                 }],
             )
 
@@ -221,9 +230,9 @@ Rules:
                     logger.warning("No JSON found in briefing response for user %s", user_id)
                     continue
 
-            # Render to HTML
+            # Render to simple HTML — 3 tasks + motivation
             student_name = profile.get("display_name")
-            briefing_html = render_briefing_html(briefing_data, today, student_name)
+            briefing_html = render_daily_tasks_html(briefing_data, today, student_name)
 
             # Get user email from Supabase auth
             user_data = db.auth.admin.get_user_by_id(user_id)

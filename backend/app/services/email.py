@@ -181,6 +181,64 @@ def send_briefing_email(to_email: str, briefing_html: str, date_str: str) -> boo
         return False
 
 
+def render_daily_tasks_html(
+    briefing_data: dict,
+    date_str: str,
+    student_name: Optional[str] = None,
+) -> str:
+    """Render a simple '3 things to do today' email from structured briefing data."""
+    name_greeting = f" {html_mod.escape(student_name)}" if student_name else ""
+    safe_date = html_mod.escape(date_str)
+
+    tasks = briefing_data.get("tasks", [])
+    motivation = briefing_data.get("motivation", "")
+
+    task_html = ""
+    for i, task in enumerate(tasks[:3], 1):
+        text = html_mod.escape(str(task.get("text", "")))
+        course = html_mod.escape(str(task.get("course", "")))
+        why = html_mod.escape(str(task.get("why", "")))
+        task_html += (
+            f"<div style='background: #141428; border-radius: 12px; padding: 20px; margin-bottom: 12px; border-left: 3px solid #7c3aed;'>"
+            f"<p style='color: #fff; font-size: 16px; margin: 0 0 4px; font-weight: 600;'>{i}. {text}</p>"
+            f"<p style='color: #a78bfa; font-size: 13px; margin: 0 0 4px;'>{course}</p>"
+            f"<p style='color: #a0a0b0; font-size: 13px; margin: 0;'>{why}</p>"
+            f"</div>"
+        )
+
+    if not task_html:
+        task_html = "<p style='color: #a0a0b0; font-size: 16px;'>Nothing urgent today. Nice.</p>"
+
+    motivation_html = ""
+    if motivation:
+        motivation_html = (
+            f"<div style='text-align: center; padding: 16px 0;'>"
+            f"<p style='color: #a0a0b0; font-style: italic; font-size: 14px;'>{html_mod.escape(motivation)}</p>"
+            f"</div>"
+        )
+
+    return (
+        "<div style='font-family: Inter, -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 16px;'>"
+        "<div style='background: #0a0a1a; padding: 32px; border-radius: 16px;'>"
+        "<div style='text-align: center; margin-bottom: 24px;'>"
+        "<h1 style='color: #7c3aed; font-size: 20px; margin: 0;'>SchoolPilot</h1>"
+        f"<p style='color: #a0a0b0; margin: 4px 0 0; font-size: 13px;'>{safe_date}</p>"
+        f"<p style='color: #fff; font-size: 22px; margin: 16px 0 0; font-weight: 600;'>Your 3 things today{', ' + name_greeting.strip() if name_greeting.strip() else ''}</p>"
+        "</div>"
+        f"{task_html}"
+        f"{motivation_html}"
+        "<div style='text-align: center; margin-top: 20px;'>"
+        "<a href='https://schoolpilot.co/today' style='display: inline-block; background: #7c3aed; color: #fff; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;'>Open SchoolPilot</a>"
+        "</div>"
+        "<div style='text-align: center; padding: 24px 0 0; border-top: 1px solid #2a2a4a; margin-top: 16px;'>"
+        "<p style='color: #707080; font-size: 11px;'>"
+        "You're getting this because you enabled daily briefings on SchoolPilot.<br>"
+        "<a href='https://schoolpilot.co/settings' style='color: #7c3aed;'>Unsubscribe</a>"
+        "</p></div>"
+        "</div></div>"
+    )
+
+
 def send_buddy_nudge_email(to_email: str, from_name: str) -> bool:
     if not _check_resend_key():
         return False
