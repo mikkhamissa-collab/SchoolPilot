@@ -193,8 +193,9 @@ async def remote_browser_ws(websocket: WebSocket, session_id: str):
         async def _handle_route(route):
             if route.request.resource_type in ("document", "subdocument"):
                 url = route.request.url
+                logger.info("[DEBUG-NAV] Navigation request: %s (allowed=%s)", url[:200], _is_nav_allowed(url))
                 if not _is_nav_allowed(url):
-                    logger.warning("Blocked navigation to disallowed URL: %s", url[:200])
+                    logger.warning("[DEBUG-NAV] BLOCKED navigation to: %s", url[:200])
                     await route.abort("blockedbyclient")
                     return
             await route.continue_()
@@ -238,12 +239,13 @@ async def remote_browser_ws(websocket: WebSocket, session_id: str):
 
         async def _on_popup(popup_page: Page):
             nonlocal page
+            logger.info("[DEBUG-POPUP] New page/popup detected! url=%s page_id=%s", popup_page.url[:200], id(popup_page))
             try:
                 await popup_page.wait_for_load_state("domcontentloaded", timeout=10000)
-            except Exception:
-                pass
+                logger.info("[DEBUG-POPUP] Popup loaded: %s", popup_page.url[:200])
+            except Exception as e:
+                logger.warning("[DEBUG-POPUP] Popup load timed out: %s — url=%s", e, popup_page.url[:200])
             page = popup_page
-            logger.info("Switched to SSO popup: %s", popup_page.url[:200])
             await send_json({"type": "status", "message": "Google login opened — continue below"})
             await send_screenshot()
 
@@ -251,11 +253,12 @@ async def remote_browser_ws(websocket: WebSocket, session_id: str):
             def _on_popup_close():
                 nonlocal page
                 page = original_page
-                logger.info("SSO popup closed — switched back to main page")
+                logger.info("[DEBUG-POPUP] Popup closed — switched back to main page (id=%s)", id(original_page))
 
             popup_page.on("close", _on_popup_close)
 
         context.on("page", _on_popup)
+        logger.info("[DEBUG-POPUP] Popup handler registered on context")
 
         # Heartbeat task: send screenshots every 2 seconds
         heartbeat_active = True
@@ -298,12 +301,34 @@ async def remote_browser_ws(websocket: WebSocket, session_id: str):
             if msg_type == "click":
                 x = int(msg.get("x", 0))
                 y = int(msg.get("y", 0))
+                logger.info(
+                    "[DEBUG-CLICK] user=%s coords=(%d,%d) page_url=%s page_id=%s",
+                    user_id, x, y, page.url[:120], id(page),
+                )
+                try:
+                    # Log what element is at these coordinates before clicking
+                    elem_info = await page.evaluate(
+                        """([x, y]) => {
+                            const el = document.elementFromPoint(x, y);
+                            if (!el) return 'NO_ELEMENT';
+                            return `<${el.tagName.toLowerCase()}` +
+                                (el.id ? ` id="${el.id}"` : '') +
+                                (el.className ? ` class="${String(el.className).slice(0,60)}"` : '') +
+                                (el.textContent ? ` text="${el.textContent.trim().slice(0,40)}"` : '') +
+                                `>`;
+                        }""",
+                        [x, y],
+                    )
+                    logger.info("[DEBUG-CLICK] element_at_point: %s", elem_info)
+                except Exception as e:
+                    logger.info("[DEBUG-CLICK] elementFromPoint failed: %s", e)
                 try:
                     await page.mouse.click(x, y)
+                    logger.info("[DEBUG-CLICK] mouse.click completed, new url=%s", page.url[:120])
                     await asyncio.sleep(0.8)
                     await send_screenshot()
                 except Exception as e:
-                    logger.warning("Click failed: %s", e)
+                    logger.warning("[DEBUG-CLICK] mouse.click FAILED: %s", e)
                     await send_screenshot()
 
             elif msg_type == "type":

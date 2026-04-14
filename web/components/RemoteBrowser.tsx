@@ -136,8 +136,13 @@ export default function RemoteBrowser({ onComplete, onError }: RemoteBrowserProp
   }, []);
 
   const sendMessage = useCallback((msg: Record<string, unknown>) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(msg));
+    const isOpen = wsRef.current?.readyState === WebSocket.OPEN;
+    // DEBUG: confirm messages are being sent
+    console.log("[RemoteBrowser SEND]", { msg, wsOpen: isOpen, readyState: wsRef.current?.readyState });
+    if (isOpen) {
+      wsRef.current!.send(JSON.stringify(msg));
+    } else {
+      console.warn("[RemoteBrowser SEND] WebSocket NOT open, message dropped!", msg);
     }
   }, []);
 
@@ -149,6 +154,14 @@ export default function RemoteBrowser({ onComplete, onError }: RemoteBrowserProp
     const scaleY = VIEWPORT_H / rect.height;
     const x = Math.round((e.clientX - rect.left) * scaleX);
     const y = Math.round((e.clientY - rect.top) * scaleY);
+    // DEBUG: log coordinate mapping
+    console.log("[RemoteBrowser CLICK]", {
+      raw: { clientX: e.clientX, clientY: e.clientY },
+      rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+      scale: { scaleX, scaleY },
+      mapped: { x, y },
+      wsOpen: wsRef.current?.readyState === WebSocket.OPEN,
+    });
     sendMessage({ type: "click", x, y });
   }, [sendMessage]);
 
