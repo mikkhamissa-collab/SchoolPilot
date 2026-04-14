@@ -147,7 +147,7 @@ export default function RemoteBrowser({ onComplete, onError }: RemoteBrowserProp
   }, []);
 
   // Handle click on the browser image
-  const handleClick = useCallback((e: React.MouseEvent<HTMLImageElement>) => {
+  const handleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!imgRef.current) return;
     const rect = imgRef.current.getBoundingClientRect();
     const scaleX = VIEWPORT_W / rect.width;
@@ -256,20 +256,21 @@ export default function RemoteBrowser({ onComplete, onError }: RemoteBrowserProp
             </div>
           )}
 
-          {/* Screenshot container */}
+          {/* Screenshot container — onClick is on the div, not the img,
+               because some browsers swallow click events on <img> elements */}
           <div
             ref={containerRef}
-            className={`relative bg-bg border border-border overflow-hidden ${currentUrl ? "rounded-b-xl" : "rounded-xl"}`}
+            className={`relative bg-bg border border-border overflow-hidden cursor-crosshair ${currentUrl ? "rounded-b-xl" : "rounded-xl"}`}
             style={{ maxWidth: `${VIEWPORT_W}px`, width: "100%", aspectRatio: `${VIEWPORT_W} / ${VIEWPORT_H}` }}
+            onClick={handleClick}
           >
             {screenshot ? (
               <img
                 ref={imgRef}
                 src={screenshot}
                 alt="Remote browser view"
-                className="w-full h-full object-contain cursor-crosshair"
+                className="w-full h-full object-contain pointer-events-none"
                 style={{ imageRendering: "auto" }}
-                onClick={handleClick}
                 draggable={false}
               />
             ) : (
