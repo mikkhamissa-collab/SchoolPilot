@@ -33,9 +33,9 @@ async def daily_sync_job():
     user_ids = list({c["user_id"] for c in creds.data})
     logger.info(f"Syncing {len(user_ids)} users...")
 
-    from app.agent.explorer import LMSExplorer
+    from app.agent.http_sync import TeamieHTTPSync
 
-    sem = asyncio.Semaphore(3)  # Max 3 concurrent browser instances
+    sem = asyncio.Semaphore(5)  # Max 5 concurrent HTTP syncs (lightweight, no browser)
 
     async def sync_one(uid: str):
         async with sem:
@@ -51,8 +51,8 @@ async def daily_sync_job():
                     return
 
                 job_id = job.data[0]["id"]
-                explorer = LMSExplorer(uid, job_id)
-                await explorer.run()
+                sync = TeamieHTTPSync(uid, job_id)
+                await sync.run()
             except Exception as e:
                 logger.exception(f"Daily sync failed for user {uid}: {e}")
 
@@ -250,6 +250,39 @@ Rules:
     logger.info("Daily briefing job complete.")
 
 
+async def ping_sessions_job():
+    """Ping all active LMS sessions to keep cookies from expiring."""
+    logger.info("Starting session ping job...")
+    db = get_db()
+
+    creds = (
+        db.table("lms_credentials")
+        .select("user_id")
+        .eq("sync_enabled", True)
+        .eq("last_login_success", True)
+        .execute()
+    )
+
+    if not creds.data:
+        logger.info("No active sessions to ping.")
+        return
+
+    from app.agent.http_sync import ping_session
+
+    user_ids = list({c["user_id"] for c in creds.data})
+    logger.info(f"Pinging {len(user_ids)} sessions...")
+
+    results = await asyncio.gather(
+        *[ping_session(uid) for uid in user_ids],
+        return_exceptions=True,
+    )
+
+    alive = sum(1 for r in results if r is True)
+    expired = sum(1 for r in results if r is False)
+    errors = sum(1 for r in results if isinstance(r, Exception))
+    logger.info(f"Session ping complete: {alive} alive, {expired} expired, {errors} errors")
+
+
 def start_scheduler():
     """Start the background scheduler."""
     global _scheduler
@@ -277,6 +310,14 @@ def start_scheduler():
         send_daily_briefings_job,
         CronTrigger(minute=0),
         id="daily_briefings",
+        replace_existing=True,
+    )
+
+    # Session keep-alive — ping every 12 hours to prevent cookie expiry
+    _scheduler.add_job(
+        ping_sessions_job,
+        CronTrigger(hour="*/12", minute=30),
+        id="session_ping",
         replace_existing=True,
     )
 

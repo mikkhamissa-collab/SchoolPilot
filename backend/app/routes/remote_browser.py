@@ -58,25 +58,27 @@ async def start_remote_browser(user_id: str = Depends(get_current_user)):
     return StartSessionResponse(session_id=session_id)
 
 
-# Allowed URL domains for remote browser navigation
-_ALLOWED_DOMAINS = {
+# Allowed URL domains for top-level navigation (document requests).
+# Sub-resources (JS, CSS, images, fonts, XHR) are always allowed so pages
+# render correctly — only full-page navigations are restricted.
+_ALLOWED_NAV_DOMAINS = {
     "asl.org",
     "lms.asl.org",
     "google.com",
     "accounts.google.com",
     "googleapis.com",
     "gstatic.com",
+    "googleusercontent.com",
 }
 
 
-def _is_url_allowed(url: str) -> bool:
-    """Check if a URL is allowed for remote browser navigation."""
+def _is_nav_allowed(url: str) -> bool:
+    """Check if a navigation URL targets an allowed domain."""
     from urllib.parse import urlparse
     try:
         parsed = urlparse(url)
         hostname = (parsed.hostname or "").lower()
-        # Check against allowed domains (including subdomains)
-        for allowed in _ALLOWED_DOMAINS:
+        for allowed in _ALLOWED_NAV_DOMAINS:
             if hostname == allowed or hostname.endswith("." + allowed):
                 return True
         return False
@@ -185,14 +187,17 @@ async def remote_browser_ws(websocket: WebSocket, session_id: str):
 
         page = await context.new_page()
 
-        # Block navigation to non-allowed domains
+        # Only block top-level navigations to non-allowed domains.
+        # Sub-resources (JS, CSS, images, fonts, XHR) must pass through
+        # so pages render and function correctly.
         async def _handle_route(route):
-            url = route.request.url
-            if _is_url_allowed(url):
-                await route.continue_()
-            else:
-                logger.warning("Blocked navigation to disallowed URL: %s", url[:200])
-                await route.abort("blockedbyclient")
+            if route.request.resource_type in ("document", "subdocument"):
+                url = route.request.url
+                if not _is_nav_allowed(url):
+                    logger.warning("Blocked navigation to disallowed URL: %s", url[:200])
+                    await route.abort("blockedbyclient")
+                    return
+            await route.continue_()
 
         await context.route("**/*", _handle_route)
 
@@ -225,6 +230,32 @@ async def remote_browser_ws(websocket: WebSocket, session_id: str):
         await send_screenshot()
 
         await send_json({"type": "status", "message": "Connected — log into your LMS below"})
+
+        # Handle SSO popups: Google OAuth may open a new window.
+        # When that happens, switch our active page to the popup so
+        # screenshots and interactions target the login form.
+        original_page = page
+
+        async def _on_popup(popup_page: Page):
+            nonlocal page
+            try:
+                await popup_page.wait_for_load_state("domcontentloaded", timeout=10000)
+            except Exception:
+                pass
+            page = popup_page
+            logger.info("Switched to SSO popup: %s", popup_page.url[:200])
+            await send_json({"type": "status", "message": "Google login opened — continue below"})
+            await send_screenshot()
+
+            # When the popup closes (after SSO completes), switch back
+            def _on_popup_close():
+                nonlocal page
+                page = original_page
+                logger.info("SSO popup closed — switched back to main page")
+
+            popup_page.on("close", _on_popup_close)
+
+        context.on("page", _on_popup)
 
         # Heartbeat task: send screenshots every 2 seconds
         heartbeat_active = True

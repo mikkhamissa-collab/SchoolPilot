@@ -21,6 +21,59 @@ from app.db import get_db
 logger = logging.getLogger(__name__)
 
 
+async def ping_session(user_id: str) -> bool:
+    """Lightweight session keep-alive: hit /api/fresh-posts.json with saved cookies.
+
+    Returns True if the session is still valid, False if expired.
+    Does NOT extract any data — just keeps the Drupal session from expiring.
+    """
+    settings = get_settings()
+    db = get_db()
+
+    cred_resp = (
+        db.table("lms_credentials")
+        .select("id, lms_url, encrypted_cookies")
+        .eq("user_id", user_id)
+        .eq("sync_enabled", True)
+        .execute()
+    )
+    if not cred_resp.data or not cred_resp.data[0].get("encrypted_cookies"):
+        return False
+
+    cred = cred_resp.data[0]
+    base_url = (cred.get("lms_url") or "https://lms.asl.org").rstrip("/")
+
+    # Decrypt cookies
+    key = settings.credential_encryption_key
+    if not key:
+        return False
+    try:
+        fernet = Fernet(key.encode("utf-8") if isinstance(key, str) else key)
+        cookies_json = fernet.decrypt(cred["encrypted_cookies"].encode("utf-8")).decode("utf-8")
+        cookie_list = json.loads(cookies_json)
+    except (InvalidToken, json.JSONDecodeError):
+        return False
+
+    jar = httpx.Cookies()
+    for c in cookie_list:
+        jar.set(c.get("name", ""), c.get("value", ""), domain=c.get("domain", ""), path=c.get("path", "/"))
+
+    async with httpx.AsyncClient(cookies=jar, timeout=15.0, follow_redirects=False, headers={"Accept": "application/json"}) as client:
+        try:
+            resp = await client.get(f"{base_url}/api/fresh-posts.json")
+            if resp.status_code != 200 or "html" in resp.headers.get("content-type", ""):
+                logger.info("Session expired for user %s during ping", user_id)
+                db.table("lms_credentials").update(
+                    {"last_login_success": False, "last_error": "Session expired (ping)"}
+                ).eq("id", cred["id"]).execute()
+                return False
+            resp.json()  # confirm it's valid JSON
+            logger.debug("Session ping OK for user %s", user_id)
+            return True
+        except (httpx.HTTPError, json.JSONDecodeError):
+            return False
+
+
 def _utcnow() -> str:
     return datetime.now(timezone.utc).isoformat()
 
