@@ -6,7 +6,6 @@
 # 30-60 seconds per sync) and more reliable since we parse structured JSON
 # instead of scraping rendered HTML.
 
-import hashlib
 import json
 import logging
 from datetime import datetime, timezone
@@ -15,6 +14,14 @@ from typing import Any, Optional
 import httpx
 from cryptography.fernet import Fernet, InvalidToken
 
+from app.agent.sync_utils import (
+    decrypt_credential,
+    get_fernet,
+    normalize_course_name,
+    pct_to_letter,
+    stable_id,
+    utcnow,
+)
 from app.config import get_settings
 from app.db import get_db
 
@@ -27,7 +34,6 @@ async def ping_session(user_id: str) -> bool:
     Returns True if the session is still valid, False if expired.
     Does NOT extract any data — just keeps the Drupal session from expiring.
     """
-    settings = get_settings()
     db = get_db()
 
     cred_resp = (
@@ -44,14 +50,10 @@ async def ping_session(user_id: str) -> bool:
     base_url = (cred.get("lms_url") or "https://lms.asl.org").rstrip("/")
 
     # Decrypt cookies
-    key = settings.credential_encryption_key
-    if not key:
-        return False
     try:
-        fernet = Fernet(key.encode("utf-8") if isinstance(key, str) else key)
-        cookies_json = fernet.decrypt(cred["encrypted_cookies"].encode("utf-8")).decode("utf-8")
+        cookies_json = decrypt_credential(cred["encrypted_cookies"])
         cookie_list = json.loads(cookies_json)
-    except (InvalidToken, json.JSONDecodeError):
+    except (ValueError, json.JSONDecodeError):
         return False
 
     jar = httpx.Cookies()
@@ -74,21 +76,9 @@ async def ping_session(user_id: str) -> bool:
             return False
 
 
-def _utcnow() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-def _normalize_course_name(name: str) -> str:
-    """Strip year tags, section codes, and teacher initials from course names.
-
-    'AP Statistics P8 DK [25-26]' → 'ap statistics'
-    """
-    import re
-    cleaned = re.sub(r"\[.*?\]", "", name)
-    cleaned = re.sub(r"\bP\d+\b", "", cleaned)
-    cleaned = re.sub(r"\b[A-Z]{2,3}\b", "", cleaned)
-    cleaned = re.sub(r"\bS[12]\b", "", cleaned)
-    return " ".join(cleaned.lower().split())
+# _utcnow and _normalize_course_name are imported from sync_utils
+_utcnow = utcnow
+_normalize_course_name = normalize_course_name
 
 
 class TeamieHTTPSync:
@@ -116,19 +106,10 @@ class TeamieHTTPSync:
             "assignments": 0,
         }
 
-    # ── Crypto helpers ────────────────────────────────────────────────
-
-    def _fernet(self) -> Fernet:
-        key = self.settings.credential_encryption_key
-        if not key:
-            raise RuntimeError("credential_encryption_key is not configured")
-        return Fernet(key.encode("utf-8") if isinstance(key, str) else key)
+    # ── Crypto helpers (delegated to sync_utils) ────────────────────
 
     def _decrypt(self, encrypted: str) -> str:
-        try:
-            return self._fernet().decrypt(encrypted.encode("utf-8")).decode("utf-8")
-        except InvalidToken:
-            raise ValueError("Failed to decrypt credential — key may have changed")
+        return decrypt_credential(encrypted)
 
     # ── Job tracking ──────────────────────────────────────────────────
 
@@ -147,11 +128,10 @@ class TeamieHTTPSync:
         except Exception:
             logger.debug("Failed to update job %s", self.job_id, exc_info=True)
 
-    # ── Stable ID for dedup ───────────────────────────────────────────
+    # ── Stable ID for dedup (delegated to sync_utils) ──────────────
 
     def _stable_id(self, *parts: Optional[str]) -> str:
-        combined = "__".join(str(p or "") for p in parts)
-        return hashlib.sha256(combined.encode("utf-8")).hexdigest()[:40]
+        return stable_id(*parts)
 
     # ── Main entry point ──────────────────────────────────────────────
 
@@ -431,25 +411,26 @@ class TeamieHTTPSync:
                 published_count += 1
 
         # Calculate and store overall course grade
+        # DB schema: UNIQUE(user_id, course_name) — no lms_id column on lms_grades
         if total_max > 0:
             overall_pct = round(total_score / total_max * 100, 2)
-            letter = self._pct_to_letter(overall_pct)
-            grade_id = self._stable_id(str(nid), "overall")
+            letter = pct_to_letter(overall_pct)
 
             self.db.table("lms_grades").upsert(
                 {
                     "user_id": self.user_id,
-                    "lms_id": grade_id,
                     "course_name": course_name,
+                    "overall_grade": letter,
                     "overall_percentage": overall_pct,
-                    "letter_grade": letter,
-                    "graded_items": published_count,
-                    "total_score": round(total_score, 2),
-                    "total_possible": round(total_max, 2),
+                    "category_breakdown": {
+                        "_total_score": round(total_score, 2),
+                        "_total_possible": round(total_max, 2),
+                        "_graded_items": published_count,
+                    },
                     "job_id": self.job_id,
                     "extracted_at": _utcnow(),
                 },
-                on_conflict="user_id,lms_id",
+                on_conflict="user_id,course_name",
             ).execute()
 
     async def _fetch_and_store_events(self, client: httpx.AsyncClient, category: str) -> None:
@@ -561,29 +542,4 @@ class TeamieHTTPSync:
         ).execute()
         self._stats["assignments"] += 1
 
-    # ── Utility ───────────────────────────────────────────────────────
-
-    @staticmethod
-    def _pct_to_letter(pct: float) -> str:
-        if pct >= 93:
-            return "A"
-        elif pct >= 90:
-            return "A-"
-        elif pct >= 87:
-            return "B+"
-        elif pct >= 83:
-            return "B"
-        elif pct >= 80:
-            return "B-"
-        elif pct >= 77:
-            return "C+"
-        elif pct >= 73:
-            return "C"
-        elif pct >= 70:
-            return "C-"
-        elif pct >= 67:
-            return "D+"
-        elif pct >= 60:
-            return "D"
-        else:
-            return "F"
+    # _pct_to_letter is now imported from sync_utils as pct_to_letter

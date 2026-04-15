@@ -16,15 +16,19 @@ _scheduler: AsyncIOScheduler | None = None
 async def daily_sync_job():
     """Run daily LMS sync for all users with sync enabled."""
     logger.info("Starting daily LMS sync job...")
-    db = get_db()
+    try:
+        db = get_db()
 
-    # Find all users with sync enabled
-    creds = (
-        db.table("lms_credentials")
-        .select("user_id")
-        .eq("sync_enabled", True)
-        .execute()
-    )
+        # Find all users with sync enabled
+        creds = (
+            db.table("lms_credentials")
+            .select("user_id")
+            .eq("sync_enabled", True)
+            .execute()
+        )
+    except Exception as e:
+        logger.error("daily_sync_job: failed to query credentials: %s", e)
+        return
 
     if not creds.data:
         logger.info("No users with sync enabled. Skipping.")
@@ -62,20 +66,24 @@ async def daily_sync_job():
 
 async def check_reminders_job():
     """Check for due reminders and send email notifications."""
-    db = get_db()
-    settings = get_settings()
-    now = datetime.now(timezone.utc).isoformat()
+    try:
+        db = get_db()
+        settings = get_settings()
+        now = datetime.now(timezone.utc).isoformat()
 
-    # Find unsent reminders that are due
-    due = (
-        db.table("reminders")
-        .select("*")
-        .eq("sent", False)
-        .eq("dismissed", False)
-        .lte("remind_at", now)
-        .limit(50)
-        .execute()
-    )
+        # Find unsent reminders that are due
+        due = (
+            db.table("reminders")
+            .select("*")
+            .eq("sent", False)
+            .eq("dismissed", False)
+            .lte("remind_at", now)
+            .limit(50)
+            .execute()
+        )
+    except Exception as e:
+        logger.error("check_reminders_job: failed to query reminders: %s", e)
+        return
 
     if not due.data:
         return
@@ -126,14 +134,18 @@ async def check_reminders_job():
 async def send_daily_briefings_job():
     """Send daily email briefings to users who have them enabled."""
     logger.info("Starting daily briefing job...")
-    db = get_db()
+    try:
+        db = get_db()
 
-    profiles = (
-        db.table("student_profiles")
-        .select("user_id, display_name, personality_preset, timezone")
-        .eq("daily_briefing_enabled", True)
-        .execute()
-    )
+        profiles = (
+            db.table("student_profiles")
+            .select("user_id, display_name, personality_preset, timezone")
+            .eq("daily_briefing_enabled", True)
+            .execute()
+        )
+    except Exception as e:
+        logger.error("send_daily_briefings_job: failed to query profiles: %s", e)
+        return
 
     if not profiles.data:
         logger.info("No users with briefings enabled.")
@@ -253,15 +265,19 @@ Rules:
 async def ping_sessions_job():
     """Ping all active LMS sessions to keep cookies from expiring."""
     logger.info("Starting session ping job...")
-    db = get_db()
+    try:
+        db = get_db()
 
-    creds = (
-        db.table("lms_credentials")
-        .select("user_id")
-        .eq("sync_enabled", True)
-        .eq("last_login_success", True)
-        .execute()
-    )
+        creds = (
+            db.table("lms_credentials")
+            .select("user_id")
+            .eq("sync_enabled", True)
+            .eq("last_login_success", True)
+            .execute()
+        )
+    except Exception as e:
+        logger.error("ping_sessions_job: failed to query credentials: %s", e)
+        return
 
     if not creds.data:
         logger.info("No active sessions to ping.")

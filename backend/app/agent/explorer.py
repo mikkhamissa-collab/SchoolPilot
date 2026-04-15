@@ -12,6 +12,14 @@ from typing import Any, Optional
 from cryptography.fernet import Fernet, InvalidToken
 
 from app.agent.browser import BrowserAgent
+from app.agent.sync_utils import (
+    decrypt_credential,
+    encrypt_credential,
+    get_fernet,
+    normalize_course_name,
+    stable_id as _make_stable_id,
+    utcnow as _utcnow,
+)
 from app.config import get_settings
 from app.db import get_db
 
@@ -34,26 +42,15 @@ class LMSExplorer:
         self.settings = get_settings()
         self.db = get_db()
 
-    # ── Credential encryption helpers ─────────────────────────────────
-
-    def _fernet(self) -> Fernet:
-        """Build a Fernet instance from the configured encryption key."""
-        key = self.settings.credential_encryption_key
-        if not key:
-            raise RuntimeError("credential_encryption_key is not configured")
-        # Fernet expects bytes
-        return Fernet(key.encode("utf-8") if isinstance(key, str) else key)
+    # ── Credential encryption helpers (delegated to sync_utils) ─────
 
     def _decrypt(self, encrypted: str) -> str:
         """Decrypt a Fernet-encrypted credential string."""
-        try:
-            return self._fernet().decrypt(encrypted.encode("utf-8")).decode("utf-8")
-        except InvalidToken:
-            raise ValueError("Failed to decrypt credential — key may have changed")
+        return decrypt_credential(encrypted)
 
     def _encrypt(self, plain: str) -> str:
         """Encrypt a plaintext credential string with Fernet."""
-        return self._fernet().encrypt(plain.encode("utf-8")).decode("utf-8")
+        return encrypt_credential(plain)
 
     # ── Main entry point ──────────────────────────────────────────────
 
@@ -299,35 +296,17 @@ class LMSExplorer:
         logger.info("Stored data for user %s: %s", self.user_id, counts)
         return counts
 
-    # ── Course name normalization ───────────────────────────────────
+    # ── Course name normalization (delegated to sync_utils) ─────────
 
     @staticmethod
     def _normalize_course_name(name: str) -> str:
-        """Normalize a course name by stripping year/semester suffixes.
-
-        Examples:
-            "AP Psychology P5 MM [25-26]" → "AP Psychology P5 MM"
-            "Global Issues S2 P1 TG [25-26]" → "Global Issues S2 P1 TG"
-            "Math - S2" → "Math"
-        """
-        if not name:
-            return name
-        # Strip trailing [25-26], [2025-2026], etc.
-        result = re.sub(r'\s*\[\d{2,4}-\d{2,4}\]\s*$', '', name)
-        # Strip trailing " - S1", " - S2", " S1", " S2" (semester tags)
-        result = re.sub(r'\s*-?\s*S[12]\s*$', '', result)
-        return result.strip()
+        return normalize_course_name(name)
 
     # ── Upsert helpers ────────────────────────────────────────────────
 
     def _stable_id(self, *parts: Optional[str]) -> str:
-        """Create a deterministic ID from component strings.
-
-        Used as ``lms_id`` so that re-scraping the same assignment doesn't
-        create duplicates.
-        """
-        combined = "__".join(str(p or "") for p in parts)
-        return hashlib.sha256(combined.encode("utf-8")).hexdigest()[:40]
+        """Create a deterministic ID from component strings."""
+        return _make_stable_id(*parts)
 
     def _upsert_assignment(self, item: dict) -> None:
         lms_id = self._stable_id(
@@ -401,7 +380,7 @@ class LMSExplorer:
 
     def _upsert_course(self, item: dict) -> None:
         raw_name = item.get("name", "Unknown")
-        normalized = _normalize_course_name(raw_name)
+        normalized = normalize_course_name(raw_name)
 
         # Check if a course with the same normalized name already exists
         existing = (
@@ -412,7 +391,7 @@ class LMSExplorer:
         )
         canonical = raw_name
         for row in existing.data or []:
-            if _normalize_course_name(row["class_name"]) == normalized:
+            if normalize_course_name(row["class_name"]) == normalized:
                 # Keep the LONGEST version as canonical
                 if len(row["class_name"]) >= len(canonical):
                     canonical = row["class_name"]
@@ -571,20 +550,8 @@ class LMSExplorer:
             logger.warning("Failed to update cred status %s", cred_id, exc_info=True)
 
 
-# ── Utility ───────────────────────────────────────────────────────────
-
-
-def _normalize_course_name(name: str) -> str:
-    """Strip period codes (e.g. 'P6 LA'), year brackets (e.g. '[25-26]'),
-    and extra whitespace so course names can be compared consistently."""
-    name = re.sub(r'\s*P\d+\s+[A-Z]{1,3}\s*', '', name)   # Strip "P6 LA"
-    name = re.sub(r'\s*\[\d{2}-\d{2}\]\s*$', '', name)     # Strip "[25-26]"
-    return name.strip()
-
-
-def _utcnow() -> str:
-    """Return the current UTC time as an ISO-8601 string."""
-    return datetime.now(timezone.utc).isoformat()
+# ── Utility (now imported from sync_utils) ────────────────────────────
+# _utcnow and normalize_course_name are imported at the top of this file.
 
 
 # ── Convenience runner (for background tasks / CLI) ───────────────────
