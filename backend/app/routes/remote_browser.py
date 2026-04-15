@@ -64,6 +64,9 @@ async def start_remote_browser(user_id: str = Depends(get_current_user)):
 _ALLOWED_NAV_DOMAINS = {
     "asl.org",
     "lms.asl.org",
+    "teamie.com",
+    "asl.teamie.com",
+    "login.teamie.com",
     "google.com",
     "accounts.google.com",
     "googleapis.com",
@@ -196,6 +199,7 @@ async def remote_browser_ws(websocket: WebSocket, session_id: str):
                 logger.info("[DEBUG-NAV] Navigation request: %s (allowed=%s)", url[:200], _is_nav_allowed(url))
                 if not _is_nav_allowed(url):
                     logger.warning("[DEBUG-NAV] BLOCKED navigation to: %s", url[:200])
+                    await send_json({"type": "status", "message": f"[DEBUG] Blocked nav to: {url[:120]}"})
                     await route.abort("blockedbyclient")
                     return
             await route.continue_()
@@ -320,6 +324,7 @@ async def remote_browser_ws(websocket: WebSocket, session_id: str):
                         [x, y],
                     )
                     logger.info("[DEBUG-CLICK] element_at_point: %s", elem_info)
+                    await send_json({"type": "status", "message": f"[DEBUG] Clicked: {elem_info}"})
                 except Exception as e:
                     logger.info("[DEBUG-CLICK] elementFromPoint failed: %s", e)
                 try:
