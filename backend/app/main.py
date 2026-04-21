@@ -23,7 +23,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from app.config import get_settings
 from app.middleware.audit import AuditLogMiddleware
-from app.routes import auth_routes, chat_routes, agent_routes, grades_routes, profile_routes, plan_routes, study_routes, focus_routes, buddy_routes, email_routes, remote_browser
+from app.routes import auth_routes, chat_routes, agent_routes, grades_routes, profile_routes, plan_routes, study_routes, focus_routes, buddy_routes, email_routes, remote_browser, sync_routes
 from app.scheduler import start_scheduler, stop_scheduler
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -152,6 +152,7 @@ app.include_router(focus_routes.router, prefix="/api/focus", tags=["focus"])
 app.include_router(buddy_routes.router, prefix="/api/buddy", tags=["buddy"])
 app.include_router(email_routes.router, prefix="/api/email", tags=["email"])
 app.include_router(remote_browser.router, prefix="/api/agent", tags=["remote-browser"])
+app.include_router(sync_routes.router, prefix="/api/sync", tags=["sync"])
 
 
 @app.get("/health")

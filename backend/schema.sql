@@ -102,9 +102,13 @@ CREATE TABLE lms_credentials (
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   lms_type TEXT NOT NULL,                -- 'teamie', 'canvas', 'blackboard', 'google_classroom'
   lms_url TEXT NOT NULL,                 -- 'https://lms.asl.org'
-  -- Encrypted credentials (AES-256 via Fernet)
-  encrypted_username TEXT NOT NULL,
-  encrypted_password TEXT NOT NULL,
+  -- Encrypted credentials (AES-256 via Fernet) — NULLable because
+  -- Chrome-extension onboarding captures cookies only, never credentials.
+  encrypted_username TEXT,
+  encrypted_password TEXT,
+  -- Encrypted JSON blob of browser cookies captured by the extension
+  encrypted_session_cookies TEXT,
+  cookies_updated_at TIMESTAMPTZ,
   -- Session state
   last_login_success BOOLEAN,
   last_login_at TIMESTAMPTZ,

@@ -6,7 +6,7 @@ import asyncio
 import hashlib
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -61,8 +61,10 @@ class LMSExplorer:
         """Execute the full sync: login, explore, extract, store.
 
         Auth strategy (cookie-first):
-        1. If encrypted_cookies exist → inject and verify
-        2. If cookies expired → fail with "session_expired"
+        1. If encrypted_session_cookies exist AND cookies_updated_at is within
+           the last 30 days → inject and verify. Skips SSO entirely.
+        2. Legacy ``encrypted_cookies`` column (pre-extension flow) is tried
+           next for backwards compatibility.
         3. Else if username/password exist → try credential login (fallback)
         4. Else → fail with no credentials
 
@@ -79,7 +81,7 @@ class LMSExplorer:
 
         if not creds_response.data:
             logger.warning("No active LMS credentials for user %s", self.user_id)
-            self._update_job("failed", error="No LMS credentials configured")
+            self._update_job("failed", error="No credentials or cookies on file")
             return {"status": "no_credentials", "message": "No LMS credentials configured"}
 
         cred = creds_response.data[0]
@@ -96,36 +98,66 @@ class LMSExplorer:
             agent.max_login_steps = 12
 
             authenticated = False
-            has_cookies = bool(cred.get("encrypted_cookies"))
+            session_cookies_cipher, session_cookies_fresh = _pick_session_cookies(cred)
+            legacy_cookies_cipher = cred.get("encrypted_cookies")
             has_creds = bool(cred.get("encrypted_username") and cred.get("encrypted_password"))
 
-            # ── Strategy 1: Cookie replay ──────────────────────────
-            if has_cookies:
-                logger.info("Attempting cookie replay for user %s at %s", self.user_id, lms_url)
+            # ── Strategy 1: Fresh extension-captured cookies ─────────
+            if session_cookies_cipher and session_cookies_fresh:
+                logger.info(
+                    "Attempting session-cookie replay (extension) for user %s at %s",
+                    self.user_id, lms_url,
+                )
                 try:
                     import json as _json
-                    cookies_json = self._decrypt(cred["encrypted_cookies"])
-                    cookies = _json.loads(cookies_json)
+                    cookies_json = self._decrypt(session_cookies_cipher)
+                    cookies = _normalize_cookies_for_playwright(_json.loads(cookies_json))
                     dashboard_url = lms_url.rstrip("/") + "/dash/#/"
                     authenticated = await agent.inject_cookies_and_verify(cookies, dashboard_url)
                 except (ValueError, KeyError) as exc:
-                    logger.warning("Cookie decryption failed for user %s: %s", self.user_id, exc)
+                    logger.warning("Session cookie decryption failed for user %s: %s", self.user_id, exc)
                     authenticated = False
 
-                if not authenticated:
-                    logger.warning("Cookie replay failed (session expired) for user %s", self.user_id)
-                    self._update_job("failed", error="session_expired")
-                    self._update_cred_status(cred_id, success=False, error="Session expired")
-                    return {
-                        "status": "session_expired",
-                        "message": "Your LMS session has expired. Please reconnect.",
-                    }
+                if authenticated:
+                    logger.info("Session-cookie replay succeeded for user %s", self.user_id)
+                    self._update_cred_status(cred_id, success=True)
                 else:
-                    logger.info("Cookie replay succeeded for user %s", self.user_id)
+                    logger.warning(
+                        "Session-cookie replay failed for user %s — will try legacy cookies / password fallback",
+                        self.user_id,
+                    )
+
+            # ── Strategy 1b: Legacy ``encrypted_cookies`` column ─────
+            if not authenticated and legacy_cookies_cipher:
+                logger.info("Attempting legacy cookie replay for user %s", self.user_id)
+                try:
+                    import json as _json
+                    cookies_json = self._decrypt(legacy_cookies_cipher)
+                    cookies = _normalize_cookies_for_playwright(_json.loads(cookies_json))
+                    dashboard_url = lms_url.rstrip("/") + "/dash/#/"
+                    authenticated = await agent.inject_cookies_and_verify(cookies, dashboard_url)
+                except (ValueError, KeyError) as exc:
+                    logger.warning("Legacy cookie decryption failed for user %s: %s", self.user_id, exc)
+                    authenticated = False
+
+                if authenticated:
+                    logger.info("Legacy cookie replay succeeded for user %s", self.user_id)
                     self._update_cred_status(cred_id, success=True)
 
+            # ── If we had cookies of any flavour but nothing worked
+            #    AND there's no password to fall back to, bail out now
+            had_any_cookie = bool(session_cookies_cipher or legacy_cookies_cipher)
+            if not authenticated and had_any_cookie and not has_creds:
+                logger.warning("Cookie replay failed and no password fallback for user %s", self.user_id)
+                self._update_job("failed", error="session_expired")
+                self._update_cred_status(cred_id, success=False, error="Session expired")
+                return {
+                    "status": "session_expired",
+                    "message": "Your LMS session has expired. Please reconnect.",
+                }
+
             # ── Strategy 2: Username/password login (fallback) ─────
-            elif has_creds:
+            if not authenticated and has_creds:
                 try:
                     username = self._decrypt(cred["encrypted_username"])
                     password = self._decrypt(cred["encrypted_password"])
@@ -152,9 +184,11 @@ class LMSExplorer:
                 self._update_cred_status(cred_id, success=True)
 
             # ── Strategy 3: No auth method available ───────────────
-            else:
-                msg = "No LMS credentials configured. Please connect your LMS."
+            if not authenticated:
+                msg = "No credentials or cookies on file"
+                logger.error("%s for user %s", msg, self.user_id)
                 self._update_job("failed", error=msg)
+                self._update_cred_status(cred_id, success=False, error=msg)
                 return {"status": "no_credentials", "message": msg}
 
             # 5. Explore & extract (hard 90s timeout — kill browser if stuck)
@@ -520,6 +554,86 @@ def _normalize_course_name(name: str) -> str:
 def _utcnow() -> str:
     """Return the current UTC time as an ISO-8601 string."""
     return datetime.now(timezone.utc).isoformat()
+
+
+# ── Session-cookie helpers ────────────────────────────────────────────
+
+_COOKIE_FRESHNESS_WINDOW = timedelta(days=30)
+
+
+def _pick_session_cookies(cred: dict) -> tuple[Optional[str], bool]:
+    """Return ``(ciphertext, is_fresh)`` for ``encrypted_session_cookies``.
+
+    ``is_fresh`` is True only when ``cookies_updated_at`` is within the last
+    30 days. Stale cookies are reported so the caller can decide whether to
+    try them anyway or skip straight to password fallback.
+    """
+    cipher = cred.get("encrypted_session_cookies")
+    if not cipher:
+        return None, False
+
+    updated_raw = cred.get("cookies_updated_at")
+    if not updated_raw:
+        return cipher, False
+
+    try:
+        # Supabase returns ISO8601; handle optional 'Z' suffix
+        iso = updated_raw.replace("Z", "+00:00") if isinstance(updated_raw, str) else str(updated_raw)
+        updated_at = datetime.fromisoformat(iso)
+        if updated_at.tzinfo is None:
+            updated_at = updated_at.replace(tzinfo=timezone.utc)
+    except Exception:
+        logger.warning("Could not parse cookies_updated_at=%r", updated_raw)
+        return cipher, False
+
+    is_fresh = (datetime.now(timezone.utc) - updated_at) <= _COOKIE_FRESHNESS_WINDOW
+    return cipher, is_fresh
+
+
+def _normalize_cookies_for_playwright(raw: list) -> list[dict]:
+    """Convert Chrome-extension cookie objects into Playwright's add_cookies shape.
+
+    The extension sends objects shaped like Chrome's cookies API
+    (``expirationDate``, ``httpOnly``, etc.); Playwright expects ``expires``,
+    ``httpOnly`` kept as-is, and ``sameSite`` in TitleCase (``Strict`` / ``Lax`` /
+    ``None``). Unknown keys are dropped so ``context.add_cookies`` doesn't throw.
+    """
+    allowed_same_site = {"Strict", "Lax", "None"}
+    out: list[dict] = []
+    if not isinstance(raw, list):
+        return out
+    for c in raw:
+        if not isinstance(c, dict):
+            continue
+        name = c.get("name")
+        value = c.get("value")
+        if not name or value is None:
+            continue
+
+        cookie: dict[str, Any] = {
+            "name": name,
+            "value": str(value),
+            "domain": c.get("domain", ""),
+            "path": c.get("path", "/"),
+            "secure": bool(c.get("secure", True)),
+            "httpOnly": bool(c.get("httpOnly", False)),
+        }
+
+        exp = c.get("expirationDate") if "expirationDate" in c else c.get("expires")
+        if exp is not None:
+            try:
+                cookie["expires"] = float(exp)
+            except (TypeError, ValueError):
+                pass
+
+        same = c.get("sameSite")
+        if isinstance(same, str):
+            title = same.strip().title()
+            if title in allowed_same_site:
+                cookie["sameSite"] = title
+
+        out.append(cookie)
+    return out
 
 
 # ── Convenience runner (for background tasks / CLI) ───────────────────

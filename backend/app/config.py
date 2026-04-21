@@ -28,8 +28,11 @@ class Settings(BaseSettings):
         "https://app.schoolpilot.co",
     ]
 
-    # CORS origin regex for dynamic subdomains (e.g. Vercel preview deploys)
-    cors_origin_regex: str = ""
+    # CORS origin regex for dynamic subdomains (Vercel previews) and the
+    # Chrome extension. Chrome extension IDs are always 32 lowercase letters
+    # a–p, so ``chrome-extension://[a-p]{32}`` matches every install of our
+    # extension regardless of signing key.
+    cors_origin_regex: str = r"^chrome-extension://[a-p]{32}$"
 
     # Playwright
     playwright_headless: bool = True
