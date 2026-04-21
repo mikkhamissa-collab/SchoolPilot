@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase-client";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import RemoteBrowser from "@/components/RemoteBrowser";
+import ExtensionConnectStep from "@/components/ExtensionConnectStep";
 import { posthog } from "@/lib/posthog";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -462,7 +462,7 @@ export default function TodayPage() {
               Cancel
             </button>
           </div>
-          <RemoteBrowser
+          <ExtensionConnectStep
             onComplete={() => {
               setShowReconnect(false);
               setSessionExpired(false);

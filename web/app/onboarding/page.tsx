@@ -7,7 +7,7 @@
 import { createClient } from "@/lib/supabase-client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
-import RemoteBrowser from "@/components/RemoteBrowser";
+import ExtensionConnectStep from "@/components/ExtensionConnectStep";
 import { posthog } from "@/lib/posthog";
 
 // ---------------------------------------------------------------------------
@@ -286,7 +286,7 @@ export default function OnboardingPage() {
     try {
       await authedFetch("/api/profile/onboarding", {
         step: "lms",
-        answers: { lms_type: "teamie", connected_via: "remote_browser" },
+        answers: { lms_type: "teamie", connected_via: "chrome_extension" },
       });
     } catch {
       // Continue even if backend tracking fails
@@ -706,7 +706,7 @@ export default function OnboardingPage() {
         )}
 
         {/* ================================================================= */}
-        {/* STEP 5: LMS SETUP (Remote Browser) */}
+        {/* STEP 5: LMS SETUP (Chrome Extension) */}
         {/* ================================================================= */}
         {step === "lms" && (
           <div className="space-y-6">
@@ -715,11 +715,11 @@ export default function OnboardingPage() {
                 Connect your LMS
               </h1>
               <p className="text-text-secondary">
-                Log into your school&apos;s learning management system below. We&apos;ll securely save your session.
+                Install the SchoolPilot Chrome extension and log into Teamie. Your data syncs from your own browser &mdash; nothing goes through our server.
               </p>
             </div>
 
-            <RemoteBrowser
+            <ExtensionConnectStep
               onComplete={handleLmsConnected}
               onError={handleLmsError}
             />

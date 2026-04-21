@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase-client";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import RemoteBrowser from "@/components/RemoteBrowser";
+import ExtensionConnectStep from "@/components/ExtensionConnectStep";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -158,7 +158,7 @@ export default function SettingsPage() {
   const [editBriefingTime, setEditBriefingTime] = useState("07:00");
 
   // UI state
-  const [showRemoteBrowser, setShowRemoteBrowser] = useState(false);
+  const [showReconnect, setShowReconnect] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [confirmDisconnect, setConfirmDisconnect] = useState<string | null>(null);
   const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false);
@@ -528,9 +528,9 @@ export default function SettingsPage() {
         <section className="bg-surface border border-border rounded-xl p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-white">LMS Connection</h2>
-            {!showRemoteBrowser && (
+            {!showReconnect && (
               <button
-                onClick={() => setShowRemoteBrowser(true)}
+                onClick={() => setShowReconnect(true)}
                 className="px-4 py-2 rounded-lg bg-accent/10 text-accent text-sm font-medium hover:bg-accent/20 transition-colors cursor-pointer"
               >
                 {hasConnected ? "Reconnect" : "Connect LMS"}
@@ -539,7 +539,7 @@ export default function SettingsPage() {
           </div>
 
           {/* Connected credential card */}
-          {hasConnected && activeCred && !showRemoteBrowser && (
+          {hasConnected && activeCred && !showReconnect && (
             <div className="p-4 bg-bg rounded-lg space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -608,7 +608,7 @@ export default function SettingsPage() {
           )}
 
           {/* No LMS connected */}
-          {!hasConnected && !showRemoteBrowser && (
+          {!hasConnected && !showReconnect && (
             <div className="text-center py-8">
               <div className="w-12 h-12 rounded-full bg-bg mx-auto flex items-center justify-center mb-3">
                 <svg className="w-6 h-6 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -622,24 +622,24 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* Remote browser */}
-          {showRemoteBrowser && (
+          {/* Extension reconnect flow */}
+          {showReconnect && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-text-secondary text-sm">
-                  Log into your LMS below. We will capture the session.
+                  Reconnect via the SchoolPilot Chrome extension.
                 </p>
                 <button
-                  onClick={() => setShowRemoteBrowser(false)}
+                  onClick={() => setShowReconnect(false)}
                   className="text-muted text-sm hover:text-white transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
               </div>
-              <div className="rounded-lg overflow-hidden border border-border">
-                <RemoteBrowser
+              <div className="rounded-lg overflow-hidden border border-border p-4">
+                <ExtensionConnectStep
                   onComplete={() => {
-                    setShowRemoteBrowser(false);
+                    setShowReconnect(false);
                     toast("success", "LMS connected successfully!");
                     if (token) fetchCredentials(token);
                   }}
