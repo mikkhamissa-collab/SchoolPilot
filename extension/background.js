@@ -26,12 +26,42 @@ const COOKIE_DEBOUNCE_MS = 15 * 60 * 1000; // 15 minutes
 
 // ---------- Install & alarms ----------
 
-chrome.runtime.onInstalled.addListener(() => {
-  console.info("[SchoolPilot] installed");
+// Zombie-backend migration: early dev builds let the extension point at the
+// old Flask service (schoolpilot-obvu.onrender.com) or localhost. That
+// override sticks across updates and returns 404 for every current endpoint.
+// On every install/update, drop any backendUrl override that's not the
+// canonical prod host so the extension falls through to the default
+// (https://schoolpilot-claw.onrender.com). Keep the key untouched otherwise
+// so future backend-swaps can still be pinned via chrome.storage.
+async function migrateBackendUrl(reason) {
+  try {
+    const { backendUrl } = await chrome.storage.local.get("backendUrl");
+    if (!backendUrl) return;
+    const bad =
+      backendUrl.includes("obvu") ||
+      backendUrl.includes("localhost") ||
+      backendUrl.includes("127.0.0.1") ||
+      backendUrl.includes("schoolpilot-new");
+    if (bad) {
+      await chrome.storage.local.remove("backendUrl");
+      console.info(
+        "[SchoolPilot] removed stale backendUrl override",
+        { backendUrl, reason },
+      );
+    }
+  } catch (err) {
+    console.error("[SchoolPilot] backendUrl migration failed", err);
+  }
+}
+
+chrome.runtime.onInstalled.addListener(async (details) => {
+  console.info("[SchoolPilot] installed", details);
+  await migrateBackendUrl(details && details.reason);
   chrome.alarms.create("refresh", { periodInMinutes: 360 }); // every 6h
 });
 
-chrome.runtime.onStartup.addListener(() => {
+chrome.runtime.onStartup.addListener(async () => {
+  await migrateBackendUrl("startup");
   chrome.alarms.create("refresh", { periodInMinutes: 360 });
 });
 
@@ -272,8 +302,13 @@ async function handleScrapeComplete(payload, sender) {
   }
   const jwt = await getJwt();
   if (!jwt) {
-    await recordSync({ ok: false, error: "no jwt stored" });
-    return { ok: false, error: "no jwt" };
+    // Not yet onboarded — this is not a sync failure, so don't record one.
+    // The content script's autoFireScrapeWhenReady() deferral should prevent
+    // us ever getting here, but keep the guard belt-and-braces.
+    console.info(
+      "[SchoolPilot] scrape-complete received without jwt — ignoring (not onboarded yet)",
+    );
+    return { ok: false, error: "no jwt", deferred: true };
   }
 
   // Refresh cookies along with ingestion.

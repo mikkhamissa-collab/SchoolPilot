@@ -174,15 +174,17 @@ async def save_cookies(
             lms_url = lms_url[:-len(suffix)]
             break
 
+    now_iso = datetime.now(timezone.utc).isoformat()
     db = get_db()
     db.table("lms_credentials").upsert(
         {
             "user_id": user_id,
             "lms_type": "teamie",
             "lms_url": lms_url,
-            "encrypted_cookies": encrypted_cookies,
+            "encrypted_session_cookies": encrypted_cookies,
+            "cookies_updated_at": now_iso,
             "last_login_success": True,
-            "last_login_at": datetime.now(timezone.utc).isoformat(),
+            "last_login_at": now_iso,
             "sync_enabled": True,
         },
         on_conflict="user_id,lms_type",
@@ -211,13 +213,14 @@ async def debug_screenshot(user_id: str = Depends(get_current_user)):
         raise HTTPException(404, "No credentials found")
 
     cred = creds.data[0]
-    if not cred.get("encrypted_cookies"):
+    cookie_cipher = cred.get("encrypted_session_cookies") or cred.get("encrypted_cookies")
+    if not cookie_cipher:
         raise HTTPException(400, "No cookies saved — connect your LMS first")
 
     settings = get_settings()
     fernet = Fernet(settings.credential_encryption_key.encode("utf-8"))
     cookies = _json.loads(
-        fernet.decrypt(cred["encrypted_cookies"].encode()).decode()
+        fernet.decrypt(cookie_cipher.encode()).decode()
     )
     lms_url = cred["lms_url"].rstrip("/") + "/dash/#/"
 

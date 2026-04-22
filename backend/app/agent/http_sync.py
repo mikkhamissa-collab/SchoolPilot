@@ -38,12 +38,12 @@ async def ping_session(user_id: str) -> bool:
 
     cred_resp = (
         db.table("lms_credentials")
-        .select("id, lms_url, encrypted_cookies")
+        .select("id, lms_url, encrypted_session_cookies")
         .eq("user_id", user_id)
         .eq("sync_enabled", True)
         .execute()
     )
-    if not cred_resp.data or not cred_resp.data[0].get("encrypted_cookies"):
+    if not cred_resp.data or not cred_resp.data[0].get("encrypted_session_cookies"):
         return False
 
     cred = cred_resp.data[0]
@@ -51,7 +51,7 @@ async def ping_session(user_id: str) -> bool:
 
     # Decrypt cookies
     try:
-        cookies_json = decrypt_credential(cred["encrypted_cookies"])
+        cookies_json = decrypt_credential(cred["encrypted_session_cookies"])
         cookie_list = json.loads(cookies_json)
     except (ValueError, json.JSONDecodeError):
         return False
@@ -156,13 +156,14 @@ class TeamieHTTPSync:
         self.base_url = (cred.get("lms_url") or "https://lms.asl.org").rstrip("/")
         self.teamie_uid = cred.get("teamie_uid") or ""
 
-        # 2. Decrypt cookies
-        if not cred.get("encrypted_cookies"):
+        # 2. Decrypt cookies (prefer new extension column, fall back to legacy)
+        cookie_cipher = cred.get("encrypted_session_cookies") or cred.get("encrypted_cookies")
+        if not cookie_cipher:
             self._update_job("failed", error="No cookies stored — re-login required")
             return {"status": "no_cookies"}
 
         try:
-            cookies_json = self._decrypt(cred["encrypted_cookies"])
+            cookies_json = self._decrypt(cookie_cipher)
             cookie_list = json.loads(cookies_json)
         except (ValueError, json.JSONDecodeError) as exc:
             logger.error("Cookie decryption failed for user %s: %s", self.user_id, exc)

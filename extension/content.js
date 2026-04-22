@@ -32,9 +32,44 @@ async function main() {
   });
 
   // Auto-run once per page load, after a short delay to let SPA routing settle.
+  // Only fire if the student has actually onboarded — otherwise we create a
+  // confusing "no jwt" error state on their very first visit to Teamie. If the
+  // JWT shows up later (they complete onboarding in another tab), storage
+  // change listener picks it up and fires the scrape exactly once.
   setTimeout(() => {
-    runScrape().catch((err) => console.error("[SchoolPilot] auto scrape error", err));
+    autoFireScrapeWhenReady().catch((err) =>
+      console.error("[SchoolPilot] auto scrape gate error", err),
+    );
   }, 2500);
+}
+
+async function autoFireScrapeWhenReady() {
+  const { jwt, userId } = await chrome.storage.local.get(["jwt", "userId"]);
+  if (jwt && userId) {
+    await runScrape().catch((err) =>
+      console.error("[SchoolPilot] auto scrape error", err),
+    );
+    return;
+  }
+
+  console.info(
+    "[SchoolPilot] auto scrape deferred — no jwt yet, will retry when onboarding completes",
+  );
+
+  // Wait for the JWT to appear, then fire once.
+  let fired = false;
+  const handler = (changes, area) => {
+    if (area !== "local" || fired) return;
+    const jwtNow = changes.jwt && changes.jwt.newValue;
+    if (!jwtNow) return;
+    fired = true;
+    chrome.storage.onChanged.removeListener(handler);
+    console.info("[SchoolPilot] jwt arrived — firing deferred scrape");
+    runScrape().catch((err) =>
+      console.error("[SchoolPilot] deferred scrape error", err),
+    );
+  };
+  chrome.storage.onChanged.addListener(handler);
 }
 
 async function runScrape() {
