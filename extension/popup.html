@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SchoolPilot</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="card">
+      <header>
+        <div class="brand">
+          <span class="logo">SP</span>
+          <div class="title">
+            <h1>SchoolPilot</h1>
+            <span class="version" id="version">v0.0.0</span>
+          </div>
+        </div>
+      </header>
+
+      <section class="status" id="status">
+        <div class="dot" id="dot"></div>
+        <div class="status-text">
+          <div class="primary" id="statusPrimary">Checking…</div>
+          <div class="secondary" id="statusSecondary"></div>
+        </div>
+      </section>
+
+      <section class="sync">
+        <div class="row">
+          <span class="label">Last sync</span>
+          <span class="value" id="lastSync">Never</span>
+        </div>
+        <div class="row">
+          <span class="label">Result</span>
+          <span class="value" id="lastResult">—</span>
+        </div>
+      </section>
+
+      <section class="actions">
+        <button id="syncBtn" class="primary" disabled>Sync now</button>
+        <button id="openBtn" class="secondary">Open SchoolPilot</button>
+      </section>
+
+      <footer>
+        <a href="#" id="debugLink">Open extension logs</a>
+      </footer>
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
